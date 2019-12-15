@@ -41,6 +41,16 @@
         }
       ]
     },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "ia32"
+          ]
+        }
+      ]
+    },
     "mac": {
       "category": "public.app-category.developer-tools"
     },
