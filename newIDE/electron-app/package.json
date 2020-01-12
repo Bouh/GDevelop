@@ -30,6 +30,16 @@
         "to": "GDJS"
       }
     ],
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "ia32"
+          ]
+        }
+      ]
+    },
     "win": {
       "target": [
         {
