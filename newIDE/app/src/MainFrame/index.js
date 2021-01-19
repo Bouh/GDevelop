@@ -116,6 +116,7 @@ import HotReloadLogsDialog from '../HotReload/HotReloadLogsDialog';
 import { useDiscordRichPresence } from '../Utils/UpdateDiscordRichPresence';
 import { useResourceFetcher } from '../ProjectsStorage/ResourceFetcher';
 import { delay } from '../Utils/Delay';
+import { getIDEVersion, getGDCoreVersion } from '../Version';
 
 const GD_STARTUP_TIMES = global.GD_STARTUP_TIMES || [];
 
@@ -612,11 +613,48 @@ const MainFrame = (props: Props) => {
 
           return loadFromProject(newProject, fileMetadata);
         },
-        time => console.info(`Unserialization took ${time} ms`)
+        time => {
+          console.info(`Unserialization took ${time} ms`);
+          printGDevelopInfo();
+        }
       );
     },
     [loadFromProject]
   );
+
+  function printGDevelopInfo() {
+    const hello = {
+      app: 'GDevelop',
+      base: ' - based on GDevelop.js ',
+      github: 'Hey you! We are on Github! - https://github.com/4ian/GDevelop ',
+    };
+
+    if (navigator.userAgent.toLowerCase().indexOf('chrome') > -1) {
+      console.log(
+        '\n%c   ' +
+          hello.app +
+          '   %c ' +
+          getIDEVersion() +
+          hello.base +
+          getGDCoreVersion() +
+          ' \n%c ' +
+          hello.github,
+        'background: #5B1865; color: #ffffff; padding:5px 0;',
+        'background: #2C5784; color: #ffffff; padding:5px 0;',
+        'background: #5688C7; color: #ffffff; padding:5px 0;'
+      );
+    } else if (window.console) {
+      window.console.log(
+        hello.app +
+          ' ' +
+          getIDEVersion() +
+          hello.base +
+          getGDCoreVersion() +
+          ' \n ' +
+          hello.github
+      );
+    }
+  }
 
   const openFromFileMetadata = React.useCallback(
     (fileMetadata: FileMetadata): Promise<?State> => {
