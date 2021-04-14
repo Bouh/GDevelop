@@ -1,0 +1,4 @@
+# README
+
+Show how to create an object at the position of the click.
+

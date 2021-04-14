@@ -1,0 +1,2 @@
+# TEST for GDevelop5
+

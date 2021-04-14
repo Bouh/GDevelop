@@ -1,0 +1,4 @@
+# README
+
+Basic example showing how to shoot bullets from an object.
+

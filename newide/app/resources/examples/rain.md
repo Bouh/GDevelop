@@ -1,0 +1,4 @@
+# README
+
+Show how to simulate a rain effect by creating several objects.
+

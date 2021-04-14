@@ -1,0 +1,4 @@
+# README
+
+Another example showing how to have multiple layers with a parallax effect \(where the background layers move slower than the foreground\).
+

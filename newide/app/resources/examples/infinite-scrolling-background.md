@@ -1,0 +1,4 @@
+# README
+
+Learn how to create a background that is scolling infinitely.
+

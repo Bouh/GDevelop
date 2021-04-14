@@ -1,0 +1,4 @@
+# README
+
+Show how to make the device vibrate.
+

@@ -1,0 +1,4 @@
+# README
+
+This shows how to use the device sensors to create a compass like app.
+

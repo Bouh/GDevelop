@@ -1,0 +1,4 @@
+# README
+
+Simple game where the player must use his laser powered gun to destroy zombies running at him.
+

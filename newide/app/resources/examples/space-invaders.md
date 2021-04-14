@@ -1,0 +1,4 @@
+# README
+
+A Space Invaders-like game, where you have a turret and shoot on enemies coming from the sky.
+

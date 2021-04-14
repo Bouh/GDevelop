@@ -1,0 +1,4 @@
+# README
+
+This shows how to use the Text Entry object to capture what is written on the keyboard.
+
