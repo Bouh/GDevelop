@@ -1229,6 +1229,10 @@ export class AtlasResource extends Resource {
   constructor();
 }
 
+export class RiveResource extends Resource {
+  constructor();
+}
+
 export class JavaScriptResource extends Resource {
   constructor();
 }

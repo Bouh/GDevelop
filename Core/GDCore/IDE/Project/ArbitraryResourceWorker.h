@@ -98,6 +98,12 @@ public:
   virtual void ExposeModel3D(gd::String &resourceName);
 
   /**
+   * \brief Expose a Rive file, which is always a reference to a "rive"
+   * resource.
+   */
+  virtual void ExposeRive(gd::String &resourceName);
+
+  /**
    * \brief Expose an atlas, which is always a reference to a "atlas" resource.
    */
   virtual void ExposeAtlas(gd::String &resourceName);

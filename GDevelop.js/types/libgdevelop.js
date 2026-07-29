@@ -142,6 +142,7 @@ declare class libGDevelop {
   TilesetResource: Class<gdTilesetResource>;
   Model3DResource: Class<gdModel3DResource>;
   AtlasResource: Class<gdAtlasResource>;
+  RiveResource: Class<gdRiveResource>;
   JavaScriptResource: Class<gdJavaScriptResource>;
   InitialInstance: Class<gdInitialInstance>;
   InitialInstancesContainer: Class<gdInitialInstancesContainer>;

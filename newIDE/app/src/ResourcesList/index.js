@@ -50,6 +50,9 @@ export const getDefaultResourceThumbnail = (resource: gdResource): string => {
     case 'model3D':
       return 'JsPlatform/Extensions/3d_model.svg';
     // $FlowFixMe[invalid-compare]
+    case 'rive':
+      return 'JsPlatform/Extensions/rive.svg';
+    // $FlowFixMe[invalid-compare]
     case 'javascript':
       return 'res/javascript.svg';
     default:

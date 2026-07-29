@@ -48,6 +48,7 @@ public:
   std::set<gd::String>& GetAll3DModels() { return GetAll("model3D"); };
   std::set<gd::String>& GetAllAtlases() { return GetAll("atlas"); };
   std::set<gd::String>& GetAllSpines() { return GetAll("spine"); };
+  std::set<gd::String>& GetAllRiveFiles() { return GetAll("rive"); };
   std::set<gd::String>& GetAll(const gd::String& resourceType) {
     // When adding a new resource type don't forget to update
     // gd::ResourcesInUseHelper::resourceTypes
@@ -63,6 +64,7 @@ public:
     if (resourceType == "model3D") return allModel3Ds;
     if (resourceType == "atlas") return allAtlases;
     if (resourceType == "spine") return allSpines;
+    if (resourceType == "rive") return allRiveFiles;
     if (resourceType == "javascript") return allJavaScripts;
 
     return emptyResources;
@@ -107,6 +109,9 @@ public:
   virtual void ExposeSpine(gd::String& resourceName) override {
     allSpines.insert(resourceName);
   };
+  virtual void ExposeRive(gd::String& resourceName) override {
+    allRiveFiles.insert(resourceName);
+  };
 
  protected:
   std::vector<gd::String> allResources;
@@ -121,6 +126,7 @@ public:
   std::set<gd::String> allModel3Ds;
   std::set<gd::String> allAtlases;
   std::set<gd::String> allSpines;
+  std::set<gd::String> allRiveFiles;
   std::set<gd::String> allJavaScripts;
   std::set<gd::String> emptyResources;
 

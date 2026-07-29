@@ -210,6 +210,8 @@ void ObjectJsImplementation::ExposeResources(gd::ArbitraryResourceWorker& worker
         worker.ExposeAtlas(newPropertyValue);
       } else if (resourceType == "spine") {
         worker.ExposeSpine(newPropertyValue);
+      } else if (resourceType == "rive") {
+        worker.ExposeRive(newPropertyValue);
       }
 
       if (newPropertyValue != oldPropertyValue) {

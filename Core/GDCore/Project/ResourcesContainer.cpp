@@ -131,6 +131,8 @@ ResourcesContainer::CreateResource(const gd::String &kind) {
     return std::make_shared<AtlasResource>();
   else if (kind == "spine")
     return std::make_shared<SpineResource>();
+  else if (kind == "rive")
+    return std::make_shared<RiveResource>();
   else if (kind == "javascript")
     return std::make_shared<JavaScriptResource>();
   else if (kind == "internal-in-game-editor-only-svg")
@@ -151,6 +153,7 @@ const gd::String Resource::bitmapType = "bitmapFont";
 const gd::String Resource::model3DType = "model3D";
 const gd::String Resource::atlasType = "atlas";
 const gd::String Resource::spineType = "spine";
+const gd::String Resource::riveType = "rive";
 const gd::String Resource::javaScriptType = "javascript";
 const gd::String Resource::internalInGameEditorOnlySvgType = "internal-in-game-editor-only-svg";
 
@@ -617,6 +620,20 @@ void Model3DResource::UnserializeFrom(const SerializerElement &element) {
 }
 
 void Model3DResource::SerializeTo(SerializerElement &element) const {
+  element.SetAttribute("userAdded", IsUserAdded());
+  element.SetAttribute("file", GetFile());
+}
+
+void RiveResource::SetFile(const gd::String &newFile) {
+  file = NormalizePathSeparator(newFile);
+}
+
+void RiveResource::UnserializeFrom(const SerializerElement &element) {
+  SetUserAdded(element.GetBoolAttribute("userAdded"));
+  SetFile(element.GetStringAttribute("file"));
+}
+
+void RiveResource::SerializeTo(SerializerElement &element) const {
   element.SetAttribute("userAdded", IsUserAdded());
   element.SetAttribute("file", GetFile());
 }

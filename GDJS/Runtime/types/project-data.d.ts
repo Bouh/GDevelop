@@ -637,5 +637,6 @@ declare type ResourceKind =
   | 'model3D'
   | 'atlas'
   | 'spine'
+  | 'rive'
   | 'internal-in-game-editor-only-svg'
   | 'fake-resource-kind-for-testing-only';

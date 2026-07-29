@@ -190,6 +190,12 @@ const jsExtensions = [
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'Rive',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Rive/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'SpineObject',
     // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Spine/JsExtension.js'),

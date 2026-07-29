@@ -1460,6 +1460,11 @@ interface AtlasResource {
 };
 AtlasResource implements Resource;
 
+interface RiveResource {
+    void RiveResource();
+};
+RiveResource implements Resource;
+
 interface JavaScriptResource {
     void JavaScriptResource();
 };

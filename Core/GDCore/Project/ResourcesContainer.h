@@ -37,6 +37,7 @@ public:
   static const gd::String model3DType;
   static const gd::String atlasType;
   static const gd::String spineType;
+  static const gd::String riveType;
   static const gd::String javaScriptType;
   static const gd::String internalInGameEditorOnlySvgType;
 
@@ -526,6 +527,32 @@ public:
   virtual ~Model3DResource(){};
   virtual Model3DResource *Clone() const override {
     return new Model3DResource(*this);
+  }
+
+  virtual const gd::String &GetFile() const override { return file; };
+  virtual void SetFile(const gd::String &newFile) override;
+
+  virtual bool UseFile() const override { return true; }
+  void SerializeTo(SerializerElement &element) const override;
+
+  void UnserializeFrom(const SerializerElement &element) override;
+
+private:
+  gd::String file;
+};
+
+/**
+ * \brief Describe a Rive file (.riv) used by a project.
+ *
+ * \see Resource
+ * \ingroup ResourcesManagement
+ */
+class GD_CORE_API RiveResource : public Resource {
+public:
+  RiveResource() : Resource() { SetKind("rive"); };
+  virtual ~RiveResource(){};
+  virtual RiveResource *Clone() const override {
+    return new RiveResource(*this);
   }
 
   virtual const gd::String &GetFile() const override { return file; };

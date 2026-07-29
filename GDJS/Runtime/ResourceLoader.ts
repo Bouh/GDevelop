@@ -143,6 +143,7 @@ namespace gdjs {
     private _fontManager: FontManager;
     private _jsonManager: JsonManager;
     private _model3DManager: Model3DManager;
+    private _riveManager: RiveManager | null = null;
     private _bitmapFontManager: BitmapFontManager;
     private _spineAtlasManager: SpineAtlasManager | null = null;
     private _spineManager: SpineManager | null = null;
@@ -199,6 +200,7 @@ namespace gdjs {
       );
       this._model3DManager = new gdjs.Model3DManager(this);
       this._svgManager = new InternalInGameEditorOnlySvgManager();
+      // The Rive manager is extension-provided (like Spine's), registered below.
 
       const resourceManagers: Array<ResourceManager> = [
         this._imageManager,
@@ -720,6 +722,16 @@ namespace gdjs {
       return this._spineAtlasManager;
     }
 
+    /**
+     * Get the Rive manager of the game, used to load the Rive WASM runtime
+     * and `.riv` files from game resources.
+     * @return The Rive manager for the game, or null if the Rive extension
+     * is not used/loaded.
+     */
+    getRiveManager(): gdjs.RiveManager | null {
+      return this._riveManager;
+    }
+
     registerOptionalManagersForHotReload(): void {
       this._registerOptionalManagersIfNeeded();
     }
@@ -744,6 +756,15 @@ namespace gdjs {
         );
         for (const resourceKind of this._spineManager.getResourceKinds()) {
           this._resourceManagersMap.set(resourceKind, this._spineManager);
+        }
+      }
+
+      // Rive manager is extension-provided and can become available after
+      // scripts reload. Register it exactly once.
+      if (!this._riveManager && gdjs.RiveManager) {
+        this._riveManager = new gdjs.RiveManager(this);
+        for (const resourceKind of this._riveManager.getResourceKinds()) {
+          this._resourceManagersMap.set(resourceKind, this._riveManager);
         }
       }
     }

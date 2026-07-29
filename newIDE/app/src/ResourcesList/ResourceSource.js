@@ -32,6 +32,7 @@ export type ResourceKind =
   | 'model3D'
   | 'atlas'
   | 'spine'
+  | 'rive'
   | 'javascript';
 
 export const resourcesKindSupportedByResourceStore = ['audio', 'font'];
@@ -105,6 +106,14 @@ export const allResourceKindsAndMetadata = [
     fileExtensions: ['json'],
     createNewResource: (): gdSpineResource => {
       return new gd.SpineResource();
+    },
+  },
+  {
+    kind: 'rive',
+    displayName: (t`Rive file`: any),
+    fileExtensions: ['riv'],
+    createNewResource: (): gdRiveResource => {
+      return new gd.RiveResource();
     },
   },
   {

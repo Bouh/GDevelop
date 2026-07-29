@@ -110,6 +110,9 @@ ValueTypeMetadata::GetResourceType(const gd::String &parameterType) {
   if (parameterType == "spineResource") {
     return gd::Resource::spineType;
   }
+  if (parameterType == "riveResource") {
+    return gd::Resource::riveType;
+  }
   return parameterType;
 }
 
