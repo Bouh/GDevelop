@@ -5,156 +5,310 @@
  */
 
 #include "GDCore/Project/InitialInstance.h"
+
 #include "GDCore/Project/Layout.h"
 #include "GDCore/Project/Object.h"
+#include "GDCore/Project/ObjectsContainer.h"
 #include "GDCore/Project/Project.h"
-#include "GDCore/Serialization/SerializerElement.h"
-#if defined(GD_IDE_ONLY)
 #include "GDCore/Project/PropertyDescriptor.h"
-#endif
+#include "GDCore/Serialization/SerializerElement.h"
+#include "GDCore/Tools/UUID/UUID.h"
+#include "GDCore/Extensions/Metadata/BehaviorMetadata.h"
+#include "GDCore/Extensions/Metadata/MetadataProvider.h"
+#include "GDCore/Project/CustomBehavior.h"
+#include "GDCore/Tools/Log.h"
 
 namespace gd {
 
-gd::String* InitialInstance::badStringProperyValue = NULL;
+gd::String* InitialInstance::badStringPropertyValue = NULL;
 
 InitialInstance::InitialInstance()
     : objectName(""),
-      x(0),
-      y(0),
-      angle(0),
-      zOrder(0),
       layer(""),
-      personalizedSize(false),
-      width(0),
-      height(0),
-      locked(false) {}
+      persistentUuid(UUID::MakeUuid4()),
+      behaviorOverridings(true) {}
 
-void InitialInstance::UnserializeFrom(const SerializerElement& element) {
+void InitialInstance::UnserializeFrom(gd::Project &project,
+                                      const SerializerElement &element) {
   SetObjectName(element.GetStringAttribute("name", "", "nom"));
   SetX(element.GetDoubleAttribute("x"));
   SetY(element.GetDoubleAttribute("y"));
+  SetZ(element.GetDoubleAttribute("z", 0));
   SetAngle(element.GetDoubleAttribute("angle"));
+  SetRotationX(element.GetDoubleAttribute("rotationX", 0));
+  SetRotationY(element.GetDoubleAttribute("rotationY", 0));
   SetHasCustomSize(
       element.GetBoolAttribute("customSize", false, "personalizedSize"));
   SetCustomWidth(element.GetDoubleAttribute("width"));
   SetCustomHeight(element.GetDoubleAttribute("height"));
+  if (element.HasChild("depth") || element.HasAttribute("depth")) {
+    SetHasCustomDepth(true);
+    SetCustomDepth(element.GetDoubleAttribute("depth"));
+  } else {
+    SetHasCustomDepth(false);
+  }
+  if (element.HasChild("defaultWidth") ||
+      element.HasAttribute("defaultWidth")) {
+    defaultWidth = element.GetDoubleAttribute("defaultWidth");
+  }
+  if (element.HasChild("defaultHeight") ||
+      element.HasAttribute("defaultHeight")) {
+    defaultHeight = element.GetDoubleAttribute("defaultHeight");
+  }
+  if (element.HasChild("defaultDepth") ||
+      element.HasAttribute("defaultDepth")) {
+    defaultDepth = element.GetDoubleAttribute("defaultDepth");
+  }
   SetZOrder(element.GetIntAttribute("zOrder", 0, "plan"));
+  SetOpacity(element.GetIntAttribute("opacity", 255));
   SetLayer(element.GetStringAttribute("layer"));
+  SetFlippedX(element.GetBoolAttribute("flippedX", false));
+  SetFlippedY(element.GetBoolAttribute("flippedY", false));
+  SetFlippedZ(element.GetBoolAttribute("flippedZ", false));
   SetLocked(element.GetBoolAttribute("locked", false));
+  SetSealed(element.GetBoolAttribute("sealed", false));
+  SetShouldKeepRatio(element.GetBoolAttribute("keepRatio", false));
 
-  floatInfos.clear();
-  const SerializerElement& floatPropElement =
-      element.GetChild("numberProperties", 0, "floatInfos");
-  floatPropElement.ConsiderAsArrayOf("property", "Info");
-  for (std::size_t j = 0; j < floatPropElement.GetChildrenCount(); ++j) {
-    gd::String name = floatPropElement.GetChild(j).GetStringAttribute("name");
-    float value = floatPropElement.GetChild(j).GetDoubleAttribute("value");
-    floatInfos[name] = value;
+  persistentUuid = element.GetStringAttribute("persistentUuid");
+  if (persistentUuid.empty()) ResetPersistentUuid();
+
+  numberProperties.clear();
+  if (element.HasChild("numberProperties", "floatInfos")) {
+    const SerializerElement& numberPropertiesElement =
+        element.GetChild("numberProperties", 0, "floatInfos");
+    numberPropertiesElement.ConsiderAsArrayOf("property", "Info");
+    for (std::size_t j = 0; j < numberPropertiesElement.GetChildrenCount(); ++j) {
+      gd::String name =
+          numberPropertiesElement.GetChild(j).GetStringAttribute("name");
+      double value =
+          numberPropertiesElement.GetChild(j).GetDoubleAttribute("value");
+
+      // Compatibility with GD <= 5.1.164
+      if (name == "z") {
+        SetZ(value);
+      } else if (name == "rotationX") {
+        SetRotationX(value);
+      } else if (name == "rotationY") {
+        SetRotationY(value);
+      } else if (name == "depth") {
+        SetHasCustomDepth(true);
+        SetCustomDepth(value);
+      }
+      // end of compatibility code
+      else {
+        numberProperties[name] = value;
+      }
+    }
   }
 
-  stringInfos.clear();
-  const SerializerElement& stringPropElement =
-      element.GetChild("stringProperties", 0, "stringInfos");
-  stringPropElement.ConsiderAsArrayOf("property", "Info");
-  for (std::size_t j = 0; j < stringPropElement.GetChildrenCount(); ++j) {
-    gd::String name = stringPropElement.GetChild(j).GetStringAttribute("name");
-    gd::String value =
-        stringPropElement.GetChild(j).GetStringAttribute("value");
-    stringInfos[name] = value;
+  stringProperties.clear();
+  if (element.HasChild("stringProperties", "stringInfos")) {
+    const SerializerElement& stringPropElement =
+        element.GetChild("stringProperties", 0, "stringInfos");
+    stringPropElement.ConsiderAsArrayOf("property", "Info");
+    for (std::size_t j = 0; j < stringPropElement.GetChildrenCount(); ++j) {
+      gd::String name = stringPropElement.GetChild(j).GetStringAttribute("name");
+      gd::String value =
+          stringPropElement.GetChild(j).GetStringAttribute("value");
+      stringProperties[name] = value;
+    }
   }
 
-  GetVariables().UnserializeFrom(
-      element.GetChild("initialVariables", 0, "InitialVariables"));
+  if (element.HasChild("initialVariables", "InitialVariables")) {
+    GetVariables().UnserializeFrom(
+        element.GetChild("initialVariables", 0, "InitialVariables"));
+    // The "mixed values" marker is an editor-only, display state used when
+    // showing the variables of several objects or instances at once. It must
+    // never be kept on the variables of an instance - clean it up in case it
+    // was wrongly persisted in the project by a previous version of the
+    // editor.
+    GetVariables().ClearMixedValues();
+  }
+
+  if (element.HasChild("behaviorOverridings")) {
+    behaviorOverridings.UnserializeFrom(
+        project, element.GetChild("behaviorOverridings"));
+  }
 }
 
 void InitialInstance::SerializeTo(SerializerElement& element) const {
   element.SetAttribute("name", GetObjectName());
   element.SetAttribute("x", GetX());
   element.SetAttribute("y", GetY());
+  if (GetZ() != 0) element.SetAttribute("z", GetZ());
   element.SetAttribute("zOrder", GetZOrder());
+  if (GetOpacity() != 255) element.SetAttribute("opacity", GetOpacity());
+  if (IsFlippedX()) element.SetAttribute("flippedX", IsFlippedX());
+  if (IsFlippedY()) element.SetAttribute("flippedY", IsFlippedY());
+  if (IsFlippedZ()) element.SetAttribute("flippedZ", IsFlippedZ());
   element.SetAttribute("layer", GetLayer());
   element.SetAttribute("angle", GetAngle());
+  if (GetRotationX() != 0) element.SetAttribute("rotationX", GetRotationX());
+  if (GetRotationY() != 0) element.SetAttribute("rotationY", GetRotationY());
   element.SetAttribute("customSize", HasCustomSize());
   element.SetAttribute("width", GetCustomWidth());
   element.SetAttribute("height", GetCustomHeight());
-  element.SetAttribute("locked", IsLocked());
+  if (HasCustomDepth()) element.SetAttribute("depth", GetCustomDepth());
+  // defaultWidth, defaultHeight and defaultDepth are not serialized
+  // because they are evaluated by InGameEditor.
+  if (IsLocked()) element.SetAttribute("locked", IsLocked());
+  if (IsSealed()) element.SetAttribute("sealed", IsSealed());
+  if (ShouldKeepRatio()) element.SetAttribute("keepRatio", ShouldKeepRatio());
 
-  SerializerElement& floatPropElement = element.AddChild("numberProperties");
-  floatPropElement.ConsiderAsArrayOf("property");
-  for (std::map<gd::String, float>::const_iterator floatInfo =
-           floatInfos.begin();
-       floatInfo != floatInfos.end();
-       ++floatInfo) {
-    floatPropElement.AddChild("property")
-        .SetAttribute("name", floatInfo->first)
-        .SetAttribute("value", floatInfo->second);
+  if (persistentUuid.empty()) persistentUuid = UUID::MakeUuid4();
+  element.SetStringAttribute("persistentUuid", persistentUuid);
+
+  SerializerElement& numberPropertiesElement =
+      element.AddChild("numberProperties");
+  numberPropertiesElement.ConsiderAsArrayOf("property");
+  for (const auto& property : numberProperties) {
+    numberPropertiesElement.AddChild("property")
+        .SetAttribute("name", property.first)
+        .SetAttribute("value", property.second);
   }
 
   SerializerElement& stringPropElement = element.AddChild("stringProperties");
   stringPropElement.ConsiderAsArrayOf("property");
-  for (std::map<gd::String, gd::String>::const_iterator stringInfo =
-           stringInfos.begin();
-       stringInfo != stringInfos.end();
-       ++stringInfo) {
+  for (const auto& property : stringProperties) {
     stringPropElement.AddChild("property")
-        .SetAttribute("name", stringInfo->first)
-        .SetAttribute("value", stringInfo->second);
+        .SetAttribute("name", property.first)
+        .SetAttribute("value", property.second);
   }
 
   GetVariables().SerializeTo(element.AddChild("initialVariables"));
+
+  if (!behaviorOverridings.GetAllBehaviorContents().empty()) {
+    behaviorOverridings.SerializeTo(element.AddChild("behaviorOverridings"));
+  }
 }
 
-#if defined(GD_IDE_ONLY)
+InitialInstance& InitialInstance::ResetPersistentUuid() {
+  persistentUuid = UUID::MakeUuid4();
+  return *this;
+}
+
 std::map<gd::String, gd::PropertyDescriptor>
-InitialInstance::GetCustomProperties(gd::Project& project, gd::Layout& layout) {
+InitialInstance::GetCustomProperties(
+    gd::ObjectsContainer& globalObjectsContainer,
+    gd::ObjectsContainer& objectsContainer) {
   // Find an object
-  if (layout.HasObjectNamed(GetObjectName()))
-    return layout.GetObject(GetObjectName())
-        .GetInitialInstanceProperties(*this, project, layout);
-  else if (project.HasObjectNamed(GetObjectName()))
-    return project.GetObject(GetObjectName())
-        .GetInitialInstanceProperties(*this, project, layout);
+  if (objectsContainer.HasObjectNamed(GetObjectName()))
+    return objectsContainer.GetObject(GetObjectName())
+        .GetConfiguration()
+        .GetInitialInstanceProperties(*this);
+  else if (globalObjectsContainer.HasObjectNamed(GetObjectName()))
+    return globalObjectsContainer.GetObject(GetObjectName())
+        .GetConfiguration()
+        .GetInitialInstanceProperties(*this);
 
   std::map<gd::String, gd::PropertyDescriptor> nothing;
   return nothing;
 }
 
-bool InitialInstance::UpdateCustomProperty(const gd::String& name,
-                                           const gd::String& value,
-                                           gd::Project& project,
-                                           gd::Layout& layout) {
-  if (layout.HasObjectNamed(GetObjectName()))
-    return layout.GetObject(GetObjectName())
-        .UpdateInitialInstanceProperty(*this, name, value, project, layout);
-  else if (project.HasObjectNamed(GetObjectName()))
-    return project.GetObject(GetObjectName())
-        .UpdateInitialInstanceProperty(*this, name, value, project, layout);
+bool InitialInstance::UpdateCustomProperty(
+    const gd::String& name,
+    const gd::String& value,
+    gd::ObjectsContainer& globalObjectsContainer,
+    gd::ObjectsContainer& objectsContainer) {
+  if (objectsContainer.HasObjectNamed(GetObjectName()))
+    return objectsContainer.GetObject(GetObjectName())
+        .GetConfiguration()
+        .UpdateInitialInstanceProperty(*this, name, value);
+  else if (globalObjectsContainer.HasObjectNamed(GetObjectName()))
+    return globalObjectsContainer.GetObject(GetObjectName())
+        .GetConfiguration()
+        .UpdateInitialInstanceProperty(*this, name, value);
 
   return false;
 }
 
-float InitialInstance::GetRawFloatProperty(const gd::String& name) const {
-  const auto& it = floatInfos.find(name);
-  return it != floatInfos.end() ? it->second : 0;
+double InitialInstance::GetRawDoubleProperty(const gd::String& name) const {
+  const auto& it = numberProperties.find(name);
+  return it != numberProperties.end() ? it->second : 0;
 }
 
 const gd::String& InitialInstance::GetRawStringProperty(
     const gd::String& name) const {
-  if (!badStringProperyValue) badStringProperyValue = new gd::String("");
+  if (!badStringPropertyValue) badStringPropertyValue = new gd::String("");
 
-  const auto& it = stringInfos.find(name);
-  return it != stringInfos.end() ? it->second : *badStringProperyValue;
+  const auto& it = stringProperties.find(name);
+  return it != stringProperties.end() ? it->second : *badStringPropertyValue;
 }
 
-void InitialInstance::SetRawFloatProperty(const gd::String& name, float value)
-{
-  floatInfos[name] = value;
+void InitialInstance::SetRawDoubleProperty(const gd::String& name,
+                                           double value) {
+  numberProperties[name] = value;
 }
 
-void InitialInstance::SetRawStringProperty(const gd::String& name, const gd::String& value)
-{
-  stringInfos[name] = value;
+void InitialInstance::SetRawStringProperty(const gd::String& name,
+                                           const gd::String& value) {
+  stringProperties[name] = value;
 }
-#endif
+
+bool InitialInstance::HasAnyOverriddenProperty(const gd::Object &object) {
+  for (auto &behaviorOverridingPair : behaviorOverridings.GetAllBehaviorContents()) {
+    auto &behaviorName = behaviorOverridingPair.first;
+    if (HasAnyOverriddenPropertyForBehavior(object.GetBehavior(behaviorName))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool InitialInstance::HasAnyOverriddenPropertyForBehavior(
+    const gd::Behavior &behavior) {
+  auto &behaviorName = behavior.GetName();
+  if (!HasBehaviorOverridingNamed(behaviorName)) {
+    return false;
+  }
+  auto &behaviorOverriding = GetBehaviorOverriding(behaviorName);
+  if (behaviorOverriding.GetContent().IsEmpty()) {
+    return false;
+  }
+  const auto &overridingProperties = behaviorOverriding.GetProperties();
+  for (auto &propertyPair : behavior.GetProperties()) {
+    auto &propertyName = propertyPair.first;
+    auto &behaviorProperty = propertyPair.second;
+
+    if (behaviorProperty.GetType() != "Behavior" &&
+        behaviorOverriding.HasPropertyValue(propertyName) &&
+        overridingProperties.find(propertyName) !=
+            overridingProperties.end() &&
+        overridingProperties.at(propertyName).GetValue() !=
+            behaviorProperty.GetValue()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+gd::Behavior &InitialInstance::GetBehaviorOverriding(const gd::String &name) {
+  return behaviorOverridings.GetBehavior(name);
+}
+
+const gd::Behavior &
+InitialInstance::GetBehaviorOverriding(const gd::String &name) const {
+  return behaviorOverridings.GetBehavior(name);
+}
+
+bool InitialInstance::HasBehaviorOverridingNamed(const gd::String &name) const {
+  return behaviorOverridings.HasBehaviorNamed(name);
+}
+
+void InitialInstance::RemoveBehaviorOverriding(const gd::String &name) {
+  behaviorOverridings.RemoveBehavior(name);
+}
+
+bool InitialInstance::RenameBehaviorOverriding(const gd::String &name,
+                                               const gd::String &newName) {
+  return behaviorOverridings.RenameBehavior(name, newName);
+}
+
+gd::Behavior *
+InitialInstance::AddNewBehaviorOverriding(const gd::Project &project,
+                                          const gd::String &type,
+                                          const gd::String &name) {
+  return behaviorOverridings.AddNewBehavior(project, type, name);
+}
 
 }  // namespace gd

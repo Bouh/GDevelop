@@ -4,19 +4,15 @@
  * reserved. This project is released under the MIT License.
  */
 
-#ifndef GDCORE_SPRITEOBJECT_H
-#define GDCORE_SPRITEOBJECT_H
-#include "GDCore/Extensions/Builtin/SpriteExtension/Animation.h"
-#include "GDCore/Extensions/Builtin/SpriteExtension/Direction.h"
-#include "GDCore/Extensions/Builtin/SpriteExtension/Sprite.h"
+#pragma once
+
+#include "GDCore/Extensions/Builtin/SpriteExtension/SpriteAnimationList.h"
 #include "GDCore/Project/Object.h"
+
 namespace gd {
 class InitialInstance;
 class Object;
 class Layout;
-class Sprite;
-class Animation;
-class MainFrameWrapper;
 class SerializerElement;
 class PropertyDescriptor;
 }  // namespace gd
@@ -37,107 +33,83 @@ namespace gd {
  * \see gd::BuiltinExtensionsImplementer::ImplementsSpriteExtension
  * \ingroup SpriteObjectExtension
  */
-class GD_CORE_API SpriteObject : public gd::Object {
+class GD_CORE_API SpriteObject : public gd::ObjectConfiguration {
  public:
-  SpriteObject(gd::String name_);
+  SpriteObject();
   virtual ~SpriteObject();
-  std::unique_ptr<gd::Object> Clone() const override {
+  std::unique_ptr<gd::ObjectConfiguration> Clone() const override {
     return gd::make_unique<SpriteObject>(*this);
   }
 
-#if defined(GD_IDE_ONLY)
   void ExposeResources(gd::ArbitraryResourceWorker& worker) override;
 
-  std::map<gd::String, gd::PropertyDescriptor> GetProperties(
-      gd::Project& project) const override;
-  bool UpdateProperty(const gd::String& name,
-                      const gd::String& value,
-                      gd::Project& project) override;
+  std::map<gd::String, gd::PropertyDescriptor> GetProperties() const override;
+  bool UpdateProperty(const gd::String& name, const gd::String& value) override;
 
   std::map<gd::String, gd::PropertyDescriptor> GetInitialInstanceProperties(
-      const gd::InitialInstance& position,
-      gd::Project& project,
-      gd::Layout& scene) override;
+      const gd::InitialInstance& position) override;
   bool UpdateInitialInstanceProperty(gd::InitialInstance& position,
                                      const gd::String& name,
-                                     const gd::String& value,
-                                     gd::Project& project,
-                                     gd::Layout& scene) override;
-#endif
+                                     const gd::String& value) override;
 
-  /** \name Animations
-   * Methods related to animations management
-   */
-  ///@{
+  size_t GetAnimationsCount() const override;
+
+  const gd::String &GetAnimationName(size_t index) const override;
+
+  bool HasAnimationNamed(const gd::String &animationName) const override;
+  
   /**
-   * \brief Return the animation at the specified index.
-   * If the index is out of bound, a "bad animation" object is returned.
+   * \brief Return the animation configuration.
    */
-  const Animation& GetAnimation(std::size_t nb) const;
+  const SpriteAnimationList& GetAnimations() const;
 
   /**
-   * \brief Return the animation at the specified index.
-   * If the index is out of bound, a "bad animation" object is returned.
+   * @brief Return the animation configuration.
    */
-  Animation& GetAnimation(std::size_t nb);
+  SpriteAnimationList& GetAnimations();
 
   /**
-   * \brief Return the number of animations this object has.
+   * \brief Set if the object animation should be played even if the object is
+   * hidden or far from the camera.
    */
-  std::size_t GetAnimationsCount() const { return animations.size(); };
+  void SetUpdateIfNotVisible(bool updateIfNotVisible_) {
+    updateIfNotVisible = updateIfNotVisible_;
+  }
 
   /**
-   * \brief Add an animation at the end of the existing ones.
+   * \brief Check if the object animation should be played even if the object
+   * is hidden or far from the camera (false by default).
    */
-  void AddAnimation(const Animation& animation);
+  bool GetUpdateIfNotVisible() const { return updateIfNotVisible; }
 
   /**
-   * \brief Remove an animation.
+   * \brief Return the scale applied to object to evaluate the default dimensions.
    */
-  bool RemoveAnimation(std::size_t nb);
+  double GetPreScale() { return preScale; }
 
   /**
-   * \brief Remove all animations.
+   * \brief Set the scale applied to object to evaluate the default dimensions.
+   * 
+   * Its value must be strictly positive.
    */
-  void RemoveAllAnimations() { animations.clear(); }
-
-  /**
-   * \brief Return true if the object hasn't any animation.
-   */
-  bool HasNoAnimations() const { return animations.empty(); }
-
-  /**
-   * \brief Swap the position of two animations
-   */
-  void SwapAnimations(std::size_t firstIndex, std::size_t secondIndex);
-
-  /**
-   * \brief Change the position of the specified animation
-   */
-  void MoveAnimation(std::size_t oldIndex, std::size_t newIndex);
-
-  /**
-   * \brief Return a read-only reference to the vector containing all the
-   * animation of the object.
-   */
-  const std::vector<Animation>& GetAllAnimations() const { return animations; }
-  ///@}
+  void SetPreScale(double preScale_) {
+    if (preScale_ <= 0) {
+      return;
+    }
+    preScale = preScale_;
+  }
 
  private:
   void DoUnserializeFrom(gd::Project& project,
                          const gd::SerializerElement& element) override;
-#if defined(GD_IDE_ONLY)
   void DoSerializeTo(gd::SerializerElement& element) const override;
-#endif
 
-  mutable std::vector<Animation> animations;
+  SpriteAnimationList animations;
+
   bool updateIfNotVisible;  ///< If set to true, ask the game engine to play
-                            ///< object animation even if hidden or far from the
-                            ///< screen.
-
-  static Animation badAnimation;  //< Bad animation when an out of bound
-                                  // animation is requested.
+                            ///< object animation even if hidden or far from
+                            ///< the screen.
+  double preScale;
 };
 
 }  // namespace gd
-#endif  // GDCORE_SPRITEOBJECT_H

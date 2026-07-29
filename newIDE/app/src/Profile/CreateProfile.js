@@ -4,40 +4,57 @@ import { Trans } from '@lingui/macro';
 import * as React from 'react';
 import FlatButton from '../UI/FlatButton';
 import RaisedButton from '../UI/RaisedButton';
-import { Column, Line, Spacer } from '../UI/Grid';
+import { Column } from '../UI/Grid';
 import Text from '../UI/Text';
-import BackgroundText from '../UI/BackgroundText';
+import { ColumnStackLayout, ResponsiveLineStackLayout } from '../UI/Layout';
 
-type Props = {
-  message?: React.Node,
-  onLogin: () => void,
-  onCreateAccount: () => void,
+const styles = {
+  container: {
+    maxWidth: '480px',
+    whiteSpace: 'normal',
+  },
 };
 
-export default ({ message, onLogin, onCreateAccount }: Props) => (
-  <Column noMargin>
-    <Line>
-      <Text>
-        {message || (
-          <Trans>
-            You are not connected. Create an account to access to GDevelop
-            online services and build your game for Android, Windows, macOS and
-            Linux in one click!
-          </Trans>
-        )}
-      </Text>
-    </Line>
-    <Line justifyContent="center" alignItems="baseline">
-      <RaisedButton
-        label={<Trans>Create my account</Trans>}
-        onClick={onCreateAccount}
-        primary
-      />
-      <Spacer />
-      <Spacer />
-      <BackgroundText>or</BackgroundText>
-      <Spacer />
-      <FlatButton label={<Trans>Login</Trans>} onClick={onLogin} />
-    </Line>
+type Props = {|
+  message?: React.Node,
+  onOpenLoginDialog: () => void,
+  onOpenCreateAccountDialog: () => void,
+  justifyContent?: 'center',
+|};
+
+const CreateProfile = ({
+  message,
+  onOpenLoginDialog,
+  onOpenCreateAccountDialog,
+  justifyContent,
+}: Props): React.Node => (
+  <Column alignItems="center">
+    <div style={styles.container}>
+      <ColumnStackLayout>
+        <Text noMargin align="center">
+          {message || (
+            <Trans>
+              You are not connected. Create an account to build your game for
+              Android, Windows, macOS and Linux in one click, and get access to
+              metrics for your game.
+            </Trans>
+          )}
+        </Text>
+        <ResponsiveLineStackLayout justifyContent="center" noMargin>
+          <RaisedButton
+            id="create-account-button"
+            label={<Trans>Create my account</Trans>}
+            onClick={onOpenCreateAccountDialog}
+            primary
+          />
+          <FlatButton
+            label={<Trans>Login</Trans>}
+            onClick={onOpenLoginDialog}
+          />
+        </ResponsiveLineStackLayout>
+      </ColumnStackLayout>
+    </div>
   </Column>
 );
+
+export default CreateProfile;

@@ -13,32 +13,35 @@ void GD_CORE_API
 BuiltinExtensionsImplementer::ImplementsExternalLayoutsExtension(
     gd::PlatformExtension& extension) {
   extension
-      .SetExtensionInformation(
-          "BuiltinExternalLayouts",
-          _("External layouts"),
-          _("Built-in extension providing actions and conditions related to "
-            "external layouts"),
-          "Florian Rival",
-          "Open source (MIT License)")
-      .SetExtensionHelpPath("/interface/scene-editor/external-layouts");
+      .SetExtensionInformation("BuiltinExternalLayouts",
+                               _("External layouts"),
+                               "Provides actions and conditions related to "
+                               "external layouts.",
+                               "Florian Rival",
+                               "Open source (MIT License)")
+      .SetShortDescription("Create objects from an external layout to reuse level sections or UI templates.")
+      .SetExtensionHelpPath("/interface/scene-editor/external-layouts")
+      .SetCategory("Advanced");
+  extension.AddInstructionOrExpressionGroupMetadata(_("External layouts"))
+      .SetIcon("res/ribbon_default/externallayout32.png");
 
-#if defined(GD_IDE_ONLY)
   extension
       .AddAction("CreateObjectsFromExternalLayout",
                  _("Create objects from an external layout"),
                  _("Create objects from an external layout."),
-                 _("Create objects from the external layout named _PARAM1_"),
-                 _("External layouts"),
-                 "res/conditions/fichier24.png",
-                 "res/conditions/fichier.png")
+                 _("Create objects from the external layout named _PARAM1_ at position _PARAM2_;_PARAM3_;_PARAM4_"),
+                 "",
+                 "res/ribbon_default/externallayout32.png",
+                 "res/ribbon_default/externallayout32.png")
       .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("string", _("Name of the external layout"))
+      .AddParameter("externalLayoutName", _("Name of the external layout"))
       .AddParameter("expression", _("X position of the origin"), "", true)
       .SetDefaultValue("0")
       .AddParameter("expression", _("Y position of the origin"), "", true)
       .SetDefaultValue("0")
+      .AddParameter("expression", _("Z position of the origin"), "", true)
+      .SetDefaultValue("0")
       .MarkAsAdvanced();
-#endif
 }
 
 }  // namespace gd

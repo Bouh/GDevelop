@@ -1,9 +1,56 @@
 /*!
- * @pixi/filter-outline - v2.6.0
- * Compiled Fri, 20 Dec 2019 18:59:17 UTC
+ * @pixi/filter-outline - v5.2.0
+ * Compiled Thu, 31 Aug 2023 09:18:38 UTC
  *
  * @pixi/filter-outline is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
- */
-!function(e,o){"object"==typeof exports&&"undefined"!=typeof module?o(exports,require("pixi.js")):"function"==typeof define&&define.amd?define(["exports","pixi.js"],o):o(e.__filters={},e.PIXI)}(this,function(e,o){"use strict";var t="attribute vec2 aVertexPosition;\nattribute vec2 aTextureCoord;\n\nuniform mat3 projectionMatrix;\n\nvarying vec2 vTextureCoord;\n\nvoid main(void)\n{\n    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);\n    vTextureCoord = aTextureCoord;\n}",r="varying vec2 vTextureCoord;\nuniform sampler2D uSampler;\n\nuniform vec2 thickness;\nuniform vec4 outlineColor;\nuniform vec4 filterClamp;\n\nconst float DOUBLE_PI = 3.14159265358979323846264 * 2.;\n\nvoid main(void) {\n    vec4 ownColor = texture2D(uSampler, vTextureCoord);\n    vec4 curColor;\n    float maxAlpha = 0.;\n    vec2 displaced;\n    for (float angle = 0.; angle <= DOUBLE_PI; angle += ${angleStep}) {\n        displaced.x = vTextureCoord.x + thickness.x * cos(angle);\n        displaced.y = vTextureCoord.y + thickness.y * sin(angle);\n        curColor = texture2D(uSampler, clamp(displaced, filterClamp.xy, filterClamp.zw));\n        maxAlpha = max(maxAlpha, curColor.a);\n    }\n    float resultAlpha = max(maxAlpha, ownColor.a);\n    gl_FragColor = vec4((ownColor.rgb + outlineColor.rgb * (1. - ownColor.a)) * resultAlpha, resultAlpha);\n}\n",n=function(e){function n(o,i,l){void 0===o&&(o=1),void 0===i&&(i=0),void 0===l&&(l=.1);var s=Math.max(l*n.MAX_SAMPLES,n.MIN_SAMPLES),a=(2*Math.PI/s).toFixed(7);e.call(this,t,r.replace(/\$\{angleStep\}/,a)),this.uniforms.thickness=new Float32Array([0,0]),this.thickness=o,this.uniforms.outlineColor=new Float32Array([0,0,0,1]),this.color=i,this.quality=l}e&&(n.__proto__=e),n.prototype=Object.create(e&&e.prototype),n.prototype.constructor=n;var i={color:{configurable:!0}};return n.prototype.apply=function(e,o,t,r){this.uniforms.thickness[0]=this.thickness/o.size.width,this.uniforms.thickness[1]=this.thickness/o.size.height,e.applyFilter(this,o,t,r)},i.color.get=function(){return o.utils.rgb2hex(this.uniforms.outlineColor)},i.color.set=function(e){o.utils.hex2rgb(e,this.uniforms.outlineColor)},Object.defineProperties(n.prototype,i),n}(o.Filter);n.MIN_SAMPLES=1,n.MAX_SAMPLES=100,e.OutlineFilter=n,Object.defineProperty(e,"__esModule",{value:!0})}),Object.assign(PIXI.filters,this?this.__filters:__filters);
-//# sourceMappingURL=filter-outline.js.map
+ */var __filters=function(r,s){"use strict";var u=`attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+
+uniform mat3 projectionMatrix;
+
+varying vec2 vTextureCoord;
+
+void main(void)
+{
+    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+    vTextureCoord = aTextureCoord;
+}`,c=`varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec4 filterClamp;
+
+uniform float uAlpha;
+uniform vec2 uThickness;
+uniform vec4 uColor;
+uniform bool uKnockout;
+
+const float DOUBLE_PI = 2. * 3.14159265358979323846264;
+const float ANGLE_STEP = \${angleStep};
+
+float outlineMaxAlphaAtPos(vec2 pos) {
+    if (uThickness.x == 0. || uThickness.y == 0.) {
+        return 0.;
+    }
+
+    vec4 displacedColor;
+    vec2 displacedPos;
+    float maxAlpha = 0.;
+
+    for (float angle = 0.; angle <= DOUBLE_PI; angle += ANGLE_STEP) {
+        displacedPos.x = vTextureCoord.x + uThickness.x * cos(angle);
+        displacedPos.y = vTextureCoord.y + uThickness.y * sin(angle);
+        displacedColor = texture2D(uSampler, clamp(displacedPos, filterClamp.xy, filterClamp.zw));
+        maxAlpha = max(maxAlpha, displacedColor.a);
+    }
+
+    return maxAlpha;
+}
+
+void main(void) {
+    vec4 sourceColor = texture2D(uSampler, vTextureCoord);
+    vec4 contentColor = sourceColor * float(!uKnockout);
+    float outlineAlpha = uAlpha * outlineMaxAlphaAtPos(vTextureCoord.xy) * (1.-sourceColor.a);
+    vec4 outlineColor = vec4(vec3(uColor) * outlineAlpha, outlineAlpha);
+    gl_FragColor = contentColor + outlineColor;
+}
+`;const e=class extends s.Filter{constructor(t=1,o=0,n=.1,i=1,l=!1){super(u,c.replace(/\$\{angleStep\}/,e.getAngleStep(n))),this._thickness=1,this._alpha=1,this._knockout=!1,this.uniforms.uThickness=new Float32Array([0,0]),this.uniforms.uColor=new Float32Array([0,0,0,1]),this.uniforms.uAlpha=i,this.uniforms.uKnockout=l,Object.assign(this,{thickness:t,color:o,quality:n,alpha:i,knockout:l})}static getAngleStep(t){const o=Math.max(t*e.MAX_SAMPLES,e.MIN_SAMPLES);return(Math.PI*2/o).toFixed(7)}apply(t,o,n,i){this.uniforms.uThickness[0]=this._thickness/o._frame.width,this.uniforms.uThickness[1]=this._thickness/o._frame.height,this.uniforms.uAlpha=this._alpha,this.uniforms.uKnockout=this._knockout,t.applyFilter(this,o,n,i)}get alpha(){return this._alpha}set alpha(t){this._alpha=t}get color(){return s.utils.rgb2hex(this.uniforms.uColor)}set color(t){s.utils.hex2rgb(t,this.uniforms.uColor)}get knockout(){return this._knockout}set knockout(t){this._knockout=t}get thickness(){return this._thickness}set thickness(t){this._thickness=t,this.padding=t}};let a=e;return a.MIN_SAMPLES=1,a.MAX_SAMPLES=100,r.OutlineFilter=a,Object.defineProperty(r,"__esModule",{value:!0}),r}({},PIXI);Object.assign(PIXI.filters,__filters);

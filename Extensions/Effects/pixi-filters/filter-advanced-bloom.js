@@ -1,9 +1,53 @@
 /*!
- * @pixi/filter-advanced-bloom - v2.6.0
- * Compiled Fri, 20 Dec 2019 18:59:17 UTC
+ * @pixi/filter-advanced-bloom - v5.1.1
+ * Compiled Thu, 31 Aug 2023 09:18:38 UTC
  *
  * @pixi/filter-advanced-bloom is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
- */
-!function(e,t){"object"==typeof exports&&"undefined"!=typeof module?t(exports,require("pixi.js"),require("@pixi/filter-kawase-blur")):"function"==typeof define&&define.amd?define(["exports","pixi.js","@pixi/filter-kawase-blur"],t):t(e.__filters={},e.PIXI,e.PIXI.filters)}(this,function(e,t,r){"use strict";var o="attribute vec2 aVertexPosition;\nattribute vec2 aTextureCoord;\n\nuniform mat3 projectionMatrix;\n\nvarying vec2 vTextureCoord;\n\nvoid main(void)\n{\n    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);\n    vTextureCoord = aTextureCoord;\n}",i="\nuniform sampler2D uSampler;\nvarying vec2 vTextureCoord;\n\nuniform float threshold;\n\nvoid main() {\n    vec4 color = texture2D(uSampler, vTextureCoord);\n\n    // A simple & fast algorithm for getting brightness.\n    // It's inaccuracy , but good enought for this feature.\n    float _max = max(max(color.r, color.g), color.b);\n    float _min = min(min(color.r, color.g), color.b);\n    float brightness = (_max + _min) * 0.5;\n\n    if(brightness > threshold) {\n        gl_FragColor = color;\n    } else {\n        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);\n    }\n}\n",n=function(e){function t(t){void 0===t&&(t=.5),e.call(this,o,i),this.threshold=t}e&&(t.__proto__=e),t.prototype=Object.create(e&&e.prototype),t.prototype.constructor=t;var r={threshold:{configurable:!0}};return r.threshold.get=function(){return this.uniforms.threshold},r.threshold.set=function(e){this.uniforms.threshold=e},Object.defineProperties(t.prototype,r),t}(t.Filter),l="uniform sampler2D uSampler;\nvarying vec2 vTextureCoord;\n\nuniform sampler2D bloomTexture;\nuniform float bloomScale;\nuniform float brightness;\n\nvoid main() {\n    vec4 color = texture2D(uSampler, vTextureCoord);\n    color.rgb *= brightness;\n    vec4 bloomColor = vec4(texture2D(bloomTexture, vTextureCoord).rgb, 0.0);\n    bloomColor.rgb *= bloomScale;\n    gl_FragColor = color + bloomColor;\n}\n",s=function(e){function i(i){e.call(this,o,l),"number"==typeof i&&(i={threshold:i}),i=Object.assign({threshold:.5,bloomScale:1,brightness:1,kernels:null,blur:8,quality:4,pixelSize:1,resolution:t.settings.RESOLUTION},i),this.bloomScale=i.bloomScale,this.brightness=i.brightness;var s=i.kernels,u=i.blur,a=i.quality,c=i.pixelSize,h=i.resolution;this._extractFilter=new n(i.threshold),this._extractFilter.resolution=h,this._blurFilter=s?new r.KawaseBlurFilter(s):new r.KawaseBlurFilter(u,a),this.pixelSize=c,this.resolution=h}e&&(i.__proto__=e),i.prototype=Object.create(e&&e.prototype),i.prototype.constructor=i;var s={resolution:{configurable:!0},threshold:{configurable:!0},kernels:{configurable:!0},blur:{configurable:!0},quality:{configurable:!0},pixelSize:{configurable:!0}};return i.prototype.apply=function(e,t,r,o,i){var n=e.getRenderTarget(!0);this._extractFilter.apply(e,t,n,!0,i);var l=e.getRenderTarget(!0);this._blurFilter.apply(e,n,l,!0,i),this.uniforms.bloomScale=this.bloomScale,this.uniforms.brightness=this.brightness,this.uniforms.bloomTexture=l,e.applyFilter(this,t,r,o),e.returnRenderTarget(l),e.returnRenderTarget(n)},s.resolution.get=function(){return this._resolution},s.resolution.set=function(e){this._resolution=e,this._extractFilter&&(this._extractFilter.resolution=e),this._blurFilter&&(this._blurFilter.resolution=e)},s.threshold.get=function(){return this._extractFilter.threshold},s.threshold.set=function(e){this._extractFilter.threshold=e},s.kernels.get=function(){return this._blurFilter.kernels},s.kernels.set=function(e){this._blurFilter.kernels=e},s.blur.get=function(){return this._blurFilter.blur},s.blur.set=function(e){this._blurFilter.blur=e},s.quality.get=function(){return this._blurFilter.quality},s.quality.set=function(e){this._blurFilter.quality=e},s.pixelSize.get=function(){return this._blurFilter.pixelSize},s.pixelSize.set=function(e){this._blurFilter.pixelSize=e},Object.defineProperties(i.prototype,s),i}(t.Filter);e.AdvancedBloomFilter=s,Object.defineProperty(e,"__esModule",{value:!0})}),Object.assign(PIXI.filters,this?this.__filters:__filters);
-//# sourceMappingURL=filter-advanced-bloom.js.map
+ */var __filters=function(s,o,a){"use strict";var h=`attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+
+uniform mat3 projectionMatrix;
+
+varying vec2 vTextureCoord;
+
+void main(void)
+{
+    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+    vTextureCoord = aTextureCoord;
+}`,m=`
+uniform sampler2D uSampler;
+varying vec2 vTextureCoord;
+
+uniform float threshold;
+
+void main() {
+    vec4 color = texture2D(uSampler, vTextureCoord);
+
+    // A simple & fast algorithm for getting brightness.
+    // It's inaccuracy , but good enought for this feature.
+    float _max = max(max(color.r, color.g), color.b);
+    float _min = min(min(color.r, color.g), color.b);
+    float brightness = (_max + _min) * 0.5;
+
+    if(brightness > threshold) {
+        gl_FragColor = color;
+    } else {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+    }
+}
+`;class g extends o.Filter{constructor(e=.5){super(h,m),this.threshold=e}get threshold(){return this.uniforms.threshold}set threshold(e){this.uniforms.threshold=e}}var x=`uniform sampler2D uSampler;
+varying vec2 vTextureCoord;
+
+uniform sampler2D bloomTexture;
+uniform float bloomScale;
+uniform float brightness;
+
+void main() {
+    vec4 color = texture2D(uSampler, vTextureCoord);
+    color.rgb *= brightness;
+    vec4 bloomColor = vec4(texture2D(bloomTexture, vTextureCoord).rgb, 0.0);
+    bloomColor.rgb *= bloomScale;
+    gl_FragColor = color + bloomColor;
+}
+`;const c=class extends o.Filter{constructor(t){super(h,x),this.bloomScale=1,this.brightness=1,this._resolution=o.settings.FILTER_RESOLUTION,typeof t=="number"&&(t={threshold:t});const e=Object.assign(c.defaults,t);this.bloomScale=e.bloomScale,this.brightness=e.brightness;const{kernels:i,blur:n,quality:u,pixelSize:l,resolution:r}=e;this._extractFilter=new g(e.threshold),this._extractFilter.resolution=r,this._blurFilter=i?new a.KawaseBlurFilter(i):new a.KawaseBlurFilter(n,u),this.pixelSize=l,this.resolution=r}apply(t,e,i,n,u){const l=t.getFilterTexture();this._extractFilter.apply(t,e,l,1,u);const r=t.getFilterTexture();this._blurFilter.apply(t,l,r,1),this.uniforms.bloomScale=this.bloomScale,this.uniforms.brightness=this.brightness,this.uniforms.bloomTexture=r,t.applyFilter(this,e,i,n),t.returnFilterTexture(r),t.returnFilterTexture(l)}get resolution(){return this._resolution}set resolution(t){this._resolution=t,this._extractFilter&&(this._extractFilter.resolution=t),this._blurFilter&&(this._blurFilter.resolution=t)}get threshold(){return this._extractFilter.threshold}set threshold(t){this._extractFilter.threshold=t}get kernels(){return this._blurFilter.kernels}set kernels(t){this._blurFilter.kernels=t}get blur(){return this._blurFilter.blur}set blur(t){this._blurFilter.blur=t}get quality(){return this._blurFilter.quality}set quality(t){this._blurFilter.quality=t}get pixelSize(){return this._blurFilter.pixelSize}set pixelSize(t){this._blurFilter.pixelSize=t}};let b=c;return b.defaults={threshold:.5,bloomScale:1,brightness:1,kernels:null,blur:8,quality:4,pixelSize:1,resolution:o.settings.FILTER_RESOLUTION},s.AdvancedBloomFilter=b,Object.defineProperty(s,"__esModule",{value:!0}),s}({},PIXI,PIXI.filters);Object.assign(PIXI.filters,__filters);

@@ -4,9 +4,12 @@
  * reserved. This project is released under the MIT License.
  */
 #include "Platform.h"
+
 #include "GDCore/Extensions/PlatformExtension.h"
 #include "GDCore/Project/Object.h"
+#include "GDCore/Project/ObjectConfiguration.h"
 #include "GDCore/String.h"
+#include "GDCore/Tools/Log.h"
 
 using namespace std;
 
@@ -14,28 +17,40 @@ using namespace std;
 
 namespace gd {
 
-Platform::Platform() {}
+InstructionOrExpressionGroupMetadata
+    Platform::badInstructionOrExpressionGroupMetadata;
+
+Platform::Platform() : enableExtensionLoadingLogs(false) {}
 
 Platform::~Platform() {}
 
 bool Platform::AddExtension(std::shared_ptr<gd::PlatformExtension> extension) {
   if (!extension) return false;
 
-  std::cout << "Loading " << extension->GetName() << "...";
+  if (enableExtensionLoadingLogs)
+    std::cout << "Loading " << extension->GetName() << "...";
   if (IsExtensionLoaded(extension->GetName())) {
-    std::cout << " (replacing existing extension)";
+    if (enableExtensionLoadingLogs)
+      std::cout << " (replacing existing extension)";
     RemoveExtension(extension->GetName());
   }
-  std::cout << std::endl;
+  if (enableExtensionLoadingLogs) std::cout << std::endl;
 
   extensionsLoaded.push_back(extension);
 
-  // Load all creation/destruction functions for objects provided by the
-  // extension
+  // Load all creation functions for objects provided by the
+  // extension.
   vector<gd::String> objectsTypes = extension->GetExtensionObjectsTypes();
   for (std::size_t i = 0; i < objectsTypes.size(); ++i) {
-    creationFunctionTable[objectsTypes[i]] =
-        extension->GetObjectCreationFunctionPtr(objectsTypes[i]);
+    CreateFunPtr createFunPtr = extension->GetObjectCreationFunctionPtr(objectsTypes[i]);
+    if (createFunPtr != nullptr) {
+      creationFunctionTable[objectsTypes[i]] = createFunPtr;
+    }
+  }
+
+  for (const auto& it :
+       extension->GetAllInstructionOrExpressionGroupMetadata()) {
+    instructionOrExpressionGroupMetadata[it.first] = it.second;
   }
 
   return true;
@@ -49,7 +64,9 @@ void Platform::RemoveExtension(const gd::String& name) {
     if (extension->GetName() == name) {
       vector<gd::String> objectsTypes = extension->GetExtensionObjectsTypes();
       for (std::size_t i = 0; i < objectsTypes.size(); ++i) {
-        creationFunctionTable.erase(objectsTypes[i]);
+        if (creationFunctionTable.find(objectsTypes[i]) != creationFunctionTable.end()) {
+          creationFunctionTable.erase(objectsTypes[i]);
+        }
       }
     }
   }
@@ -80,44 +97,22 @@ std::shared_ptr<gd::PlatformExtension> Platform::GetExtension(
   return std::shared_ptr<gd::PlatformExtension>();
 }
 
-std::unique_ptr<gd::Object> Platform::CreateObject(
-    gd::String type, const gd::String& name) const {
+std::unique_ptr<gd::ObjectConfiguration> Platform::CreateObjectConfiguration(
+    gd::String type) const {
   if (creationFunctionTable.find(type) == creationFunctionTable.end()) {
-    std::cout << "Tried to create an object with an unknown type: " << type
-              << " for platform " << GetName() << "!" << std::endl;
+    gd::LogWarning("Tried to create an object configuration with an unknown type: " + type
+              + " for platform " + GetName() + "!");
     type = "";
     if (creationFunctionTable.find("") == creationFunctionTable.end()) {
-      std::cout << "Unable to create a Base object!" << std::endl;
+      gd::LogFatalError("Unable to create a base object configuration!");
       return nullptr;
     }
   }
 
   // Create a new object with the type we want.
-  std::unique_ptr<gd::Object> object =
-      (creationFunctionTable.find(type)->second)(name);
-  object->SetType(type);
-
-  return std::unique_ptr<gd::Object>(std::move(object));
-}
-
-gd::Behavior* Platform::GetBehavior(const gd::String& behaviorType) const {
-  for (std::size_t i = 0; i < extensionsLoaded.size(); ++i) {
-    gd::Behavior* behavior = extensionsLoaded[i]->GetBehavior(behaviorType);
-    if (behavior) return behavior;
-  }
-
-  return nullptr;
-}
-
-gd::BehaviorsSharedData* Platform::GetBehaviorSharedDatas(
-    const gd::String& behaviorType) const {
-  for (std::size_t i = 0; i < extensionsLoaded.size(); ++i) {
-    gd::BehaviorsSharedData* behaviorSharedData =
-        extensionsLoaded[i]->GetBehaviorSharedDatas(behaviorType);
-    if (behaviorSharedData) return behaviorSharedData;
-  }
-
-  return nullptr;
+  auto objectConfiguration = (creationFunctionTable.find(type)->second)();
+  objectConfiguration->SetType(type);
+  return objectConfiguration;
 }
 
 #if defined(GD_IDE_ONLY)

@@ -6,29 +6,42 @@ Copyright (c) 2014-2016 Florian Rival (Florian.Rival@gmail.com)
 This project is released under the MIT License.
 */
 
-#include "GDCpp/Extensions/ExtensionBase.h"
-
 #include <iostream>
+
+#include "GDCore/Extensions/PlatformExtension.h"
+#include "GDCore/Tools/Localization.h"
 #include "TiledSpriteObject.h"
 
 void DeclareTiledSpriteObjectExtension(gd::PlatformExtension& extension) {
-  extension.SetExtensionInformation(
-      "TiledSpriteObject",
-      _("Tiled Sprite Object"),
-      _("This Extension enables the use of Tiled Sprite Objects."),
-      "Victor Levasseur and Florian Rival",
-      "Open source (MIT License)")
+  extension
+      .SetExtensionInformation(
+          "TiledSpriteObject",
+          _("Tiled Sprite Object"),
+          "Displays a 2D image in a repeating pattern over an area. Useful for "
+          "making backgrounds, including background that are scrolling when "
+          "the camera moves. This is more performant than using multiple "
+          "Sprite objects.",
+          "Victor Levasseur and Florian Rival",
+          "Open source (MIT License)")
+      .SetShortDescription("Repeating 2D image over an area. Useful for scrolling backgrounds. Adjustable offset.")
+      .SetDimension("2D")
       .SetExtensionHelpPath("/objects/tiled_sprite");
+  extension.AddInstructionOrExpressionGroupMetadata(_("Tiled Sprite Object"))
+      .SetIcon("CppPlatform/Extensions/TiledSpriteIcon.png");
 
-  gd::ObjectMetadata& obj = extension.AddObject<TiledSpriteObject>(
-      "TiledSprite",
-      _("Tiled Sprite"),
-      _("Displays an image repeated over an area"),
-      "CppPlatform/Extensions/TiledSpriteIcon.png");
+  gd::ObjectMetadata& obj =
+      extension
+          .AddObject<TiledSpriteObject>(
+              "TiledSprite",
+              _("Tiled Sprite"),
+              _("Displays an image repeated over an area."),
+              "CppPlatform/Extensions/TiledSpriteIcon.png")
+          .AddDefaultBehavior("EffectCapability::EffectBehavior")
+          .AddDefaultBehavior("ResizableCapability::ResizableBehavior")
+          .AddDefaultBehavior("OpacityCapability::OpacityBehavior")
+          .SetCategory("General");
 
-#if defined(GD_IDE_ONLY)
-  obj.SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
-
+  // Deprecated
   obj.AddCondition("Opacity",
                    _("Opacity"),
                    _("Compare the opacity of a Tiled Sprite, between 0 (fully "
@@ -39,121 +52,155 @@ void DeclareTiledSpriteObjectExtension(gd::PlatformExtension& extension) {
                    "res/conditions/opacity.png")
 
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardRelationalOperatorParameters("number");
+      .UseStandardRelationalOperatorParameters(
+          "number",
+          gd::ParameterOptions::MakeNewOptions().SetDescription(
+              _("Opacity to compare to (0-255)")))
+      .SetHidden();
 
-  obj.AddAction("SetOpacity",
-                _("Change Tiled Sprite opacity"),
-                _("Change the opacity of a Tiled Sprite. 0 is fully transparent, 255 "
-                  "is opaque (default)."),
-                _("the opacity"),
-                _("Visibility"),
-                "res/actions/opacity24.png",
-                "res/actions/opacity.png")
+  // Deprecated
+  obj.AddAction(
+         "SetOpacity",
+         _("Change Tiled Sprite opacity"),
+         _("Change the opacity of a Tiled Sprite. 0 is fully transparent, 255 "
+           "is opaque (default)."),
+         _("the opacity"),
+         _("Visibility"),
+         "res/actions/opacity24.png",
+         "res/actions/opacity.png")
 
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardOperatorParameters("number");
+      .UseStandardOperatorParameters(
+          "number",
+          gd::ParameterOptions::MakeNewOptions().SetDescription(
+              _("Opacity (0-255)")))
+      .SetHidden();
 
+  // Deprecated
   obj.AddExpression("Opacity",
                     _("Opacity"),
                     _("Opacity"),
                     _("Visibility"),
                     "res/actions/opacity.png")
-      .AddParameter("object", _("Object"), "TiledSprite");
+      .AddParameter("object", _("Object"), "TiledSprite")
+      .SetHidden();
 
   obj.AddAction(
          "SetColor",
-         _("Global color"),
-         _("Change the global color of a Tiled Sprite. The default color is white."),
-         _("Change color of _PARAM0_ to _PARAM1_"),
+         _("Tint color"),
+         _("Change the tint of a Tiled Sprite. The default color is white."),
+         _("Change tint of _PARAM0_ to _PARAM1_"),
          _("Effects"),
          "res/actions/color24.png",
          "res/actions/color.png")
 
       .AddParameter("object", _("Object"), "TiledSprite")
-      .AddParameter("color", _("Color"));
+      .AddParameter("color", _("Tint"));
 
+  // Deprecated
   obj.AddAction("Width",
                 _("Width"),
                 _("Modify the width of a Tiled Sprite."),
                 _("the width"),
-                _("Size and angle"),
-                "res/actions/scaleWidth24.png",
-                "res/actions/scaleWidth.png")
+                _("Size"),
+                "res/actions/scaleWidth24_black.png",
+                "res/actions/scaleWidth_black.png")
 
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardOperatorParameters("number")
+      .UseStandardOperatorParameters("number",
+                                     gd::ParameterOptions::MakeNewOptions())
+      .SetHidden()
       .SetFunctionName("SetWidth")
-      .SetGetter("GetWidth")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .SetGetter("GetWidth");
 
+  // Deprecated
   obj.AddCondition("Width",
                    _("Width"),
                    _("Test the width of a Tiled Sprite."),
                    _("the width"),
-                   _("Size and angle"),
-                   "res/conditions/scaleWidth24.png",
-                   "res/conditions/scaleWidth.png")
+                   _("Size"),
+                   "res/conditions/scaleWidth24_black.png",
+                   "res/conditions/scaleWidth_black.png")
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardRelationalOperatorParameters("number")
+      .UseStandardRelationalOperatorParameters(
+          "number", gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
-      .SetFunctionName("GetWidth")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .SetHidden()
+      .SetFunctionName("GetWidth");
 
+  // Deprecated
   obj.AddAction("Height",
                 _("Height"),
                 _("Modify the height of a Tiled Sprite."),
                 _("the height"),
-                _("Size and angle"),
-                "res/actions/scaleHeight24.png",
-                "res/actions/scaleHeight.png")
+                _("Size"),
+                "res/actions/scaleHeight24_black.png",
+                "res/actions/scaleHeight_black.png")
 
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardOperatorParameters("number")
+      .UseStandardOperatorParameters("number",
+                                     gd::ParameterOptions::MakeNewOptions())
+      .SetHidden()
       .SetFunctionName("SetHeight")
-      .SetGetter("GetHeight")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .SetGetter("GetHeight");
 
+  // Deprecated
   obj.AddCondition("Height",
                    _("Height"),
                    _("Test the height of a Tiled Sprite."),
                    _("the height"),
-                   _("Size and angle"),
-                   "res/conditions/scaleHeight24.png",
-                   "res/conditions/scaleHeight.png")
+                   _("Size"),
+                   "res/conditions/scaleHeight24_black.png",
+                   "res/conditions/scaleHeight_black.png")
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardRelationalOperatorParameters("number")
+      .UseStandardRelationalOperatorParameters(
+          "number", gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
-      .SetFunctionName("GetHeight")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .SetHidden()
+      .SetFunctionName("GetHeight");
 
+  // Deprecated
+  obj.AddAction("SetSize",
+                _("Size"),
+                _("Modify the size of a Tiled Sprite."),
+                _("Change the size of _PARAM0_: set to _PARAM1_x_PARAM2_"),
+                _("Size"),
+                "res/actions/scale24_black.png",
+                "res/actions/scale_black.png")
+
+      .AddParameter("object", _("Object"), "TiledSprite")
+      .AddParameter("expression", _("Width"))
+      .AddParameter("expression", _("Height"))
+      .SetHidden()
+      .SetFunctionName("SetSize");
+
+  // Deprecated: now available for all objects.
   obj.AddAction("Angle",
                 _("Angle"),
                 _("Modify the angle of a Tiled Sprite."),
                 _("the angle"),
-                _("Size and angle"),
-                "res/actions/rotate24.png",
-                "res/actions/rotate.png")
+                _("Size"),
+                "res/actions/rotate24_black.png",
+                "res/actions/rotate_black.png")
 
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardOperatorParameters("number")
-      .MarkAsAdvanced()
-      .SetFunctionName("SetAngle")
-      .SetGetter("GetAngle")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .UseStandardOperatorParameters("number",
+                                     gd::ParameterOptions::MakeNewOptions())
+      .SetHidden();
 
+  // Deprecated: now available for all objects.
   obj.AddCondition("Angle",
-                   _("Angle"),
-                   _("Test the angle of a Tiled Sprite."),
-                   _("the angle"),
-                   _("Size and angle"),
-                   "res/conditions/rotate24.png",
-                   "res/conditions/rotate.png")
+                   "Angle",
+                   "Test the angle of a Tiled Sprite.",
+                   "the angle",
+                   _("Size"),
+                   "res/conditions/rotate24_black.png",
+                   "res/conditions/rotate_black.png")
 
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardRelationalOperatorParameters("number")
-      .SetHidden()  // Now available for all objects
-      .SetFunctionName("GetAngle")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .UseStandardRelationalOperatorParameters(
+          "number", gd::ParameterOptions::MakeNewOptions())
+      .SetHidden();
 
   obj.AddAction(
          "XOffset",
@@ -161,14 +208,14 @@ void DeclareTiledSpriteObjectExtension(gd::PlatformExtension& extension) {
          _("Modify the offset used on the X axis when displaying the image."),
          _("the X offset"),
          _("Image offset"),
-         "res/conditions/scaleWidth24.png",
-         "res/conditions/scaleWidth.png")
+         "res/conditions/scaleWidth24_black.png",
+         "res/conditions/scaleWidth_black.png")
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardOperatorParameters("number")
+      .UseStandardOperatorParameters("number",
+                                     gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
       .SetFunctionName("SetXOffset")
-      .SetGetter("GetXOffset")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .SetGetter("GetXOffset");
 
   obj.AddCondition(
          "XOffset",
@@ -176,13 +223,20 @@ void DeclareTiledSpriteObjectExtension(gd::PlatformExtension& extension) {
          _("Test the offset used on the X axis when displaying the image."),
          _("the X offset"),
          _("Image offset"),
-         "res/conditions/scaleWidth24.png",
-         "res/conditions/scaleWidth.png")
+         "res/conditions/scaleWidth24_black.png",
+         "res/conditions/scaleWidth_black.png")
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardRelationalOperatorParameters("number")
+      .UseStandardRelationalOperatorParameters(
+          "number", gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
-      .SetFunctionName("GetXOffset")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .SetFunctionName("GetXOffset");
+
+  obj.AddExpression("XOffset",
+                    _("Image X Offset"),
+                    _("Return the offset used on the X axis when displaying the image."),
+                    _("Image offset"),
+                    "res/actions/scaleWidth_black.png")
+      .AddParameter("object", _("Object"), "TiledSprite");
 
   obj.AddAction(
          "YOffset",
@@ -190,14 +244,14 @@ void DeclareTiledSpriteObjectExtension(gd::PlatformExtension& extension) {
          _("Modify the offset used on the Y axis when displaying the image."),
          _("the Y offset"),
          _("Image offset"),
-         "res/conditions/scaleWidth24.png",
-         "res/conditions/scaleWidth.png")
+         "res/conditions/scaleHeight24_black.png",
+         "res/conditions/scaleHeight_black.png")
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardOperatorParameters("number")
+      .UseStandardOperatorParameters("number",
+                                     gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
       .SetFunctionName("SetYOffset")
-      .SetGetter("GetYOffset")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
+      .SetGetter("GetYOffset");
 
   obj.AddCondition(
          "YOffset",
@@ -205,45 +259,29 @@ void DeclareTiledSpriteObjectExtension(gd::PlatformExtension& extension) {
          _("Test the offset used on the Y axis when displaying the image."),
          _("the Y offset"),
          _("Image offset"),
-         "res/conditions/scaleWidth24.png",
-         "res/conditions/scaleWidth.png")
+         "res/conditions/scaleHeight24_black.png",
+         "res/conditions/scaleHeight_black.png")
       .AddParameter("object", _("Object"), "TiledSprite")
-      .UseStandardRelationalOperatorParameters("number")
+      .UseStandardRelationalOperatorParameters(
+          "number", gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
-      .SetFunctionName("GetYOffset")
-      .SetIncludeFile("TiledSpriteObject/TiledSpriteObject.h");
-#endif
-}
+      .SetFunctionName("GetYOffset");
 
-/**
- * \brief This class declares information about the extension.
- */
-class TiledSpriteObjectCppExtension : public ExtensionBase {
- public:
-  /**
-   * Constructor of an extension declares everything the extension contains:
-   * objects, actions, conditions and expressions.
-   */
-  TiledSpriteObjectCppExtension() {
-    DeclareTiledSpriteObjectExtension(*this);
-    AddRuntimeObject<TiledSpriteObject, RuntimeTiledSpriteObject>(
-        GetObjectMetadata("TiledSpriteObject::TiledSprite"),
-        "RuntimeTiledSpriteObject");
+  obj.AddExpression("YOffset",
+                    _("Image Y Offset"),
+                    _("Return the offset used on the Y axis when displaying the image."),
+                    _("Image offset"),
+                    "res/actions/scaleWidth_black.png")
+      .AddParameter("object", _("Object"), "TiledSprite");
 
-    GD_COMPLETE_EXTENSION_COMPILATION_INFORMATION();
-  };
-};
-
-#if defined(ANDROID)
-extern "C" ExtensionBase* CreateGDCppTiledSpriteObjectExtension() {
-  return new TiledSpriteObjectCppExtension;
+  obj.AddAction("SetImageFromResource",
+                _("Image"),
+                _("Change the image of a Tiled Sprite."),
+                _("Set image _PARAM1_ on _PARAM0_"),
+                _("Image"),
+                "res/imageicon24.png",
+                "res/imageicon.png")
+      .AddParameter("object", _("Object"), "TiledSprite")
+      .AddParameter("imageResource", _("Image resource"))
+      .AddCodeOnlyParameter("currentScene", "");
 }
-#elif !defined(EMSCRIPTEN)
-/**
- * Used by GDevelop to create the extension class
- * -- Do not need to be modified. --
- */
-extern "C" ExtensionBase* GD_EXTENSION_API CreateGDExtension() {
-  return new TiledSpriteObjectCppExtension;
-}
-#endif

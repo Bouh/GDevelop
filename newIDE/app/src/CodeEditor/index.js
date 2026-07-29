@@ -2,12 +2,19 @@
 import { Trans } from '@lingui/macro';
 
 import * as React from 'react';
-import { setupAutocompletions } from './LocalCodeEditorAutocompletions';
 import PlaceholderLoader from '../UI/PlaceholderLoader';
 import RaisedButton from '../UI/RaisedButton';
 import Text from '../UI/Text';
 import PreferencesContext from '../MainFrame/Preferences/PreferencesContext';
-import { getAllThemes } from './Theme';
+import PortalContainerContext from '../UI/PortalContainerContext';
+import PoppedOutMonacoEditor from './PoppedOutMonacoEditor';
+import {
+  registerThemes,
+  initializeCompletions,
+  enableJsTypeDiagnostics,
+  applyElectronClipboardPatch,
+  baseEditorOptions,
+} from './MonacoSetup';
 
 export type State = {|
   MonacoEditor: ?any,
@@ -16,129 +23,204 @@ export type State = {|
 export type Props = {|
   value: string,
   onChange: string => void,
-  width: number,
+  initialScrollTop: number,
+  initialCursorColumn: number,
+  initialCursorLine: number,
+  saveEditorState: ({
+    scrollTop: number,
+    cursorColumn: number,
+    cursorLine: number,
+  }) => void,
+  width?: number,
+  height?: number,
   onEditorMounted?: () => void,
+  onFocus: () => void,
+  onBlur: () => void,
 |};
 
-const monacoEditorOptions = {
-  scrollBeyondLastLine: false,
-  minimap: {
-    enabled: false,
-  },
-};
+export const CodeEditor = ({
+  value,
+  onChange,
+  initialScrollTop,
+  initialCursorColumn,
+  initialCursorLine,
+  saveEditorState,
+  width,
+  height,
+  onEditorMounted,
+  onFocus,
+  onBlur,
+}: Props): React.Node => {
+  const [MonacoEditor, setMonacoEditor] = React.useState<any>(null);
+  const [error, setError] = React.useState<Error | null>(null);
 
-// There is only a single instance of monaco living, keep track
-// of if its initialized or not.
-let monacoCompletionsInitialized = false;
-let monacoThemesInitialized = false;
+  const { values: preferences } = React.useContext(PreferencesContext);
+  const portalContainer = React.useContext(PortalContainerContext);
 
-export class CodeEditor extends React.Component<Props, State> {
-  state = {
-    MonacoEditor: null,
-    error: null,
-  };
+  const setupEditorThemes = React.useCallback((monaco: any) => {
+    registerThemes(monaco);
+  }, []);
 
-  setupEditorThemes = (monaco: any) => {
-    if (!monacoThemesInitialized) {
-      monacoThemesInitialized = true;
+  const setUpSaveOnEditorBlur = React.useCallback(
+    (editor: any) => {
+      editor.onDidBlurEditorText(onBlur);
+    },
+    [onBlur]
+  );
+  const setUpEditorFocus = React.useCallback(
+    (editor: any) => {
+      editor.onDidFocusEditorText(onFocus);
+    },
+    [onFocus]
+  );
 
-      getAllThemes().forEach(codeEditorTheme => {
-        // Builtin themes don't have themeData, don't redefine them.
-        if (codeEditorTheme.themeData) {
-          monaco.editor.defineTheme(
-            codeEditorTheme.themeName,
-            codeEditorTheme.themeData
-          );
-        }
+  const setupEditorCompletions = React.useCallback(
+    (editor: any, monaco: any) => {
+      setUpEditorFocus(editor);
+      setUpSaveOnEditorBlur(editor);
+      initializeCompletions(monaco);
+      applyElectronClipboardPatch(editor, monaco);
+
+      if (preferences.showJsTypeError) {
+        enableJsTypeDiagnostics(monaco);
+      }
+
+      editor.setScrollTop(initialScrollTop);
+      editor.setPosition({
+        column: initialCursorColumn,
+        lineNumber: initialCursorLine,
       });
-    }
-  };
 
-  setupEditorCompletions = (editor: any, monaco: any) => {
-    if (!monacoCompletionsInitialized) {
-      monacoCompletionsInitialized = true;
+      if (onEditorMounted) onEditorMounted();
+    },
+    [
+      initialCursorColumn,
+      initialCursorLine,
+      initialScrollTop,
+      onEditorMounted,
+      preferences.showJsTypeError,
+      setUpEditorFocus,
+      setUpSaveOnEditorBlur,
+    ]
+  );
 
-      monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
-        // noLib: true,
-        target: monaco.languages.typescript.ScriptTarget.ES6,
-        allowNonTsExtensions: true,
-        allowJs: true,
-        checkJs: true,
-      });
-      setupAutocompletions(monaco);
-    }
+  const handleLoadError = React.useCallback((error: Error) => {
+    setError(error);
+  }, []);
 
-    if (this.props.onEditorMounted) this.props.onEditorMounted();
-  };
+  const loadMonacoEditor = React.useCallback(
+    () => {
+      setError(null);
 
-  componentDidMount() {
-    this.loadMonacoEditor();
-  }
+      // Define the global variable used by Monaco Editor to find its worker
+      // (used, at least, for auto-completions).
+      window.MonacoEnvironment = {
+        getWorkerUrl: function(workerId, label) {
+          return 'external/monaco-editor-min/vs/base/worker/workerMain.js';
+        },
+      };
 
-  handleLoadError(error: Error) {
-    this.setState({
-      error,
-    });
-  }
+      import(/* webpackChunkName: "react-monaco-editor" */ 'react-monaco-editor')
+        .then(module => setMonacoEditor(oldValue => module.default))
+        .catch(handleLoadError);
+    },
+    [handleLoadError]
+  );
 
-  loadMonacoEditor() {
-    this.setState({
-      error: null,
-    });
-    import(/* webpackChunkName: "react-monaco-editor" */ 'react-monaco-editor')
-      .then(module =>
-        this.setState({
-          MonacoEditor: module.default,
-        })
-      )
-      .catch(this.handleLoadError);
-  }
+  // Load the editor on mount.
+  React.useEffect(() => {
+    loadMonacoEditor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  _handleContextMenu = (event: SyntheticEvent<>) => {
+  const _handleContextMenu = React.useCallback((event: SyntheticEvent<>) => {
     // Prevent right click to bubble up and trigger the context menu
     // of the event.
     event.preventDefault();
     event.stopPropagation();
-  };
+  }, []);
 
-  render() {
-    const { MonacoEditor, error } = this.state;
-    if (error) {
-      return (
-        <React.Fragment>
-          <Text>
-            <Trans>Unable to load the code editor</Trans>
-          </Text>
-          <RaisedButton
-            label={<Trans>Retry</Trans>}
-            onClick={this.loadMonacoEditor}
-          />
-        </React.Fragment>
-      );
-    }
+  const _saveEditorState = React.useCallback(
+    (editor: any, monaco: any) => {
+      const cursorPosition = editor.getPosition();
+      saveEditorState({
+        scrollTop: editor.getScrollTop(),
+        cursorColumn: cursorPosition.column,
+        cursorLine: cursorPosition.lineNumber,
+      });
+    },
+    [saveEditorState]
+  );
 
-    if (!MonacoEditor) {
-      return <PlaceholderLoader />;
-    }
-
+  // When rendered inside a popped-out window (PortalContainerContext
+  // is set), use PoppedOutMonacoEditor which loads Monaco via the
+  // AMD loader in the target window's context. This is necessary
+  // because the webpack-bundled Monaco (react-monaco-editor) has
+  // internal DOM checks that compare against the main window's
+  // document.body — elements in a different window's document are
+  // treated as detached and never rendered.
+  if (portalContainer) {
     return (
-      <div onContextMenu={this._handleContextMenu}>
-        <PreferencesContext.Consumer>
-          {({ values }) => (
-            <MonacoEditor
-              width={this.props.width || 600}
-              height="400"
-              language="javascript"
-              theme={values.codeEditorThemeName}
-              value={this.props.value}
-              onChange={this.props.onChange}
-              editorWillMount={this.setupEditorThemes}
-              editorDidMount={this.setupEditorCompletions}
-              options={monacoEditorOptions}
-            />
-          )}
-        </PreferencesContext.Consumer>
+      <PoppedOutMonacoEditor
+        value={value}
+        onChange={onChange}
+        width={width || 600}
+        height={height || 200}
+        theme={preferences.codeEditorThemeName}
+        fontSize={preferences.eventsSheetZoomLevel}
+        showJsTypeError={preferences.showJsTypeError}
+        initialScrollTop={initialScrollTop}
+        initialCursorColumn={initialCursorColumn}
+        initialCursorLine={initialCursorLine}
+        saveEditorState={saveEditorState}
+        onEditorMounted={onEditorMounted}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <React.Fragment>
+        <Text>
+          <Trans>Unable to load the code editor</Trans>
+        </Text>
+        <RaisedButton label={<Trans>Retry</Trans>} onClick={loadMonacoEditor} />
+      </React.Fragment>
+    );
+  }
+
+  if (!MonacoEditor) {
+    // Reserve the same dimensions as the editor that will replace this loader,
+    // so that the surrounding container keeps a stable height while Monaco is
+    // being loaded asynchronously. Without this, the height would grow once the
+    // editor mounts, which - in the events sheet - reports a new event height
+    // and makes the virtualized list jump the scroll position.
+    return (
+      <div style={{ width: width || 600, height: height || 200 }}>
+        <PlaceholderLoader />
       </div>
     );
   }
-}
+
+  return (
+    <div onContextMenu={_handleContextMenu}>
+      <MonacoEditor
+        width={width || 600}
+        height={height || 200}
+        language="javascript"
+        theme={preferences.codeEditorThemeName}
+        value={value}
+        onChange={onChange}
+        editorWillMount={setupEditorThemes}
+        editorDidMount={setupEditorCompletions}
+        editorWillUnmount={_saveEditorState}
+        options={{
+          ...baseEditorOptions,
+          fontSize: preferences.eventsSheetZoomLevel,
+        }}
+      />
+    </div>
+  );
+};

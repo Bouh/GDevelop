@@ -1,46 +1,86 @@
 // @flow
 import * as React from 'react';
-import ThemeConsumer from './Theme/ThemeConsumer';
+import GDevelopThemeContext from './Theme/GDevelopThemeContext';
 
 type ToolbarProps = {|
   children: React.Node,
+  height?: number,
+  borderBottomColor?: ?string,
+  paddingBottom?: number,
+  hidden?: boolean,
 |};
+
+const styles = {
+  toolbar: {
+    flexShrink: 0,
+    display: 'flex',
+    overflowX: 'overlay',
+    overflowY: 'hidden',
+    paddingLeft: 8,
+    paddingRight: 8,
+    alignItems: 'center',
+    position: 'relative', // to ensure it is displayed above any global iframe.
+  },
+};
+
+export const Toolbar: React.ComponentType<ToolbarProps> = React.memo<ToolbarProps>(
+  ({
+    children,
+    borderBottomColor,
+    height = 40,
+    paddingBottom,
+    hidden,
+  }: ToolbarProps) => {
+    const gdevelopTheme = React.useContext(GDevelopThemeContext);
+    return (
+      <div
+        className="almost-invisible-scrollbar"
+        style={{
+          ...styles.toolbar,
+          backgroundColor: gdevelopTheme.toolbar.backgroundColor,
+          height,
+          borderBottom: borderBottomColor
+            ? `2px solid ${borderBottomColor}`
+            : undefined,
+          ...(paddingBottom ? { paddingBottom } : undefined),
+
+          // Hiding the titlebar should still keep its position in the layout to avoid layout shifts:
+          visibility: hidden ? 'hidden' : 'visible',
+          // Use content-visibility as we know the exact height of the toolbar, so the
+          // content can be entirely skipped when hidden:
+          contentVisibility: hidden ? 'hidden' : 'visible',
+          pointerEvents: hidden ? undefined : 'all',
+        }}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+
+// $FlowFixMe[missing-local-annot]
+const toolbarGroupStyle = props => ({
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: props.spaceOut
+    ? 'space-around'
+    : props.firstChild
+    ? 'flex-start'
+    : props.lastChild
+    ? 'flex-end'
+    : 'center',
+});
 
 type ToolbarGroupProps = {|
   children?: React.Node,
-  firstChild?: true, // Not used, but could be useful one day for styling
-  lastChild?: true, // Not used, but could be useful one day for styling
+  firstChild?: boolean,
+  lastChild?: boolean,
+  spaceOut?: boolean,
 |};
 
-export const Toolbar = React.memo<ToolbarProps>(
-  ({ children }: ToolbarProps) => (
-    <ThemeConsumer>
-      {muiTheme => (
-        <div
-          style={{
-            backgroundColor: muiTheme.toolbar.backgroundColor,
-            padding: 3,
-            flexShrink: 0,
-            display: 'flex',
-            justifyContent: 'space-between',
-            overflowX: 'auto',
-            overflowY: 'hidden',
-          }}
-        >
-          {children}
-        </div>
-      )}
-    </ThemeConsumer>
-  )
-);
-
-const toolbarGroupStyle = {
-  display: 'flex',
-  alignItems: 'center',
-};
-
-export const ToolbarGroup = React.memo<ToolbarGroupProps>(
-  ({ children }: ToolbarGroupProps) => (
-    <span style={toolbarGroupStyle}>{children}</span>
+export const ToolbarGroup: React.ComponentType<ToolbarGroupProps> = React.memo<ToolbarGroupProps>(
+  (props: ToolbarGroupProps) => (
+    <span style={toolbarGroupStyle(props)}>{props.children}</span>
   )
 );

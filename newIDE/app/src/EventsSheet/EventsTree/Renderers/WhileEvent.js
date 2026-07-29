@@ -1,17 +1,20 @@
 // @flow
 import * as React from 'react';
 import InstructionsList from '../InstructionsList';
+import VariableDeclarationsList from '../VariableDeclarationsList';
 import classNames from 'classnames';
 import {
   largeSelectedArea,
   largeSelectableArea,
-  executableEventContainer,
+  conditionsActionsContainer,
   disabledText,
   conditionsContainer,
+  eventLabel,
 } from '../ClassNames';
 import { type EventRendererProps } from './EventRenderer';
 import ConditionsActionsColumns from '../ConditionsActionsColumns';
-const gd = global.gd;
+import { Trans } from '@lingui/macro';
+const gd: libGDevelop = global.gd;
 
 const styles = {
   container: {
@@ -26,11 +29,11 @@ const styles = {
   },
 };
 
-export default class ForEachEvent extends React.Component<
+export default class WhileEvent extends React.Component<
   EventRendererProps,
-  *
+  any
 > {
-  render() {
+  render(): any {
     var whileEvent = gd.asWhileEvent(this.props.event);
 
     return (
@@ -39,17 +42,31 @@ export default class ForEachEvent extends React.Component<
         className={classNames({
           [largeSelectableArea]: true,
           [largeSelectedArea]: this.props.selected,
-          [executableEventContainer]: true,
         })}
       >
+        <VariableDeclarationsList
+          variablesContainer={whileEvent.getVariables()}
+          loopIndexVariableName={whileEvent.getLoopIndexVariableName()}
+          onVariableDeclarationClick={this.props.onVariableDeclarationClick}
+          onVariableDeclarationDoubleClick={
+            this.props.onVariableDeclarationDoubleClick
+          }
+          className={'local-variables-container'}
+          disabled={this.props.disabled}
+          screenType={this.props.screenType}
+          windowSize={this.props.windowSize}
+          idPrefix={this.props.idPrefix}
+        />
         <div
           className={classNames({
             [disabledText]: this.props.disabled,
+            [eventLabel]: true,
           })}
         >
-          While these conditions are true:
+          <Trans>While these conditions are true:</Trans>
         </div>
         <InstructionsList
+          platform={this.props.project.getCurrentPlatform()}
           instrsList={whileEvent.getWhileConditions()}
           style={
             {} /* TODO: Use a new object to force update - somehow updates are not always propagated otherwise */
@@ -64,27 +81,41 @@ export default class ForEachEvent extends React.Component<
           onInstructionClick={this.props.onInstructionClick}
           onInstructionDoubleClick={this.props.onInstructionDoubleClick}
           onInstructionContextMenu={this.props.onInstructionContextMenu}
-          onInstructionsListContextMenu={
-            this.props.onInstructionsListContextMenu
-          }
+          onAddInstructionContextMenu={this.props.onAddInstructionContextMenu}
           onParameterClick={this.props.onParameterClick}
           disabled={this.props.disabled}
           renderObjectThumbnail={this.props.renderObjectThumbnail}
           screenType={this.props.screenType}
-          windowWidth={this.props.windowWidth}
+          windowSize={this.props.windowSize}
+          scope={this.props.scope}
+          resourcesManager={this.props.project.getResourcesManager()}
+          globalObjectsContainer={this.props.globalObjectsContainer}
+          objectsContainer={this.props.objectsContainer}
+          projectScopedContainersAccessor={
+            this.props.projectScopedContainersAccessor
+          }
+          idPrefix={`${this.props.idPrefix}-while`}
+          highlightedSearchText={this.props.highlightedSearchText}
+          highlightedSearchMatchCase={this.props.highlightedSearchMatchCase}
         />
         <div
           className={classNames({
             [disabledText]: this.props.disabled,
+            [eventLabel]: true,
           })}
         >
-          Repeat these:
+          <Trans>Repeat these:</Trans>
         </div>
         <ConditionsActionsColumns
           leftIndentWidth={this.props.leftIndentWidth}
-          windowWidth={this.props.windowWidth}
+          windowSize={this.props.windowSize}
+          eventsSheetWidth={this.props.eventsSheetWidth}
+          className={classNames({
+            [conditionsActionsContainer]: true,
+          })}
           renderConditionsList={({ style, className }) => (
             <InstructionsList
+              platform={this.props.project.getCurrentPlatform()}
               instrsList={whileEvent.getConditions()}
               style={style}
               className={className}
@@ -97,18 +128,29 @@ export default class ForEachEvent extends React.Component<
               onInstructionClick={this.props.onInstructionClick}
               onInstructionDoubleClick={this.props.onInstructionDoubleClick}
               onInstructionContextMenu={this.props.onInstructionContextMenu}
-              onInstructionsListContextMenu={
-                this.props.onInstructionsListContextMenu
+              onAddInstructionContextMenu={
+                this.props.onAddInstructionContextMenu
               }
               onParameterClick={this.props.onParameterClick}
               disabled={this.props.disabled}
               renderObjectThumbnail={this.props.renderObjectThumbnail}
               screenType={this.props.screenType}
-              windowWidth={this.props.windowWidth}
+              windowSize={this.props.windowSize}
+              scope={this.props.scope}
+              resourcesManager={this.props.project.getResourcesManager()}
+              globalObjectsContainer={this.props.globalObjectsContainer}
+              objectsContainer={this.props.objectsContainer}
+              projectScopedContainersAccessor={
+                this.props.projectScopedContainersAccessor
+              }
+              idPrefix={this.props.idPrefix}
+              highlightedSearchText={this.props.highlightedSearchText}
+              highlightedSearchMatchCase={this.props.highlightedSearchMatchCase}
             />
           )}
           renderActionsList={({ className }) => (
             <InstructionsList
+              platform={this.props.project.getCurrentPlatform()}
               instrsList={whileEvent.getActions()}
               style={
                 {
@@ -125,14 +167,24 @@ export default class ForEachEvent extends React.Component<
               onInstructionClick={this.props.onInstructionClick}
               onInstructionDoubleClick={this.props.onInstructionDoubleClick}
               onInstructionContextMenu={this.props.onInstructionContextMenu}
-              onInstructionsListContextMenu={
-                this.props.onInstructionsListContextMenu
+              onAddInstructionContextMenu={
+                this.props.onAddInstructionContextMenu
               }
               onParameterClick={this.props.onParameterClick}
               disabled={this.props.disabled}
               renderObjectThumbnail={this.props.renderObjectThumbnail}
               screenType={this.props.screenType}
-              windowWidth={this.props.windowWidth}
+              windowSize={this.props.windowSize}
+              scope={this.props.scope}
+              resourcesManager={this.props.project.getResourcesManager()}
+              globalObjectsContainer={this.props.globalObjectsContainer}
+              objectsContainer={this.props.objectsContainer}
+              projectScopedContainersAccessor={
+                this.props.projectScopedContainersAccessor
+              }
+              idPrefix={this.props.idPrefix}
+              highlightedSearchText={this.props.highlightedSearchText}
+              highlightedSearchMatchCase={this.props.highlightedSearchMatchCase}
             />
           )}
         />

@@ -23,6 +23,7 @@ const getLocales = () => {
         locales
           .filter(name => name !== '.DS_Store')
           .filter(name => name !== 'LocalesMetadata.js')
+          .filter(name => name !== 'ExtensionLocalesMetadata.js')
           .filter(name => name !== '_build')
       );
     });
@@ -34,7 +35,7 @@ const getLocaleSourceCatalogFiles = localeName => {
   if (localeName === 'pseudo_LOCALE') return ['ide-messages.pot'];
 
   return ['ide-messages.po', 'gdcore-gdcpp-gdjs-extensions-messages.po'];
-}
+};
 
 const getLocalePath = localeName => {
   return path.join(localesBasePath, localeName);

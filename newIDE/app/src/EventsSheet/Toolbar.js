@@ -1,25 +1,37 @@
 //@flow
 import { t } from '@lingui/macro';
-import React, { PureComponent } from 'react';
+import * as React from 'react';
 import { ToolbarGroup } from '../UI/Toolbar';
 import ToolbarSeparator from '../UI/ToolbarSeparator';
-import ToolbarIcon from '../UI/ToolbarIcon';
+import IconButton from '../UI/IconButton';
 import ElementWithMenu from '../UI/Menu/ElementWithMenu';
+import ToolbarCommands from './ToolbarCommands';
 import { type EventMetadata } from './EnumerateEventsMetadata';
+import AddEventIcon from '../UI/CustomSvgIcons/AddEvent';
+import AddSubEventIcon from '../UI/CustomSvgIcons/AddSubEvent';
+import AddCommentIcon from '../UI/CustomSvgIcons/AddComment';
+import CircledAddIcon from '../UI/CustomSvgIcons/CircledAdd';
+import TrashIcon from '../UI/CustomSvgIcons/Trash';
+import UndoIcon from '../UI/CustomSvgIcons/Undo';
+import RedoIcon from '../UI/CustomSvgIcons/Redo';
+import ToolbarSearchIcon from '../UI/CustomSvgIcons/ToolbarSearch';
+import EditSceneIcon from '../UI/CustomSvgIcons/EditScene';
+import { getShortcutDisplayName, useShortcutMap } from '../KeyboardShortcuts';
+import AddLocalVariableIcon from '../UI/CustomSvgIcons/LocalVariable';
 
 type Props = {|
-  showPreviewButton: boolean,
-  onPreview: () => void,
-  showNetworkPreviewButton: boolean,
-  onNetworkPreview: () => void,
-  onOpenDebugger: () => void,
-  showPreviewButton: boolean,
   onAddStandardEvent: () => void,
   onAddSubEvent: () => void,
   canAddSubEvent: boolean,
+  onAddLocalVariable: () => void,
+  canAddLocalVariable: boolean,
   onAddCommentEvent: () => void,
   allEventsMetadata: Array<EventMetadata>,
-  onAddEvent: (eventType: string) => void,
+  onAddEvent: (eventType: string) => Array<gdBaseEvent>,
+  onToggleInvertedCondition: () => void,
+  onToggleDisabledEvent: () => void,
+  canToggleEventDisabled: boolean,
+  canToggleInstructionInverted: boolean,
   onRemove: () => void,
   canRemove: boolean,
   undo: () => void,
@@ -28,110 +40,204 @@ type Props = {|
   canRedo: boolean,
   onToggleSearchPanel: () => void,
   onOpenSettings?: ?() => void,
+  settingsIcon?: React.Node,
+  moveEventsIntoNewGroup: () => void,
+  canMoveEventsIntoNewGroup: boolean,
+  onOpenSceneVariables: () => void,
 |};
 
-export class Toolbar extends PureComponent<Props> {
-  render() {
-    return (
+const Toolbar: React.ComponentType<Props> = React.memo<Props>(function Toolbar({
+  onAddStandardEvent,
+  onAddSubEvent,
+  canAddSubEvent,
+  onAddLocalVariable,
+  canAddLocalVariable,
+  onAddCommentEvent,
+  allEventsMetadata,
+  onAddEvent,
+  onToggleInvertedCondition,
+  onToggleDisabledEvent,
+  canToggleEventDisabled,
+  canToggleInstructionInverted,
+  onRemove,
+  canRemove,
+  undo,
+  canUndo,
+  redo,
+  canRedo,
+  onToggleSearchPanel,
+  onOpenSettings,
+  settingsIcon,
+  moveEventsIntoNewGroup,
+  canMoveEventsIntoNewGroup,
+  onOpenSceneVariables,
+}: Props) {
+  const shortcutMap = useShortcutMap();
+
+  return (
+    <>
+      <ToolbarCommands
+        onAddCommentEvent={onAddCommentEvent}
+        onAddSubEvent={onAddSubEvent}
+        canAddSubEvent={canAddSubEvent}
+        onAddLocalVariable={onAddLocalVariable}
+        canAddLocalVariable={canAddLocalVariable}
+        onAddStandardEvent={onAddStandardEvent}
+        onAddEvent={onAddEvent}
+        allEventsMetadata={allEventsMetadata}
+        onToggleInvertedCondition={onToggleInvertedCondition}
+        onToggleDisabledEvent={onToggleDisabledEvent}
+        canToggleEventDisabled={canToggleEventDisabled}
+        canToggleInstructionInverted={canToggleInstructionInverted}
+        onRemove={onRemove}
+        canRemove={canRemove}
+        undo={undo}
+        canUndo={canUndo}
+        redo={redo}
+        canRedo={canRedo}
+        onToggleSearchPanel={onToggleSearchPanel}
+        onOpenSettings={onOpenSettings}
+        moveEventsIntoNewGroup={moveEventsIntoNewGroup}
+        canMoveEventsIntoNewGroup={canMoveEventsIntoNewGroup}
+        onOpenSceneVariables={onOpenSceneVariables}
+      />
       <ToolbarGroup lastChild>
-        {this.props.showPreviewButton && (
-          <ToolbarIcon
-            onClick={this.props.onPreview}
-            src="res/ribbon_default/preview32.png"
-            tooltip={t`Launch a preview of the scene`}
-          />
-        )}
-        {this.props.showNetworkPreviewButton && (
-          <ElementWithMenu
-            element={
-              <ToolbarIcon
-                src="res/ribbon_default/bug32.png"
-                tooltip={t`Advanced preview options (debugger, network preview...)`}
-              />
-            }
-            buildMenuTemplate={() => [
-              {
-                label: 'Network preview (Preview over WiFi/LAN)',
-                click: () => this.props.onNetworkPreview(),
-              },
-              { type: 'separator' },
-              {
-                label: 'Preview with debugger and performance profiler',
-                click: () => this.props.onOpenDebugger(),
-              },
-            ]}
-          />
-        )}
-        {this.props.showPreviewButton && <ToolbarSeparator />}
-        <ToolbarIcon
-          onClick={this.props.onAddStandardEvent}
-          src="res/ribbon_default/eventadd32.png"
+        <IconButton
+          size="small"
+          color="default"
+          onClick={onAddStandardEvent}
+          id="toolbar-add-event-button"
           tooltip={t`Add a new empty event`}
-        />
-        <ToolbarIcon
-          onClick={this.props.onAddSubEvent}
-          src="res/ribbon_default/subeventadd32.png"
-          disabled={!this.props.canAddSubEvent}
+          acceleratorString={getShortcutDisplayName(
+            shortcutMap['ADD_STANDARD_EVENT']
+          )}
+        >
+          <AddEventIcon />
+        </IconButton>
+
+        <IconButton
+          size="small"
+          color="default"
+          onClick={onAddSubEvent}
+          disabled={!canAddSubEvent}
+          id="toolbar-add-sub-event-button"
           tooltip={t`Add a sub-event to the selected event`}
-        />
-        <ToolbarIcon
-          onClick={this.props.onAddCommentEvent}
-          src="res/ribbon_default/commentaireadd32.png"
+          acceleratorString={getShortcutDisplayName(
+            shortcutMap['ADD_SUBEVENT']
+          )}
+        >
+          <AddSubEventIcon />
+        </IconButton>
+
+        <IconButton
+          size="small"
+          color="default"
+          onClick={onAddLocalVariable}
+          disabled={!canAddLocalVariable}
+          id="toolbar-add-local-variable-button"
+          tooltip={t`Add a local variable`}
+          acceleratorString={getShortcutDisplayName(
+            shortcutMap['ADD_LOCAL_VARIABLE']
+          )}
+        >
+          <AddLocalVariableIcon />
+        </IconButton>
+
+        <IconButton
+          size="small"
+          color="default"
+          onClick={onAddCommentEvent}
+          id="toolbar-add-comment-button"
           tooltip={t`Add a comment`}
-        />
+          acceleratorString={getShortcutDisplayName(
+            shortcutMap['ADD_COMMENT_EVENT']
+          )}
+        >
+          <AddCommentIcon />
+        </IconButton>
         <ElementWithMenu
           element={
-            <ToolbarIcon
-              src="res/ribbon_default/add32.png"
+            <IconButton
+              size="small"
+              color="default"
               tooltip={t`Choose and add an event`}
-            />
+              acceleratorString={getShortcutDisplayName(
+                shortcutMap['CHOOSE_AND_ADD_EVENT']
+              )}
+            >
+              <CircledAddIcon />
+            </IconButton>
           }
           buildMenuTemplate={() =>
-            this.props.allEventsMetadata.map(metadata => {
+            allEventsMetadata.map(metadata => {
               return {
                 label: metadata.fullName,
-                click: () => this.props.onAddEvent(metadata.type),
+                click: () => {
+                  onAddEvent(metadata.type);
+                },
               };
             })
           }
         />
         <ToolbarSeparator />
-        <ToolbarIcon
-          onClick={this.props.onRemove}
-          src="res/ribbon_default/deleteselected32.png"
-          disabled={!this.props.canRemove}
+
+        <IconButton
+          size="small"
+          color="default"
+          onClick={onRemove}
+          disabled={!canRemove}
           tooltip={t`Delete the selected event(s)`}
-        />
-        <ToolbarIcon
-          onClick={this.props.undo}
-          src="res/ribbon_default/undo32.png"
-          disabled={!this.props.canUndo}
+          acceleratorString={'Delete'}
+        >
+          <TrashIcon />
+        </IconButton>
+
+        <IconButton
+          size="small"
+          color="default"
+          onClick={undo}
+          disabled={!canUndo}
           tooltip={t`Undo the last changes`}
-        />
-        <ToolbarIcon
-          onClick={this.props.redo}
-          src="res/ribbon_default/redo32.png"
-          disabled={!this.props.canRedo}
+          acceleratorString={'CmdOrCtrl+Z'}
+        >
+          <UndoIcon />
+        </IconButton>
+
+        <IconButton
+          size="small"
+          color="default"
+          onClick={redo}
+          disabled={!canRedo}
           tooltip={t`Redo the last changes`}
-        />
+          acceleratorString={'CmdOrCtrl+Shift+Z'}
+        >
+          <RedoIcon />
+        </IconButton>
         <ToolbarSeparator />
-        <ToolbarIcon
-          onClick={() => this.props.onToggleSearchPanel()}
-          src="res/ribbon_default/search32.png"
+
+        <IconButton
+          size="small"
+          color="default"
+          onClick={() => onToggleSearchPanel()}
           tooltip={t`Search in events`}
           acceleratorString={'CmdOrCtrl+F'}
-        />
-        {this.props.onOpenSettings && <ToolbarSeparator />}
-        {this.props.onOpenSettings && (
-          <ToolbarIcon
-            onClick={this.props.onOpenSettings}
-            src="res/ribbon_default/pref32.png"
+        >
+          <ToolbarSearchIcon />
+        </IconButton>
+        {onOpenSettings && <ToolbarSeparator />}
+        {onOpenSettings && (
+          <IconButton
+            size="small"
+            color="default"
+            onClick={onOpenSettings}
             tooltip={t`Open settings`}
-          />
+          >
+            {settingsIcon || <EditSceneIcon />}
+          </IconButton>
         )}
       </ToolbarGroup>
-    );
-  }
-}
+    </>
+  );
+});
 
 export default Toolbar;

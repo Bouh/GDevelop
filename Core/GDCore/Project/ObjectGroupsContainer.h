@@ -4,9 +4,13 @@
  * reserved. This project is released under the MIT License.
  */
 
-#ifndef GDCORE_OBJECTGROUPSCONTAINER_H
-#define GDCORE_OBJECTGROUPSCONTAINER_H
+#pragma once
+
+#include <algorithm>
+#include <memory>
 #include <vector>
+
+#include "GDCore/Project/MemoryTrackedRegistry.h"
 #include "GDCore/Project/ObjectGroup.h"
 #include "GDCore/String.h"
 namespace gd {
@@ -25,8 +29,10 @@ namespace gd {
  */
 class GD_CORE_API ObjectGroupsContainer {
  public:
-  ObjectGroupsContainer(){};
+  ObjectGroupsContainer();
+  ObjectGroupsContainer(const ObjectGroupsContainer&);
   virtual ~ObjectGroupsContainer(){};
+  ObjectGroupsContainer& operator=(const ObjectGroupsContainer& rhs);
 
   /**
    * \brief Return true if the specified group is in the container
@@ -77,7 +83,6 @@ class GD_CORE_API ObjectGroupsContainer {
    */
   bool IsEmpty() const { return objectGroups.empty(); };
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief return the position of the group called "name" in the group list
    */
@@ -107,12 +112,16 @@ class GD_CORE_API ObjectGroupsContainer {
    * \brief Move the specified group at a new position in the list.
    */
   void Move(std::size_t oldIndex, std::size_t newIndex);
-#endif
 
   /**
    * \brief Clear all groups of the container.
    */
   inline void Clear() { objectGroups.clear(); }
+
+  /**
+   * \brief Call the callback for each group name matching the specified search.
+   */
+  void ForEachNameMatchingSearch(const gd::String& search, std::function<void(const gd::String& name)> fn) const;
   ///@}
 
   /** \name Saving and loading
@@ -172,11 +181,17 @@ class GD_CORE_API ObjectGroupsContainer {
   const ObjectGroup& at(size_t index) const { return Get(index); };
   ///@}
 
+  /**
+   * Initialize from another object groups container. Used by copy-ctor and
+   * assign-op. Don't forget to update me if members were changed!
+   */
+  void Init(const gd::ObjectGroupsContainer& other);
+
  private:
-  std::vector<ObjectGroup> objectGroups;
+  std::vector<std::unique_ptr<gd::ObjectGroup>> objectGroups;
   static ObjectGroup badGroup;
+  gd::MemoryTracked _memoryTracked{this, "ObjectGroupsContainer"};
 };
 
 }  // namespace gd
 
-#endif  // GDCORE_OBJECTGROUPSCONTAINER_H

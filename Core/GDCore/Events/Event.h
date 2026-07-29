@@ -3,19 +3,19 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#if defined(GD_IDE_ONLY)
-#ifndef GDCORE_EVENT_H
-#define GDCORE_EVENT_H
+#pragma once
 
 #include <iostream>
 #include <memory>
 #include <vector>
+
 #include "GDCore/Events/Instruction.h"
 #include "GDCore/Events/InstructionsList.h"
+#include "GDCore/Extensions/Metadata/InstructionMetadata.h"
+#include "GDCore/Project/MemoryTrackedRegistry.h"
 #include "GDCore/String.h"
 namespace gd {
 class EventsList;
-class MainFrameWrapper;
 class Project;
 class Layout;
 class EventsCodeGenerator;
@@ -23,7 +23,10 @@ class EventsCodeGenerationContext;
 class Platform;
 class SerializerElement;
 class Instruction;
-}
+class EventVisitor;
+class ReadOnlyEventVisitor;
+class VariablesContainer;
+}  // namespace gd
 
 namespace gd {
 
@@ -41,6 +44,8 @@ typedef std::shared_ptr<BaseEvent> BaseEventSPtr;
 class GD_CORE_API BaseEvent {
  public:
   BaseEvent();
+  BaseEvent(const BaseEvent& other);
+  BaseEvent& operator=(const BaseEvent& other);
   virtual ~BaseEvent(){};
 
   /**
@@ -90,8 +95,54 @@ class GD_CORE_API BaseEvent {
   bool HasSubEvents() const;
 
   /**
-   * Event must be able to return all conditions std::vector they have.
-   * Used to preprocess the conditions.
+   * Derived class have to redefine this function, so as to return true, if they
+   * can have local variables.
+   */
+  virtual bool CanHaveVariables() const { return false; }
+
+  /**
+   * Return the local variables, if applicable.
+   */
+  virtual const gd::VariablesContainer& GetVariables() const {
+    return badLocalVariables;
+  };
+
+  /**
+   * Return the local variables, if applicable.
+   */
+  virtual gd::VariablesContainer& GetVariables() {
+    return badLocalVariables;
+  };
+
+  /**
+   * \brief Return true if the events has local variables.
+   * \warning This is only applicable when CanHaveVariables() return true.
+   */
+  bool HasVariables() const;
+
+  /**
+   * \brief Return the instruction list identified by \a label, or nullptr if
+   * the event has no such list.
+   *
+   * Supported labels are "conditions", "actions", and "whileConditions" (only
+   * for WhileEvent). Derived classes should override this; the base
+   * implementation always returns nullptr.
+   */
+  virtual gd::InstructionsList* GetInstructionList(const gd::String& label) {
+    return nullptr;
+  };
+  virtual const gd::InstructionsList* GetInstructionList(
+      const gd::String& label) const {
+    return nullptr;
+  };
+
+  static const gd::String conditionsLabel;
+  static const gd::String actionsLabel;
+  static const gd::String whileConditionsLabel;
+
+  /**
+   * \brief Return a list of all conditions of the event.
+   * \note Used to preprocess or search in the conditions.
    */
   virtual std::vector<gd::InstructionsList*> GetAllConditionsVectors() {
     std::vector<gd::InstructionsList*> noConditions;
@@ -104,8 +155,8 @@ class GD_CORE_API BaseEvent {
   };
 
   /**
-   * Event must be able to return all actions std::vector they have.
-   * Used to preprocess the actions.
+   * \brief Return a list of all actions of the event.
+   * \note Used to preprocess or search in the actions.
    */
   virtual std::vector<gd::InstructionsList*> GetAllActionsVectors() {
     std::vector<gd::InstructionsList*> noActions;
@@ -118,36 +169,34 @@ class GD_CORE_API BaseEvent {
   };
 
   /**
-   * Event must be able to return all expressions they have.
-   * Used to preprocess the expressions.
+   * \brief Return a list of all strings of the event.
+   * \note Used to preprocess or search in the event strings.
    */
-  virtual std::vector<gd::Expression*> GetAllExpressions() {
-    std::vector<gd::Expression*> noExpr;
-    return noExpr;
+  virtual std::vector<gd::String> GetAllSearchableStrings() const {
+    std::vector<gd::String> noSearchableStrings;
+    return noSearchableStrings;
   };
-  virtual std::vector<const gd::Expression*> GetAllExpressions() const {
-    std::vector<const gd::Expression*> noExpr;
-    return noExpr;
+
+  virtual bool ReplaceAllSearchableStrings(
+      std::vector<gd::String> newSearchableString) {
+    return false;
   };
 
   /**
-   * \brief Returns the dependencies on source files of the project.
-   * \note Default implementation returns an empty list of dependencies. This is
-   * fine for most events that are not related to adding custom user source
-   * code.
+   * \brief Return a list of all expressions of the event, each with their associated metadata.
+   * \note Used to preprocess or search in the expressions of the event.
    */
-  virtual const std::vector<gd::String>& GetSourceFileDependencies() const {
-    return emptyDependencies;
+  virtual std::vector<std::pair<gd::Expression*, gd::ParameterMetadata> >
+  GetAllExpressionsWithMetadata() {
+    std::vector<std::pair<gd::Expression*, gd::ParameterMetadata> > noExpr;
+    return noExpr;
   };
-
-  /**
-   * \brief Returns the name of the source file associated with the event
-   * \note Default implementation returns an empty string. This is fine for most
-   * events that are not related to adding custom user source code.
-   */
-  virtual const gd::String& GetAssociatedGDManagedSourceFile(
-      gd::Project& project) const {
-    return emptySourceFile;
+  virtual std::vector<
+      std::pair<const gd::Expression*, const gd::ParameterMetadata> >
+  GetAllExpressionsWithMetadata() const {
+    std::vector<std::pair<const gd::Expression*, const gd::ParameterMetadata> >
+        noExpr;
+    return noExpr;
   };
   ///@}
 
@@ -191,6 +240,11 @@ class GD_CORE_API BaseEvent {
                           std::size_t indexOfTheEventInThisList);
 
   /**
+   * A function that turns all async member actions into an Async subevent for code generation.
+   */
+  void PreprocessAsyncActions(const gd::Platform& platform);
+
+  /**
    * \brief If MustBePreprocessed is redefined to return true, the
    * gd::EventMetadata::preprocessing associated to the event will be called to
    * preprocess the event.
@@ -214,6 +268,9 @@ class GD_CORE_API BaseEvent {
    */
   virtual void UnserializeFrom(gd::Project& project,
                                const SerializerElement& element){};
+
+  virtual bool AcceptVisitor(gd::EventVisitor& eventVisitor);
+  virtual void AcceptVisitor(gd::ReadOnlyEventVisitor& eventVisitor) const;
   ///@}
 
   /** \name Common properties
@@ -253,6 +310,19 @@ class GD_CORE_API BaseEvent {
    */
   bool IsFolded() const { return folded; }
 
+  /**
+   * \brief Set the AI generated event ID.
+   */
+  void SetAiGeneratedEventId(const gd::String& aiGeneratedEventId_) {
+    aiGeneratedEventId = aiGeneratedEventId_;
+  }
+
+  /**
+   * \brief Get the AI generated event ID.
+   */
+  const gd::String& GetAiGeneratedEventId() const {
+    return aiGeneratedEventId;
+  }
   ///@}
 
   std::weak_ptr<gd::BaseEvent>
@@ -271,10 +341,11 @@ class GD_CORE_API BaseEvent {
   bool disabled;    ///< True if the event is disabled and must not be executed
   gd::String type;  ///< Type of the event. Must be assigned at the creation.
                     ///< Used for saving the event for instance.
+  gd::String aiGeneratedEventId;  ///< When generated by an AI/external tool.
 
   static gd::EventsList badSubEvents;
-  static std::vector<gd::String> emptyDependencies;
-  static gd::String emptySourceFile;
+  static gd::VariablesContainer badLocalVariables;
+  gd::MemoryTracked _memoryTracked{this, "BaseEvent"};
 };
 
 /**
@@ -297,6 +368,3 @@ class EmptyEvent : public BaseEvent {
 };
 
 }  // namespace gd
-
-#endif  // GDCORE_EVENT_H
-#endif

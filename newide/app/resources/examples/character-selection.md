@@ -1,4 +1,0 @@
-# README
-
-Example showing how to remember the character selected by the player and use it in other scenes.
-

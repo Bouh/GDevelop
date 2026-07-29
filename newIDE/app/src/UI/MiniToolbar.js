@@ -1,5 +1,5 @@
-import React, { Component } from 'react';
-import ThemeConsumer from './Theme/ThemeConsumer';
+// @flow
+import * as React from 'react';
 import Text from './Text';
 
 const style = {
@@ -9,35 +9,51 @@ const style = {
   paddingRight: 8,
 };
 
-class MiniToolbar extends Component {
-  render() {
-    const { justifyContent, smallest } = this.props;
+type MiniToolbarProps = {|
+  justifyContent?: 'flex-start' | 'flex-end' | 'center',
+  noPadding?: boolean,
+  children: React.Node,
+|};
 
-    return (
-      <ThemeConsumer>
-        {muiTheme => (
-          <div
-            style={{
-              ...style,
-              height: smallest ? 34 : 48,
-              backgroundColor: muiTheme.toolbar.backgroundColor,
-              justifyContent,
-            }}
-          >
-            {this.props.children}
-          </div>
-        )}
-      </ThemeConsumer>
-    );
-  }
-}
+const MiniToolbar = ({
+  justifyContent,
+  children,
+  noPadding,
+}: MiniToolbarProps): React.MixedElement => (
+  <div
+    style={{
+      ...style,
+      ...(noPadding ? { padding: 0 } : {}),
+      height: 32,
+      justifyContent,
+    }}
+  >
+    {children}
+  </div>
+);
 
+const firstChildToolbarTextStyle = {
+  marginRight: 4,
+};
 const toolbarTextStyle = {
-  marginRight: 5,
+  marginLeft: 4,
+  marginRight: 4,
 };
 
-export const MiniToolbarText = ({ children }) => (
-  <Text noShrink style={toolbarTextStyle}>
+type MiniToolbarTextProps = {|
+  firstChild?: boolean,
+  children: React.Node,
+|};
+
+export const MiniToolbarText = ({
+  children,
+  firstChild,
+}: MiniToolbarTextProps): React.Node => (
+  <Text
+    noShrink
+    // $FlowFixMe[incompatible-type]
+    style={firstChild ? firstChildToolbarTextStyle : toolbarTextStyle}
+  >
     {children}
   </Text>
 );

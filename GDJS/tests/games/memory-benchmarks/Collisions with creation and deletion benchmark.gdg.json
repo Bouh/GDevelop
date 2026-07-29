@@ -32,6 +32,8 @@
     "loadingScreen": {
       "showGDevelopSplash": true
     },
+    "authorIds": [],
+    "authorUsernames": [],
     "extensions": [
       {
         "name": "BuiltinObject"
@@ -202,6 +204,7 @@
           "updateIfNotVisible": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "animations": [
             {
               "name": "NewObject",
@@ -241,6 +244,7 @@
           "updateIfNotVisible": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "animations": [
             {
               "name": "NewObject2",
@@ -280,6 +284,7 @@
           "updateIfNotVisible": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "animations": [
             {
               "name": "NewObject3",
@@ -322,6 +327,7 @@
           "underlined": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "string": "Text",
           "font": "",
           "characterSize": 20,

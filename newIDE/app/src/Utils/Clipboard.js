@@ -1,11 +1,14 @@
 // @flow
-import optionalRequire from './OptionalRequire.js';
+import optionalRequire from './OptionalRequire';
 const electron = optionalRequire('electron');
 const electronClipboard = electron ? electron.clipboard : null;
 
 export type ClipboardKind = string;
 
 let internalClipboard = '';
+
+export const copyTextToClipboard = (text: string): Promise<void> =>
+  navigator.clipboard.writeText(text);
 
 const mangleClipboardKind = (kind: ClipboardKind): string => {
   // Mangle the name with GDevelop specific strings and random
@@ -28,6 +31,12 @@ export default class Clipboard {
     }
   }
 
+  /**
+   * Quickly check that the clipboard content *should* be containing valid JSON content
+   * of the specified kind.
+   *
+   * This is only a quick check and not a guarantee. Use `Clipboard.get` to get the value.
+   */
   static has(kind: ClipboardKind): boolean {
     let text = '';
     if (electronClipboard) {
@@ -39,7 +48,14 @@ export default class Clipboard {
     return text.indexOf(mangleClipboardKind(kind)) === 12; /// 12 is the position of '000kind' value
   }
 
-  static get(kind: ClipboardKind): any {
+  /**
+   * Get the content of the clipboard. Will return null if not valid JSON.
+   *
+   * Even after parsing, content is **arbitrary** and should be accessed with `SafeExtractor`
+   * to ensure everything is accessed without risk of having a wrong type, which could
+   * crash the app.
+   */
+  static get(kind: ClipboardKind): ?any {
     if (!Clipboard.has(kind)) return null;
 
     let text = '';

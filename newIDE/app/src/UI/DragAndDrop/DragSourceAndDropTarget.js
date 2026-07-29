@@ -9,27 +9,38 @@ import {
   type DropTargetMonitor,
   type DropTargetConnector,
   type ConnectDropTarget,
+  type ConnectDragPreview,
 } from 'react-dnd';
+import { hapticFeedback } from '../../Utils/Haptic';
+import { canStartDragFromCurrentGesture } from './TouchDragDelay';
 
 type Props<DraggedItemType> = {|
-  children: ({
+  children: ({|
     connectDragSource: ConnectDragSource,
     connectDropTarget: ConnectDropTarget,
+    connectDragPreview: ConnectDragPreview,
     isOver: boolean,
+    isOverLazy: boolean,
     canDrop: boolean,
-  }) => React.Node,
+  |}) => ?React.Node,
   beginDrag: () => DraggedItemType,
+  canDrag?: (item: DraggedItemType) => boolean,
   canDrop: (item: DraggedItemType) => boolean,
   drop: () => void,
+  endDrag?: () => void,
+  hover?: (monitor: DropTargetMonitor) => void,
 |};
 
 type DragSourceProps = {|
   connectDragSource: ConnectDragSource,
+  connectDragPreview: ConnectDragPreview,
+  isDragging: boolean,
 |};
 
 type DropTargetProps = {|
   connectDropTarget: ConnectDropTarget,
   isOver: boolean,
+  isOverLazy: boolean,
   canDrop: boolean,
 |};
 
@@ -39,12 +50,39 @@ type InnerDragSourceAndDropTargetProps<DraggedItemType> = {|
   ...DropTargetProps,
 |};
 
+// For some reason, defining this type in the `CustomDragLayer` component
+// creates a circular dependency, so we define it here instead.
+export type DraggedItem = {|
+  name: string,
+  thumbnail?: string,
+  is3D?: boolean,
+|};
+
+type Options = {| vibrate?: number |};
+
 export const makeDragSourceAndDropTarget = <DraggedItemType>(
-  reactDndType: string
+  reactDndType: string,
+  options: ?Options
 ): ((Props<DraggedItemType>) => React.Node) => {
   const sourceSpec = {
+    canDrag(props: Props<DraggedItemType>, monitor: DragSourceMonitor) {
+      // On a touch screen, a finger that just started pressing is scrolling,
+      // not dragging.
+      if (!canStartDragFromCurrentGesture()) return false;
+
+      const item = monitor.getItem();
+      const canDrag = props.canDrag || null;
+      if (canDrag) return canDrag(item);
+      return true;
+    },
     beginDrag(props: InnerDragSourceAndDropTargetProps<DraggedItemType>) {
+      if (hapticFeedback && options && options.vibrate) {
+        hapticFeedback({ durationInMs: options.vibrate });
+      }
       return props.beginDrag();
+    },
+    endDrag(props: Props<DraggedItemType>, monitor: DragSourceMonitor) {
+      if (props.endDrag) props.endDrag();
     },
   };
 
@@ -54,6 +92,8 @@ export const makeDragSourceAndDropTarget = <DraggedItemType>(
   ): DragSourceProps {
     return {
       connectDragSource: connect.dragSource(),
+      connectDragPreview: connect.dragPreview(),
+      isDragging: monitor.isDragging(),
     };
   }
 
@@ -68,6 +108,9 @@ export const makeDragSourceAndDropTarget = <DraggedItemType>(
       }
       props.drop();
     },
+    hover(props: Props<DraggedItemType>, monitor: DropTargetMonitor) {
+      if (props.hover) props.hover(monitor);
+    },
   };
 
   function targetCollect(
@@ -77,21 +120,40 @@ export const makeDragSourceAndDropTarget = <DraggedItemType>(
     return {
       connectDropTarget: connect.dropTarget(),
       isOver: monitor.isOver({ shallow: true }),
+      isOverLazy: monitor.isOver({ shallow: false }),
       canDrop: monitor.canDrop(),
     };
   }
 
+  // $FlowFixMe[underconstrained-implicit-instantiation]
   const InnerDragSourceAndDropTarget = DragSource(
     reactDndType,
+    // $FlowFixMe[incompatible-variance]
+    // $FlowFixMe[incompatible-type]
     sourceSpec,
     sourceCollect
   )(
+    // $FlowFixMe[incompatible-variance]
+    // $FlowFixMe[incompatible-type]
     DropTarget(reactDndType, targetSpec, targetCollect)(
-      ({ children, connectDragSource, connectDropTarget, isOver, canDrop }) => {
+      // $FlowFixMe[missing-local-annot]
+      ({
+        children,
+        connectDragSource,
+        connectDropTarget,
+        connectDragPreview,
+        isDragging,
+        isOver,
+        isOverLazy,
+        canDrop,
+      }) => {
         return children({
           connectDragSource,
           connectDropTarget,
+          connectDragPreview,
+          isDragging,
           isOver,
+          isOverLazy,
           canDrop,
         });
       }

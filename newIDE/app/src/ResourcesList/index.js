@@ -1,385 +1,468 @@
 // @flow
+import { I18n } from '@lingui/react';
+import { type I18n as I18nType } from '@lingui/core';
+import { t } from '@lingui/macro';
+
 import * as React from 'react';
 import { AutoSizer } from 'react-virtualized';
-import SortableVirtualizedItemList from '../UI/SortableVirtualizedItemList';
 import Background from '../UI/Background';
 import SearchBar from '../UI/SearchBar';
-import { showWarningBox } from '../UI/Messages/MessageBox';
+import KeyboardShortcuts from '../UI/KeyboardShortcuts';
 import { filterResourcesList } from './EnumerateResources';
-import optionalRequire from '../Utils/OptionalRequire.js';
+import { getResourceFilePathStatus } from './ResourceUtils';
+import { type MenuItemTemplate } from '../UI/Menu/Menu.flow';
 import {
-  createOrUpdateResource,
-  getLocalResourceFullPath,
-  getResourceFilePathStatus,
-  RESOURCE_EXTENSIONS,
-} from './ResourceUtils.js';
-import { type ResourceKind } from './ResourceSource.flow';
-
-const path = optionalRequire('path');
-const glob = optionalRequire('glob');
-const electron = optionalRequire('electron');
-const hasElectron = electron ? true : false;
-
-const gd = global.gd;
+  type ResourceKind,
+  allResourceKindsAndMetadata,
+} from './ResourceSource';
+import { type FileMetadata } from '../ProjectsStorage';
+import ResourcesLoader from '../ResourcesLoader';
+import { Column, Line } from '../UI/Grid';
+import { type ResourcesActionsMenuBuilder } from '../ProjectsStorage';
+import InfoBar from '../UI/Messages/InfoBar';
+import useForceUpdate from '../Utils/UseForceUpdate';
+import SortableVirtualizedItemList from '../UI/SortableVirtualizedItemList';
 
 const styles = {
   listContainer: {
     flex: 1,
+    outline: 'none',
   },
 };
 
 const getResourceName = (resource: gdResource) => resource.getName();
+export const getDefaultResourceThumbnail = (resource: gdResource): string => {
+  switch (resource.getKind()) {
+    case 'audio':
+      return 'res/actions/music24.png';
+    case 'json':
+    case 'tilemap':
+    case 'tileset':
+    case 'spine':
+      return 'res/actions/fichier24.png';
+    case 'video':
+      return 'JsPlatform/Extensions/videoicon24.png';
+    case 'font':
+      return 'res/actions/font24.png';
+    // $FlowFixMe[invalid-compare]
+    case 'bitmapFont':
+      return 'JsPlatform/Extensions/bitmapfont32.png';
+    case 'model3D':
+      return 'JsPlatform/Extensions/3d_model.svg';
+    // $FlowFixMe[invalid-compare]
+    case 'javascript':
+      return 'res/javascript.svg';
+    default:
+      return 'res/unknown32.png';
+  }
+};
 
-type State = {|
-  renamedResource: ?gdResource,
-  searchText: string,
-  resourcesWithErrors: { [string]: '' | 'error' | 'warning' },
+export type ResourcesListInterface = {|
+  forceUpdateList: () => void,
+  checkMissingPaths: () => void,
+  focusList: () => void,
 |};
 
 type Props = {|
   project: gdProject,
   selectedResource: ?gdResource,
   onSelectResource: (resource: ?gdResource) => void,
-  onDeleteResource: (resource: gdResource) => void,
-  onRenameResource: (
-    resource: gdResource,
-    newName: string,
-    cb: (boolean) => void
-  ) => void,
+  onDeleteResource: (resource: gdResource) => Promise<void>,
+  onRenameResource: (resource: gdResource, newName: string) => void,
+  fileMetadata: ?FileMetadata,
+  onRemoveUnusedResources: ResourceKind => void,
+  onRemoveAllResourcesWithInvalidPath: () => void,
+  getResourceActionsSpecificToStorageProvider?: ?ResourcesActionsMenuBuilder,
 |};
 
-export default class ResourcesList extends React.Component<Props, State> {
-  sortableList: any;
-  state: State = {
-    renamedResource: null,
-    searchText: '',
-    resourcesWithErrors: {},
-  };
-
-  shouldComponentUpdate(nextProps: Props, nextState: State) {
-    // The component is costly to render, so avoid any re-rendering as much
-    // as possible.
-    // We make the assumption that no changes to resources list is made outside
-    // from the component.
-    // If a change is made, the component won't notice it: you have to manually
-    // call forceUpdate.
-
-    if (
-      this.state.renamedResource !== nextState.renamedResource ||
-      this.state.searchText !== nextState.searchText
-    )
-      return true;
-
-    if (
-      this.props.project !== nextProps.project ||
-      this.props.selectedResource !== nextProps.selectedResource
-    )
-      return true;
-
-    return false;
-  }
-
-  _deleteResource = (resource: gdResource) => {
-    this.props.onDeleteResource(resource);
-  };
-
-  _locateResourceFile = (resource: gdResource) => {
-    const resourceFolderPath = path.dirname(
-      getLocalResourceFullPath(this.props.project, resource.getName())
-    );
-    electron.shell.openItem(resourceFolderPath);
-  };
-
-  _openResourceFile = (resource: gdResource) => {
-    const resourceFilePath = getLocalResourceFullPath(
-      this.props.project,
-      resource.getName()
-    );
-    electron.shell.openItem(resourceFilePath);
-  };
-
-  _copyResourceFilePath = (resource: gdResource) => {
-    const resourceFilePath = getLocalResourceFullPath(
-      this.props.project,
-      resource.getName()
-    );
-    electron.clipboard.writeText(resourceFilePath);
-  };
-
-  _scanForNewResources = (
-    extensions: string,
-    createResource: () => gdResource
-  ) => {
-    const project = this.props.project;
-    const resourcesManager = project.getResourcesManager();
-    const projectPath = path.dirname(project.getProjectFile());
-
-    const getDirectories = (src, callback) => {
-      glob(src + '/**/*.{' + extensions + '}', callback);
-    };
-    getDirectories(projectPath, (err, res) => {
-      if (err) {
-        console.error('Error loading ', err);
-      } else {
-        res.forEach(pathFound => {
-          const fileName = path.relative(projectPath, pathFound);
-          if (!resourcesManager.hasResource(fileName)) {
-            createOrUpdateResource(project, createResource(), fileName);
-            console.info(`${fileName} added to project.`);
-          }
-        });
-      }
-      this.forceUpdate();
-    });
-  };
-
-  _removeUnusedResources = (resourceType: ResourceKind) => {
-    const { project } = this.props;
-    gd.ProjectResourcesAdder.getAllUseless(project, resourceType)
-      .toJSArray()
-      .forEach(resourceName => {
-        console.info(
-          `Removing unused` + resourceType + ` resource: ${resourceName}`
-        );
-      });
-    gd.ProjectResourcesAdder.removeAllUseless(project, resourceType);
-    this.forceUpdate();
-  };
-
-  _removeAllResourcesWithInvalidPath = () => {
-    const { project } = this.props;
-    const resourcesManager = project.getResourcesManager();
-    resourcesManager
-      .getAllResourceNames()
-      .toJSArray()
-      .forEach(resourceName => {
-        if (getResourceFilePathStatus(project, resourceName) === 'error') {
-          resourcesManager.removeResource(resourceName);
-          console.info('Removed due to invalid path: ' + resourceName);
-        }
-      });
-    this.forceUpdate();
-  };
-
-  _editName = (resource: ?gdResource) => {
-    this.setState(
+const ResourcesList: React.ComponentType<{
+  ...Props,
+  +ref?: React.RefSetter<ResourcesListInterface>,
+  // $FlowFixMe[incompatible-type]
+}> = React.memo<Props, ResourcesListInterface>(
+  // $FlowFixMe[incompatible-type]
+  // $FlowFixMe[incompatible-exact]
+  React.forwardRef<Props, ResourcesListInterface>(
+    (
       {
-        renamedResource: resource,
-      },
-      () => {
-        if (this.sortableList) this.sortableList.forceUpdateGrid();
-      }
-    );
-  };
-
-  _rename = (resource: gdResource, newName: string) => {
-    const { project } = this.props;
-    this.setState({
-      renamedResource: null,
-    });
-
-    if (resource.getName() === newName) return;
-
-    if (project.getResourcesManager().hasResource(newName)) {
-      showWarningBox('Another resource with this name already exists');
-      return;
-    }
-
-    // eslint-disable-next-line
-    const answer = confirm(
-      'Are you sure you want to rename this resource? \nGame objects using the old name will no longer be able to find it!'
-    );
-    if (!answer) return;
-
-    this.props.onRenameResource(resource, newName, doRename => {
-      if (!doRename) return;
-      resource.setName(newName);
-      this.forceUpdate();
-    });
-  };
-
-  _moveSelectionTo = (destinationResource: gdResource) => {
-    const { project, selectedResource } = this.props;
-    if (!selectedResource) return;
-
-    const resourcesManager = project.getResourcesManager();
-    resourcesManager.moveResource(
-      resourcesManager.getResourcePosition(selectedResource.getName()),
-      resourcesManager.getResourcePosition(destinationResource.getName())
-    );
-    this.forceUpdateList();
-  };
-
-  forceUpdateList = () => {
-    this.forceUpdate();
-    if (this.sortableList) this.sortableList.forceUpdateGrid();
-  };
-
-  _renderResourceMenuTemplate = (resource: gdResource, _index: number) => {
-    return [
-      {
-        label: 'Rename',
-        click: () => this._editName(resource),
-      },
-      {
-        label: 'Remove',
-        click: () => this._deleteResource(resource),
-      },
-      { type: 'separator' },
-      {
-        label: 'Open File',
-        click: () => this._openResourceFile(resource),
-        enabled: hasElectron,
-      },
-      {
-        label: 'Locate File',
-        click: () => this._locateResourceFile(resource),
-        enabled: hasElectron,
-      },
-      {
-        label: 'Copy File Path',
-        click: () => this._copyResourceFilePath(resource),
-        enabled: hasElectron,
-      },
-      { type: 'separator' },
-      {
-        label: 'Scan for Images',
-        click: () => {
-          this._scanForNewResources(
-            RESOURCE_EXTENSIONS.image,
-            () => new gd.ImageResource()
-          );
-        },
-        enabled: hasElectron,
-      },
-      {
-        label: 'Scan for Audio',
-        click: () => {
-          this._scanForNewResources(
-            RESOURCE_EXTENSIONS.audio,
-            () => new gd.AudioResource()
-          );
-        },
-        enabled: hasElectron,
-      },
-      {
-        label: 'Scan for Fonts',
-        click: () => {
-          this._scanForNewResources(
-            RESOURCE_EXTENSIONS.font,
-            () => new gd.FontResource()
-          );
-        },
-        enabled: hasElectron,
-      },
-      {
-        label: 'Scan for Videos',
-        click: () => {
-          this._scanForNewResources(
-            RESOURCE_EXTENSIONS.video,
-            () => new gd.VideoResource()
-          );
-        },
-        enabled: hasElectron,
-      },
-      { type: 'separator' },
-      {
-        label: 'Remove Unused Images',
-        click: () => {
-          this._removeUnusedResources('image');
-        },
-      },
-      {
-        label: 'Remove Unused Audio',
-        click: () => {
-          this._removeUnusedResources('audio');
-        },
-      },
-      {
-        label: 'Remove Unused Fonts',
-        click: () => {
-          this._removeUnusedResources('font');
-        },
-      },
-      {
-        label: 'Remove Resources with Invalid Path',
-        click: () => {
-          this._removeAllResourcesWithInvalidPath();
-        },
-        enabled: hasElectron,
-      },
-    ];
-  };
-
-  checkMissingPaths = () => {
-    const { project } = this.props;
-    const resourcesManager = project.getResourcesManager();
-    const resourceNames = resourcesManager.getAllResourceNames().toJSArray();
-    const resourcesWithErrors = {};
-    resourceNames.forEach(resourceName => {
-      resourcesWithErrors[resourceName] = getResourceFilePathStatus(
         project,
-        resourceName
+        selectedResource,
+        onSelectResource,
+        onDeleteResource,
+        onRenameResource,
+        fileMetadata,
+        onRemoveUnusedResources,
+        getResourceActionsSpecificToStorageProvider,
+      }: Props,
+      ref
+    ) => {
+      const forceUpdate = useForceUpdate();
+      const [renamedResource, setRenamedResource] = React.useState(null);
+      const [searchText, setSearchText] = React.useState('');
+      const [resourcesWithErrors, setResourcesWithErrors] = React.useState({});
+      const [infoBarContent, setInfoBarContent] = React.useState(null);
+      const sortableListRef = React.useRef(null);
+      const listContainerRef = React.useRef(null);
+      const isNavigatingRef = React.useRef(false);
+
+      const resourcesManager = project.getResourcesManager();
+      // Calculate on every render to avoid stale data after deletion/rename
+      const allResourcesList = resourcesManager
+        .getAllResourceNames()
+        .toJSArray()
+        .map(resourceName => resourcesManager.getResource(resourceName));
+      const filteredList = filterResourcesList(allResourcesList, searchText);
+
+      const deleteResource = React.useCallback(
+        (resource: gdResource) => {
+          onDeleteResource(resource);
+        },
+        [onDeleteResource]
       );
-    });
-    this.setState({ resourcesWithErrors });
-    this.forceUpdateList();
-  };
 
-  componentDidMount() {
-    this.checkMissingPaths();
-  }
+      const editName = React.useCallback((resource: ?gdResource) => {
+        // $FlowFixMe[incompatible-type]
+        setRenamedResource(resource);
+        if (sortableListRef.current) sortableListRef.current.forceUpdateGrid();
+      }, []);
 
-  render() {
-    const { project, selectedResource, onSelectResource } = this.props;
-    const { searchText } = this.state;
-
-    const resourcesManager = project.getResourcesManager();
-    const allResourcesList = resourcesManager
-      .getAllResourceNames()
-      .toJSArray()
-      .map(resourceName => resourcesManager.getResource(resourceName));
-    const filteredList = filterResourcesList(allResourcesList, searchText);
-
-    // Force List component to be mounted again if project
-    // has been changed. Avoid accessing to invalid objects that could
-    // crash the app.
-    const listKey = project.ptr;
-
-    return (
-      <Background>
-        <div style={styles.listContainer}>
-          <AutoSizer>
-            {({ height, width }) => (
-              <SortableVirtualizedItemList
-                key={listKey}
-                ref={sortableList => (this.sortableList = sortableList)}
-                fullList={filteredList}
-                width={width}
-                height={height}
-                getItemName={getResourceName}
-                selectedItems={selectedResource ? [selectedResource] : []}
-                onItemSelected={onSelectResource}
-                renamedItem={this.state.renamedResource}
-                onRename={this._rename}
-                onMoveSelectionToItem={this._moveSelectionTo}
-                buildMenuTemplate={this._renderResourceMenuTemplate}
-                erroredItems={this.state.resourcesWithErrors}
-                reactDndType="GD_RESOURCE"
-              />
-            )}
-          </AutoSizer>
-        </div>
-        <SearchBar
-          value={searchText}
-          onRequestSearch={() => {}}
-          onChange={text =>
-            this.setState({
-              searchText: text,
-            })
+      const getResourceThumbnail = React.useCallback(
+        (resource: gdResource) => {
+          switch (resource.getKind()) {
+            case 'image':
+              return ResourcesLoader.getResourceFullUrl(
+                project,
+                resource.getName(),
+                {}
+              );
+            default:
+              return getDefaultResourceThumbnail(resource);
           }
-        />
-      </Background>
-    );
-  }
-}
+        },
+        [project]
+      );
+
+      const forceUpdateList = React.useCallback(
+        () => {
+          // Force re-render of component
+          forceUpdate();
+          // Force grid to re-render with updated data
+          if (sortableListRef.current)
+            sortableListRef.current.forceUpdateGrid();
+        },
+        [forceUpdate]
+      );
+
+      const focusList = React.useCallback(() => {
+        if (listContainerRef.current) {
+          listContainerRef.current.focus();
+        }
+      }, []);
+
+      const renameResource = React.useCallback(
+        (resource: gdResource, newName: string) => {
+          setRenamedResource(null);
+          onRenameResource(resource, newName);
+        },
+        [onRenameResource]
+      );
+
+      const moveSelector = React.useCallback(
+        (delta: number, filteredList: Array<gdResource>) => {
+          const resourceCount = filteredList.length;
+
+          if (resourceCount === 0) return;
+
+          let nextIndex = 0;
+          if (selectedResource) {
+            const currentIndex = filteredList.indexOf(selectedResource);
+            if (currentIndex === -1) {
+              // Selected resource is not in filtered list, select the first one.
+              nextIndex = 0;
+            } else {
+              nextIndex = Math.max(
+                0,
+                Math.min(resourceCount - 1, currentIndex + delta)
+              );
+            }
+          }
+
+          const nextResource = filteredList[nextIndex];
+          onSelectResource(nextResource);
+        },
+        [selectedResource, onSelectResource]
+      );
+
+      const handleKeyDown = React.useCallback(
+        (event: KeyboardEvent) => {
+          // Check if we should handle arrow key navigation
+          const isArrowKey =
+            event.key === 'ArrowDown' || event.key === 'ArrowUp';
+
+          // Always prevent default scroll behavior for arrow keys
+          if (isArrowKey && !renamedResource) {
+            event.preventDefault();
+          }
+
+          const shouldNavigate =
+            isArrowKey && !renamedResource && !isNavigatingRef.current;
+
+          if (shouldNavigate) {
+            // Throttle navigation to allow list to scroll and render
+            isNavigatingRef.current = true;
+            moveSelector(event.key === 'ArrowDown' ? 1 : -1, filteredList);
+
+            setTimeout(() => {
+              isNavigatingRef.current = false;
+            }, 5); // Throttle to avoid too many updates when holding down the key.
+            return;
+          }
+
+          // Handle other keyboard shortcuts (skip if arrow key already handled)
+          if (!isArrowKey || renamedResource) {
+            keyboardShortcutsRef.current.onKeyDown(event);
+          }
+        },
+        [moveSelector, filteredList, renamedResource]
+      );
+
+      const moveSelectionTo = React.useCallback(
+        (destinationResource: gdResource) => {
+          if (!selectedResource) return;
+
+          const resourcesManager = project.getResourcesManager();
+          resourcesManager.moveResource(
+            resourcesManager.getResourcePosition(selectedResource.getName()),
+            resourcesManager.getResourcePosition(destinationResource.getName())
+          );
+          forceUpdateList();
+        },
+        [project, selectedResource, forceUpdateList]
+      );
+
+      const renderResourceMenuTemplate = React.useCallback(
+        (i18n: I18nType) => (
+          resource: gdResource,
+          _index: number
+        ): Array<MenuItemTemplate> => {
+          let menu = [
+            {
+              label: i18n._(t`Rename`),
+              click: () => editName(resource),
+            },
+            {
+              label: i18n._(t`Delete`),
+              click: () => deleteResource(resource),
+            },
+            { type: 'separator' },
+            {
+              label: i18n._(t`Remove unused...`),
+              submenu: allResourceKindsAndMetadata
+                .map(({ displayName, kind }) => ({
+                  label: i18n._(displayName),
+                  click: () => {
+                    // $FlowFixMe[incompatible-type]
+                    onRemoveUnusedResources(kind);
+                  },
+                }))
+                .concat([
+                  {
+                    label: i18n._(t`Resources (any kind)`),
+                    click: () => {
+                      allResourceKindsAndMetadata.forEach(
+                        resourceKindAndMetadata => {
+                          // $FlowFixMe[incompatible-type]
+                          onRemoveUnusedResources(resourceKindAndMetadata.kind);
+                        }
+                      );
+                    },
+                  },
+                ]),
+            },
+          ];
+          if (getResourceActionsSpecificToStorageProvider && fileMetadata) {
+            menu.push({ type: 'separator' });
+            // $FlowFixMe[incompatible-type]
+            menu = menu.concat(
+              getResourceActionsSpecificToStorageProvider({
+                project,
+                fileMetadata,
+                resource,
+                i18n,
+                // $FlowFixMe[incompatible-type]
+                informUser: setInfoBarContent,
+                updateInterface: () => forceUpdateList(),
+                cleanUserSelectionOfResources: () => onSelectResource(null),
+              })
+            );
+          }
+          // $FlowFixMe[incompatible-type]
+          return menu;
+        },
+        [
+          project,
+          fileMetadata,
+          editName,
+          deleteResource,
+          onRemoveUnusedResources,
+          getResourceActionsSpecificToStorageProvider,
+          onSelectResource,
+          forceUpdateList,
+        ]
+      );
+
+      const checkMissingPaths = React.useCallback(
+        () => {
+          const resourcesManager = project.getResourcesManager();
+          const resourceNames = resourcesManager
+            .getAllResourceNames()
+            .toJSArray();
+          const newResourcesWithErrors = {};
+          resourceNames.forEach(resourceName => {
+            // $FlowFixMe[prop-missing]
+            newResourcesWithErrors[resourceName] = getResourceFilePathStatus(
+              project,
+              resourceName
+            );
+          });
+          setResourcesWithErrors(newResourcesWithErrors);
+          forceUpdateList();
+        },
+        [project, forceUpdateList]
+      );
+
+      // KeyboardShortcuts callbacks are set dynamically in useEffect below
+      // instead of here, because they depend on selectedResource which can change.
+      // This ensures the callbacks always use the current selectedResource.
+      const keyboardShortcutsRef = React.useRef<KeyboardShortcuts>(
+        new KeyboardShortcuts({
+          shortcutCallbacks: {},
+        })
+      );
+
+      React.useEffect(
+        () => {
+          if (!selectedResource) return;
+          keyboardShortcutsRef.current.setShortcutCallback('onDelete', () => {
+            deleteResource(selectedResource);
+          });
+          keyboardShortcutsRef.current.setShortcutCallback('onRename', () => {
+            editName(selectedResource);
+          });
+        },
+        [selectedResource, deleteResource, editName]
+      );
+
+      // Scroll to selected item when selection changes
+      React.useEffect(
+        () => {
+          if (!selectedResource || !sortableListRef.current) return;
+
+          if (sortableListRef.current.scrollToItem) {
+            sortableListRef.current.scrollToItem(selectedResource);
+          }
+        },
+        [selectedResource]
+      );
+
+      // Refocus list when rename ends (confirmed or canceled)
+      const previousRenamedResource = React.useRef(renamedResource);
+      React.useEffect(
+        () => {
+          if (previousRenamedResource.current && !renamedResource) {
+            // Rename was ended (either confirmed or canceled)
+            focusList();
+          }
+          previousRenamedResource.current = renamedResource;
+        },
+        [renamedResource, focusList]
+      );
+
+      React.useImperativeHandle(ref, () => ({
+        forceUpdateList,
+        checkMissingPaths,
+        focusList,
+      }));
+
+      // Check missing paths on mount and when project changes.
+      React.useEffect(
+        () => {
+          checkMissingPaths();
+        },
+        [checkMissingPaths]
+      );
+
+      // Force List component to be mounted again if project
+      // has been changed. Avoid accessing to invalid objects that could
+      // crash the app.
+      const listKey = project.ptr;
+
+      return (
+        <Background>
+          <Line>
+            <Column expand>
+              <SearchBar
+                value={searchText}
+                onRequestSearch={() => {}}
+                onChange={text => setSearchText(text)}
+                placeholder={t`Search resources`}
+              />
+            </Column>
+          </Line>
+          <div
+            // $FlowFixMe[incompatible-type]
+            ref={listContainerRef}
+            style={styles.listContainer}
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+            onKeyUp={keyboardShortcutsRef.current.onKeyUp}
+          >
+            <AutoSizer>
+              {({ height, width }) => (
+                <I18n>
+                  {({ i18n }) => (
+                    <SortableVirtualizedItemList
+                      key={listKey}
+                      // $FlowFixMe[incompatible-type]
+                      ref={sortableListRef}
+                      fullList={filteredList}
+                      width={width}
+                      height={height}
+                      getItemName={getResourceName}
+                      getItemThumbnail={getResourceThumbnail}
+                      selectedItems={selectedResource ? [selectedResource] : []}
+                      onItemSelected={onSelectResource}
+                      renamedItem={renamedResource}
+                      onRename={renameResource}
+                      onMoveSelectionToItem={moveSelectionTo}
+                      buildMenuTemplate={renderResourceMenuTemplate(i18n)}
+                      erroredItems={resourcesWithErrors}
+                      reactDndType="GD_RESOURCE"
+                    />
+                  )}
+                </I18n>
+              )}
+            </AutoSizer>
+          </div>
+          {/* $FlowFixMe[constant-condition] */}
+          {!!infoBarContent && (
+            <InfoBar
+              duration={7000}
+              visible
+              hide={() => setInfoBarContent(null)}
+              {...infoBarContent}
+            />
+          )}
+        </Background>
+      );
+    }
+  ),
+  // Prevent any update if project or selectedResource
+  // are not changed. This is important to avoid
+  // too many re-renders of the list.
+  (prevProps, nextProps) =>
+    prevProps.project !== nextProps.project ||
+    prevProps.selectedResource !== nextProps.selectedResource
+);
+
+export default ResourcesList;

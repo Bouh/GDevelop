@@ -6,6 +6,7 @@ This project is released under the MIT License.
 */
 #if defined(GD_IDE_ONLY)
 #include "GDCore/Extensions/PlatformExtension.h"
+#include "GDCore/Tools/Localization.h"
 
 #include "GDCore/Tools/Localization.h"
 
@@ -24,13 +25,23 @@ class SystemInfoJsExtension : public gd::PlatformExtension {
     DeclareSystemInfoExtension(*this);
 
     GetAllConditions()["SystemInfo::IsMobile"]
-        .codeExtraInformation
         .SetIncludeFile("Extensions/SystemInfo/systeminfotools.js")
         .SetFunctionName("gdjs.evtTools.systemInfo.isMobile");
+    GetAllConditions()["SystemInfo::IsNativeMobileApp"]
+        .SetIncludeFile("Extensions/SystemInfo/systeminfotools.js")
+        .SetFunctionName("gdjs.evtTools.systemInfo.isNativeMobileApp");
+    GetAllConditions()["SystemInfo::IsNativeDesktopApp"]
+        .SetIncludeFile("Extensions/SystemInfo/systeminfotools.js")
+        .SetFunctionName("gdjs.evtTools.systemInfo.isNativeDesktopApp");
     GetAllConditions()["SystemInfo::IsWebGLSupported"]
-        .codeExtraInformation
         .SetIncludeFile("Extensions/SystemInfo/systeminfotools.js")
         .SetFunctionName("gdjs.evtTools.systemInfo.isWebGLSupported");
+    GetAllConditions()["SystemInfo::IsPreview"]
+        .SetIncludeFile("Extensions/SystemInfo/systeminfotools.js")
+        .SetFunctionName("gdjs.evtTools.systemInfo.isPreview");
+    GetAllConditions()["SystemInfo::HasTouchScreen"]
+        .SetIncludeFile("Extensions/SystemInfo/systeminfotools.js")
+        .SetFunctionName("gdjs.evtTools.systemInfo.hasTouchScreen");
 
     StripUnimplementedInstructionsAndExpressions();
     GD_COMPLETE_EXTENSION_COMPILATION_INFORMATION();

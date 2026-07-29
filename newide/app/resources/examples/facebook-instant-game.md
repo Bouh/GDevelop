@@ -1,4 +1,0 @@
-# README
-
-Learn how to use the various Facebook Instant Games APIs to get information about the player, share their scores and have a leaderboard!
-

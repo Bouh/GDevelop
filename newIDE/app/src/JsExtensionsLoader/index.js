@@ -2,7 +2,7 @@
 // Note: this file does not use export/imports and use Flow comments to allow its usage from Node.js
 
 const some = require('lodash/some');
-/*flow-include 
+/*flow-include
 export type TranslationFunction = (string) => string;
 
 export type JsExtensionModule = {
@@ -10,17 +10,18 @@ export type JsExtensionModule = {
   runExtensionSanityTests(gd: any, extension: gdPlatformExtension): Array<string>,
 };
 
-export type ExtensionLoadingResult = {
+export type ExtensionLoadingResult = {|
   error: boolean,
   message: string,
   dangerous?: boolean,
   rawError?: any,
-};
+|};
 
 export interface JsExtensionsLoader {
-  loadAllExtensions(_: TranslationFunction): Promise<
-    Array<{ extensionModulePath: string, result: ExtensionLoadingResult }>
-  >,
+  loadAllExtensions(_: TranslationFunction): Promise<{|
+    results: Array<{| extensionModulePath: string, result: ExtensionLoadingResult |}>,
+    expectedNumberOfJSExtensionModulesLoaded: number,
+  |}>,
 }
 */
 
@@ -62,7 +63,7 @@ const runExtensionSanityTests = (
 const loadExtension = (
   _ /*: TranslationFunction */,
   gd /*: any */,
-  platform /*: gdPlatform*/,
+  platform /*: gdJsPlatform*/,
   jsExtensionModule /*: JsExtensionModule*/
 ) /*: ExtensionLoadingResult*/ => {
   if (!jsExtensionModule.createExtension) {

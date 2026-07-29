@@ -8,9 +8,8 @@ This project is released under the MIT License.
 #include "PhysicsBehavior.h"
 #include <string>
 #include "GDCore/Tools/Localization.h"
-#include "GDCpp/Runtime/Project/Project.h"
-#include "GDCpp/Runtime/Serialization/SerializerElement.h"
-#include "Triangulation/triangulate.h"
+#include "GDCore/Project/Project.h"
+#include "GDCore/Serialization/SerializerElement.h"
 #if defined(GD_IDE_ONLY)
 #include <map>
 #include "GDCore/Project/PropertyDescriptor.h"
@@ -34,7 +33,7 @@ void PhysicsBehavior::InitializeContent(
   behaviorContent.SetAttribute("polygonWidth", 200);
   behaviorContent.SetAttribute("polygonHeight", 200);
 
-  std::vector<sf::Vector2f> polygonCoords;
+  std::vector<gd::Vector2f> polygonCoords;
   behaviorContent.SetAttribute(
       "coordsList",
       PhysicsBehavior::GetStringFromCoordsVector(polygonCoords, '/', ';'));
@@ -43,7 +42,7 @@ void PhysicsBehavior::InitializeContent(
 
 #if defined(GD_IDE_ONLY)
 std::map<gd::String, gd::PropertyDescriptor> PhysicsBehavior::GetProperties(
-    const gd::SerializerElement &behaviorContent, gd::Project &project) const {
+    const gd::SerializerElement &behaviorContent) const {
   std::map<gd::String, gd::PropertyDescriptor> properties;
 
   gd::String shapeTypeStr = _("Box (rectangle)");
@@ -88,8 +87,7 @@ std::map<gd::String, gd::PropertyDescriptor> PhysicsBehavior::GetProperties(
 
 bool PhysicsBehavior::UpdateProperty(gd::SerializerElement &behaviorContent,
                                      const gd::String &name,
-                                     const gd::String &value,
-                                     gd::Project &project) {
+                                     const gd::String &value) {
   if (name == _("Shape")) {
     if (value == _("Box (rectangle)"))
       behaviorContent.SetAttribute("shapeType", "Box");
@@ -130,7 +128,7 @@ bool PhysicsBehavior::UpdateProperty(gd::SerializerElement &behaviorContent,
 #endif
 
 gd::String PhysicsBehavior::GetStringFromCoordsVector(
-    const std::vector<sf::Vector2f> &vec,
+    const std::vector<gd::Vector2f> &vec,
     char32_t coordsSep,
     char32_t composantSep) {
   gd::String coordsStr;

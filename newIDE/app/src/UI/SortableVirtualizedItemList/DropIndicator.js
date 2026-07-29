@@ -1,31 +1,35 @@
 // @flow
 import * as React from 'react';
-import ThemeConsumer from '../Theme/ThemeConsumer';
+import GDevelopThemeContext from '../Theme/GDevelopThemeContext';
 
 const styles = {
   dropIndicator: {
-    borderTop: '2px solid #18dcf2',
+    borderTop: '2px solid black',
     height: 0,
     marginTop: '-1px',
     marginBottom: '-1px',
     width: '100%',
+    pointerEvents: 'none',
     boxSizing: 'border-box',
   },
 };
 
-export default function DropIndicator({ canDrop }: {| canDrop: boolean |}) {
+type Props = {| canDrop: boolean, zIndex?: 1 |};
+
+export default function DropIndicator({
+  canDrop,
+  zIndex,
+}: Props): React.MixedElement {
+  const gdevelopTheme = React.useContext(GDevelopThemeContext);
   return (
-    <ThemeConsumer>
-      {gdevelopTheme => (
-        <div
-          style={{
-            ...styles.dropIndicator,
-            borderColor: canDrop
-              ? gdevelopTheme.listItem.selectedBackgroundColor
-              : gdevelopTheme.listItem.selectedErrorBackgroundColor,
-          }}
-        />
-      )}
-    </ThemeConsumer>
+    <div
+      style={{
+        ...styles.dropIndicator,
+        borderColor: canDrop
+          ? gdevelopTheme.dropIndicator.canDrop
+          : gdevelopTheme.dropIndicator.cannotDrop,
+        zIndex: zIndex || undefined,
+      }}
+    />
   );
 }

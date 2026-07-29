@@ -1,4 +1,0 @@
-# README
-
-Simple example showing how the engine of GDevelop select objects to be used in conditions and actions.
-

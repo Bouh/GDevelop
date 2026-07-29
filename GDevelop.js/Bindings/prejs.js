@@ -1,19 +1,16 @@
-(function() {
-  	var createModule = function(options) {
-		var Module = options || {};
+// If running under ASAN, disable the "container overflow" checks because of false positives
+// with std::vector<gd::String>. See https://github.com/google/sanitizers/wiki/AddressSanitizerContainerOverflow.
+// Also append options from the ASAN_OPTIONS environment variable when running in Node.js,
+// as Emscripten only reads them from Module['ASAN_OPTIONS'] (not from the environment).
+if (Module['ASAN_OPTIONS'] === undefined) {
+  var envAsanOptions =
+    typeof process !== 'undefined' && process.env && process.env.ASAN_OPTIONS
+      ? ':' + process.env.ASAN_OPTIONS
+      : '';
+  Module['ASAN_OPTIONS'] = 'detect_container_overflow=0' + envAsanOptions;
+}
 
-		// Setup 80Mb for memory by default.
-		Module.TOTAL_MEMORY = Module.TOTAL_MEMORY || 83886080;
-
-		//Prevent Emscripten to bind its Module to Node's module. We take care of exposing
-		//the Module by ourselves (see post.js).
-		var module;
-	    if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
-	        var module = {
-	        	exports: {}
-	        };
-	    } else {
-	        module = undefined;
-	    }
-
-		/*Emscripten generated-code for Module will be inserted here*/
+// Prevent calling process["exit"] when there is a abort/runtime crash
+// (useful for tests when running ASAN, to see the logs).
+if (Module.noExitRuntime === undefined)
+  Module.noExitRuntime = true;

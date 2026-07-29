@@ -13,6 +13,7 @@
 namespace gd {
 class Instruction;
 class Project;
+class EventVisitor;
 }
 class EventsCodeGenerationContext;
 
@@ -105,6 +106,10 @@ class GD_CORE_API GroupEvent : public gd::BaseEvent {
   virtual bool CanHaveSubEvents() const { return true; }
   virtual const gd::EventsList& GetSubEvents() const { return events; };
   virtual gd::EventsList& GetSubEvents() { return events; };
+
+  virtual std::vector<gd::String> GetAllSearchableStrings() const;
+  virtual bool ReplaceAllSearchableStrings(
+      std::vector<gd::String> newSearchableString);
 
   virtual void SerializeTo(SerializerElement& element) const;
   virtual void UnserializeFrom(gd::Project& project,

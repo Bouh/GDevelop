@@ -1,14 +1,11 @@
-//TODO: Factor with styles.js from LayersList.
-export default {
-  handleColumn: {
-    width: 24,
-    paddingLeft: 8,
-    paddingRight: 0,
-  },
+// @flow
+const styles = {
   coordinateColumn: {
-    width: 48,
+    width: 96,
   },
   toolColumn: {
-    width: 48,
+    width: 24,
   },
 };
+
+export default styles;

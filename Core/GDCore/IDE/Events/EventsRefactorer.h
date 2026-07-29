@@ -3,21 +3,25 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef GDCORE_EVENTSREFACTORER_H
-#define GDCORE_EVENTSREFACTORER_H
+#pragma once
+
 #include <memory>
 #include <vector>
+
 #include "GDCore/Events/Instruction.h"
+#include "GDCore/Extensions/Metadata/InstructionMetadata.h"
 #include "GDCore/String.h"
 namespace gd {
 class EventsList;
 class ObjectsContainer;
+class ObjectsContainersList;
+class ProjectScopedContainers;
 class Platform;
 class ExternalEvents;
 class BaseEvent;
 class Instruction;
 typedef std::shared_ptr<gd::BaseEvent> BaseEventSPtr;
-}
+}  // namespace gd
 
 namespace gd {
 
@@ -40,22 +44,23 @@ class GD_CORE_API EventsSearchResult {
   std::size_t positionInList;
 
   bool IsEventsListValid() const { return eventsList != nullptr; }
-  
+
   /**
-   * \brief Get the events list containing the event pointed by the EventsSearchResult.
-   * \warning Only call this when IsEventsListValid returns true.
+   * \brief Get the events list containing the event pointed by the
+   * EventsSearchResult. \warning Only call this when IsEventsListValid returns
+   * true.
    */
-  const gd::EventsList & GetEventsList() const { return *eventsList; }
+  const gd::EventsList& GetEventsList() const { return *eventsList; }
 
   std::size_t GetPositionInList() const { return positionInList; }
-  
+
   bool IsEventValid() const { return !event.expired(); }
 
   /**
    * \brief Get the event pointed by the EventsSearchResult.
    * \warning Only call this when IsEventValid returns true.
    */
-  const gd::BaseEvent & GetEvent() const { return *event.lock(); }
+  const gd::BaseEvent& GetEvent() const { return *event.lock(); }
 };
 
 /**
@@ -71,25 +76,16 @@ class GD_CORE_API EventsSearchResult {
 class GD_CORE_API EventsRefactorer {
  public:
   /**
-   * Replace all occurences of an object name by another name
+   * Replace all occurrences of an object name by another name
    * ( include : objects in parameters and in math/text expressions of all
    * events ).
    */
   static void RenameObjectInEvents(const gd::Platform& platform,
-                                   gd::ObjectsContainer& project,
-                                   gd::ObjectsContainer& layout,
+                                   const gd::ProjectScopedContainers& projectScopedContainers,
                                    gd::EventsList& events,
+                                   const gd::ObjectsContainer &targetedObjectsContainer,
                                    gd::String oldName,
                                    gd::String newName);
-
-  /**
-   * Remove all actions or conditions using an object
-   */
-  static void RemoveObjectInEvents(const gd::Platform& platform,
-                                   gd::ObjectsContainer& project,
-                                   gd::ObjectsContainer& layout,
-                                   gd::EventsList& events,
-                                   gd::String name);
 
   /**
    * Search for a gd::String in events
@@ -97,63 +93,43 @@ class GD_CORE_API EventsRefactorer {
    * \return A vector containing EventsSearchResult objects filled with events
    * containing the string
    */
-  static std::vector<EventsSearchResult> SearchInEvents(gd::ObjectsContainer& project,
-                                                        gd::ObjectsContainer& layout,
-                                                        gd::EventsList& events,
-                                                        gd::String search,
-                                                        bool matchCase,
-                                                        bool inConditions,
-                                                        bool inAction);
+  static std::vector<EventsSearchResult> SearchInEvents(
+      const gd::Platform& platform,
+      gd::EventsList& events,
+      gd::String search,
+      bool matchCase,
+      bool inConditions,
+      bool inActions,
+      bool inEventStrings,
+      bool inEventSentences,
+      bool inInstructionNames = false);
 
   /**
    * Replace all occurrences of a gd::String in events
+   *
+   * \return A vector of all modified events.
    */
-  static void ReplaceStringInEvents(gd::ObjectsContainer& project,
-                                    gd::ObjectsContainer& layout,
-                                    gd::EventsList& events,
-                                    gd::String toReplace,
-                                    gd::String newString,
-                                    bool matchCase,
-                                    bool inConditions,
-                                    bool inActions);
+  static std::vector<EventsSearchResult> ReplaceStringInEvents(
+      gd::ObjectsContainer& project,
+      gd::ObjectsContainer& layout,
+      gd::EventsList& events,
+      gd::String toReplace,
+      gd::String newString,
+      bool matchCase,
+      bool inConditions,
+      bool inActions,
+      bool inEventString);
 
   virtual ~EventsRefactorer(){};
 
  private:
-  /**
-   * Replace all occurences of an object name by another name in an action
-   * ( include : objects in parameters and in math/text expressions ).
-   *
-   * \return true if something was modified.
-   */
-  static bool RenameObjectInActions(const gd::Platform& platform,
-                                    gd::ObjectsContainer& project,
-                                    gd::ObjectsContainer& layout,
-                                    gd::InstructionsList& instructions,
-                                    gd::String oldName,
-                                    gd::String newName);
-
-  /**
-   * Replace all occurences of an object name by another name in a condition
-   * ( include : objects in parameters and in math/text expressions ).
-   *
-   * \return true if something was modified.
-   */
-  static bool RenameObjectInConditions(const gd::Platform& platform,
-                                       gd::ObjectsContainer& project,
-                                       gd::ObjectsContainer& layout,
-                                       gd::InstructionsList& instructions,
-                                       gd::String oldName,
-                                       gd::String newName);
-
   /**
    * Remove all conditions of the list using an object
    *
    * \return true if something was modified.
    */
   static bool RemoveObjectInConditions(const gd::Platform& platform,
-                                       gd::ObjectsContainer& project,
-                                       gd::ObjectsContainer& layout,
+                                       const gd::ProjectScopedContainers& projectScopedContainers,
                                        gd::InstructionsList& conditions,
                                        gd::String name);
 
@@ -163,13 +139,12 @@ class GD_CORE_API EventsRefactorer {
    * \return true if something was modified.
    */
   static bool RemoveObjectInActions(const gd::Platform& platform,
-                                    gd::ObjectsContainer& project,
-                                    gd::ObjectsContainer& layout,
+                                    const gd::ProjectScopedContainers& projectScopedContainers,
                                     gd::InstructionsList& conditions,
                                     gd::String name);
 
   /**
-   * Replace all occurences of a gd::String in conditions
+   * Replace all occurrences of a gd::String in conditions
    *
    * \return true if something was modified.
    */
@@ -181,7 +156,7 @@ class GD_CORE_API EventsRefactorer {
                                         bool matchCase);
 
   /**
-   * Replace all occurences of a gd::String in actions
+   * Replace all occurrences of a gd::String in actions
    *
    * \return true if something was modified.
    */
@@ -192,20 +167,45 @@ class GD_CORE_API EventsRefactorer {
                                      gd::String newString,
                                      bool matchCase);
 
-  static bool SearchStringInActions(gd::ObjectsContainer& project,
-                                    gd::ObjectsContainer& layout,
+  /**
+   * Replace all occurrences of a gd::String in strings of events (for example:
+   * comments and name of groups).
+   *
+   * \return true if something was modified.
+   */
+  static bool ReplaceStringInEventSearchableStrings(
+      gd::ObjectsContainer& project,
+      gd::ObjectsContainer& layout,
+      gd::BaseEvent& event,
+      gd::String toReplace,
+      gd::String newString,
+      bool matchCase);
+
+  static bool SearchStringInFormattedText(const gd::Platform& platform,
+                                          gd::Instruction& instruction,
+                                          gd::String search,
+                                          bool matchCase,
+                                          bool isCondition,
+                                          bool inInstructionNames = false);
+  static bool SearchStringInActions(const gd::Platform& platform,
                                     gd::InstructionsList& actions,
                                     gd::String search,
-                                    bool matchCase);
-  static bool SearchStringInConditions(gd::ObjectsContainer& project,
-                                       gd::ObjectsContainer& layout,
+                                    bool matchCase,
+                                    bool inSentences,
+                                    bool inInstructionNames = false);
+  static bool SearchStringInConditions(const gd::Platform& platform,
                                        gd::InstructionsList& conditions,
                                        gd::String search,
-                                       bool matchCase);
+                                       bool matchCase,
+                                       bool inSentences,
+                                       bool inInstructionNames = false);
+  static bool SearchStringInEvent(gd::BaseEvent& events,
+                                  gd::String search,
+                                  bool matchCase);
+
+  static const gd::String searchIgnoredCharacters;
 
   EventsRefactorer(){};
 };
 
 }  // namespace gd
-
-#endif  // GDCORE_EVENTSREFACTORER_H

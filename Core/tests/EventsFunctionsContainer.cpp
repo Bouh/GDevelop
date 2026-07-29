@@ -10,7 +10,8 @@
 
 TEST_CASE("EventsFunctionsContainer", "[common]") {
   SECTION("Sanity checks") {
-    gd::EventsFunctionsContainer eventsFunctionContainer;
+    gd::EventsFunctionsContainer eventsFunctionContainer(
+        gd::EventsFunctionsContainer::FunctionOwner::Extension);
     eventsFunctionContainer.InsertNewEventsFunction("Function1", 0);
     eventsFunctionContainer.InsertNewEventsFunction("Function2", 1);
     eventsFunctionContainer.InsertNewEventsFunction("Function3", 2);
@@ -37,6 +38,8 @@ TEST_CASE("EventsFunctionsContainer", "[common]") {
             "Function2.x");
     REQUIRE(eventsFunctionContainer.GetEventsFunction(2).GetName() ==
             "Function3");
+    REQUIRE(eventsFunctionContainer.GetOwner() ==
+            gd::EventsFunctionsContainer::FunctionOwner::Extension);
     REQUIRE(eventsFunctionContainer2.GetEventsFunctionsCount() == 3);
     REQUIRE(eventsFunctionContainer2.GetEventsFunction(0).GetName() ==
             "Function1.y");
@@ -62,7 +65,8 @@ TEST_CASE("EventsFunctionsContainer", "[common]") {
   }
   SECTION("Serialization") {
     gd::Project project;
-    gd::EventsFunctionsContainer eventsFunctionContainer;
+    gd::EventsFunctionsContainer eventsFunctionContainer(
+        gd::EventsFunctionsContainer::FunctionOwner::Extension);
     eventsFunctionContainer.InsertNewEventsFunction("Function1", 0);
     eventsFunctionContainer.InsertNewEventsFunction("Function2", 1);
     eventsFunctionContainer.InsertNewEventsFunction("Function3", 2);
@@ -72,7 +76,8 @@ TEST_CASE("EventsFunctionsContainer", "[common]") {
 
     eventsFunctionContainer.RemoveEventsFunction("Function2");
 
-    gd::EventsFunctionsContainer eventsFunctionContainer2;
+    gd::EventsFunctionsContainer eventsFunctionContainer2(
+        gd::EventsFunctionsContainer::FunctionOwner::Extension);
     eventsFunctionContainer2.UnserializeEventsFunctionsFrom(project, element);
     REQUIRE(eventsFunctionContainer.GetEventsFunctionsCount() == 2);
     REQUIRE(eventsFunctionContainer.GetEventsFunction(0).GetName() ==

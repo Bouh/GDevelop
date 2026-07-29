@@ -1,4 +1,0 @@
-# README
-
-Show how to save a screenshot of the game on the disk \(on Windows/macOS/Linux only\).
-

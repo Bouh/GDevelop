@@ -15,37 +15,40 @@ BuiltinExtensionsImplementer::ImplementsCommonConversionsExtension(
   extension
       .SetExtensionInformation(
           "BuiltinCommonConversions",
-          _("Standard Conversions"),
-          _("Built-in extension providing standard conversions expressions."),
+          _("Conversion"),
+          "Expressions to convert numbers to string, strings to numbers, "
+          "angles (degrees from/to radians) and a GDevelop variable to/from a "
+          "JSON string.",
           "Florian Rival",
           "Open source (MIT License)")
+      .SetShortDescription("Convert number<->string, degrees<->radians, variable<->JSON.")
       .SetExtensionHelpPath("/all-features/common-conversions");
-
-#if defined(GD_IDE_ONLY)
+  extension.AddInstructionOrExpressionGroupMetadata(_("Conversion"))
+      .SetIcon("res/conditions/toujours24_black.png");
 
   extension
       .AddExpression("ToNumber",
                      _("Text > Number"),
                      _("Convert the text to a number"),
-                     _("Conversion"),
-                     "res/conditions/toujours24.png")
+                     "",
+                     "res/conditions/toujours24_black.png")
       .AddParameter("string", _("Text to convert to a number"));
 
   extension
       .AddStrExpression("ToString",
                         _("Number > Text"),
                         _("Convert the result of the expression to text"),
-                        _("Conversion"),
-                        "res/conditions/toujours24.png")
+                        "",
+                        "res/conditions/toujours24_black.png")
       .AddParameter("expression", _("Expression to be converted to text"));
 
   extension
       .AddStrExpression("LargeNumberToString",
-                        _("Number > Text ( without scientific notation )"),
+                        _("Number > Text (without scientific notation)"),
                         _("Convert the result of the expression to text, "
                           "without using the scientific notation"),
-                        _("Conversion"),
-                        "res/conditions/toujours24.png")
+                        "",
+                        "res/conditions/toujours24_black.png")
       .AddParameter("expression", _("Expression to be converted to text"));
 
   extension
@@ -53,8 +56,8 @@ BuiltinExtensionsImplementer::ImplementsCommonConversionsExtension(
           "ToRad",
           _("Degrees > Radians"),
           _("Converts the angle, expressed in degrees, into radians"),
-          _("Conversion"),
-          "res/conditions/toujours24.png")
+          "",
+          "res/conditions/toujours24_black.png")
       .AddParameter("expression", _("Angle, in degrees"));
 
   extension
@@ -62,10 +65,97 @@ BuiltinExtensionsImplementer::ImplementsCommonConversionsExtension(
           "ToDeg",
           _("Radians > Degrees"),
           _("Converts the angle, expressed in radians, into degrees"),
-          _("Conversion"),
-          "res/conditions/toujours24.png")
+          "",
+          "res/conditions/toujours24_black.png")
       .AddParameter("expression", _("Angle, in radians"));
-#endif
+
+  extension
+      .AddStrExpression("ToJSON",
+                        _("Convert variable to JSON"),
+                        _("Convert a variable to JSON"),
+                        _("JSON"),
+                        "res/conditions/toujours24_black.png")
+      .AddParameter("variable",
+                    _("The variable to be stringified"),
+                    "AllowUndeclaredVariable");
+
+  // Deprecated
+  extension
+      .AddStrExpression("GlobalVarToJSON",
+                        _("Convert global variable to JSON"),
+                        _("Convert a global variable to JSON"),
+                        _("JSON"),
+                        "res/conditions/toujours24_black.png")
+      .AddParameter("globalvar", _("The global variable to be stringified"))
+      .SetHidden();
+
+  extension
+      .AddStrExpression("ObjectVarToJSON",
+                        _("Convert object variable to JSON"),
+                        _("Convert an object variable to JSON"),
+                        _("JSON"),
+                        "res/conditions/toujours24_black.png")
+      .AddParameter("objectPtr", _("The object with the variable"))
+      .AddParameter("objectvar", _("The object variable to be stringified"));
+
+  // Deprecated
+  extension
+      .AddAction(
+          "JSONToVariableStructure",
+          _("Convert JSON to a scene variable"),
+          _("Parse a JSON object and store it into a scene variable"),
+          _("Convert JSON string _PARAM0_ and store it into variable _PARAM1_"),
+          "",
+          "res/actions/net24.png",
+          "res/actions/net.png")
+      .AddParameter("string", _("JSON string"))
+      .AddParameter("scenevar", _("Variable where store the JSON object"))
+      .MarkAsAdvanced()
+      .SetHidden();
+
+  // Deprecated
+  extension
+      .AddAction("JSONToGlobalVariableStructure",
+                 _("Convert JSON to global variable"),
+                 _("Parse a JSON object and store it into a global variable"),
+                 _("Convert JSON string _PARAM0_ and store it into global "
+                   "variable _PARAM1_"),
+                 "",
+                 "res/actions/net24.png",
+                 "res/actions/net.png")
+      .AddParameter("string", _("JSON string"))
+      .AddParameter("globalvar",
+                    _("Global variable where store the JSON object"))
+      .MarkAsAdvanced()
+      .SetHidden();
+
+  extension
+      .AddAction(
+          "JSONToVariableStructure2",
+          _("Convert JSON to a variable"),
+          _("Parse a JSON object and store it into a variable"),
+          _("Convert JSON string _PARAM0_ and store it into variable _PARAM1_"),
+          "",
+          "res/actions/net24.png",
+          "res/actions/net.png")
+      .AddParameter("string", _("JSON string"))
+      .AddParameter("variable", _("Variable where to store the JSON object"))
+      .MarkAsAdvanced();
+
+  extension
+      .AddAction("JSONToObjectVariableStructure",
+                 _("Convert JSON to object variable"),
+                 _("Parse a JSON object and store it into an object variable"),
+                 _("Parse JSON string _PARAM0_ and store it into variable "
+                   "_PARAM2_ of _PARAM1_"),
+                 "",
+                 "res/actions/net24.png",
+                 "res/actions/net.png")
+      .AddParameter("string", _("JSON string"))
+      .AddParameter("objectPtr", _("Object"))
+      .AddParameter("objectvar",
+                    _("Object variable where store the JSON object"))
+      .MarkAsAdvanced();
 }
 
 }  // namespace gd

@@ -12,15 +12,20 @@ namespace gd {
 void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
     gd::PlatformExtension& extension) {
   extension
-      .SetExtensionInformation("BuiltinFile",
-                               _("Storage"),
-                               _("Built-in extension providing functions "
-                                 "to store data."),
-                               "Florian Rival",
-                               "Open source (MIT License)")
-      .SetExtensionHelpPath("/all-features/storage");
+      .SetExtensionInformation(
+          "BuiltinFile",
+          _("Storage"),
+          "Actions and conditions to store data (like the player progress or "
+          "anything else to be persisted across game sessions). Data are "
+          "stored on the device and erased when the game is uninstalled.",
+          "Florian Rival",
+          "Open source (MIT License)")
+      .SetShortDescription("Persistent key-value storage on device. Write/read data across game sessions.")
+      .SetExtensionHelpPath("/all-features/storage")
+      .SetCategory("Advanced");
+  extension.AddInstructionOrExpressionGroupMetadata(_("Storage"))
+      .SetIcon("res/conditions/fichier24.png");
 
-#if defined(GD_IDE_ONLY)
   extension
       .AddCondition(
           "GroupExists",
@@ -28,7 +33,7 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
           _("Check if an element (example : PlayerState/CurrentLevel) exists "
             "in the stored data.\nSpaces are forbidden in element names."),
           _("_PARAM1_ exists in storage _PARAM0_"),
-          _("Storage"),
+          "",
           "res/conditions/fichier24.png",
           "res/conditions/fichier.png")
       .AddParameter("string", _("Storage name"))
@@ -38,13 +43,17 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
   extension
       .AddAction(
           "LoadFile",
-          _("Load a storage in memory"),
-          _("This action loads the specified storage in memory, so you can "
-            "write and read it.\nYou can open and write without using this "
-            "action, but it will be slower.\nIf you use this action, do not "
-            "forget to unload the storage from memory."),
-          _("Load storage _PARAM0_ in memory"),
-          _("Storage"),
+          _("Manually preload a storage in memory"),
+          _("Forces the specified storage to be loaded and kept in "
+            "memory, allowing faster reads/writes. "
+            "However, it requires manual management: if you use this "
+            "action, you *must* also unload the storage manually when "
+            "it's no longer needed to ensure data is persisted.\n\n"
+            "Unless you have a specific performance need, avoid using this "
+            "action. The system already handles loading/unloading "
+            "automatically."),
+          _("Load data storage _PARAM0_ in memory"),
+          _("Advanced"),
           "res/actions/fichier24.png",
           "res/actions/fichier.png")
       .AddParameter("string", _("Storage name"))
@@ -52,11 +61,11 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
 
   extension
       .AddAction("UnloadFile",
-                 _("Close a storage"),
-                 _("This action closes the structured data previously loaded "
+                 _("Manually unload and persist a storage"),
+                 _("Close the specified storage previously loaded "
                    "in memory, saving all changes made."),
-                 _("Close structured data _PARAM0_"),
-                 _("Storage"),
+                 _("Unload and persist data storage _PARAM0_"),
+                 _("Advanced"),
                  "res/actions/fichier24.png",
                  "res/actions/fichier.png")
       .AddParameter("string", _("Storage name"))
@@ -65,13 +74,13 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
   extension
       .AddAction(
           "EcrireFichierExp",
-          _("Write a value"),
-          _("Write the result of the expression in the stored data, in the "
+          _("Save a value"),
+          _("Save the result of the expression in the stored data, in the "
             "specified element.\nSpecify the structure leading to the "
             "element using / (example : Root/Level/Current)\nSpaces are "
             "forbidden in element names."),
-          _("Write _PARAM2_ in _PARAM1_ of storage _PARAM0_"),
-          _("Storage"),
+          _("Save value _PARAM2_ in _PARAM1_ of storage _PARAM0_"),
+          "",
           "res/actions/fichier24.png",
           "res/actions/fichier.png")
       .AddParameter("string", _("Storage name"))
@@ -81,53 +90,94 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
   extension
       .AddAction(
           "EcrireFichierTxt",
-          _("Write a text"),
-          _("Write the text in the specified storage, in the specified "
+          _("Save a text"),
+          _("Save the text in the specified storage, in the specified "
             "element.\nSpecify "
             "the structure leading to the element using / (example : "
             "Root/Level/Current)\nSpaces are forbidden in element names."),
-          _("Write _PARAM2_ in _PARAM1_ of storage _PARAM0_"),
-          _("Storage"),
+          _("Save text _PARAM2_ in _PARAM1_ of storage _PARAM0_"),
+          "",
           "res/actions/fichier24.png",
           "res/actions/fichier.png")
       .AddParameter("string", _("Storage name"))
       .AddParameter("string", _("Group"))
       .AddParameter("string", _("Text"));
 
+  // Deprecated
   extension
       .AddAction(
           "LireFichierExp",
-          _("Read a value"),
-          _("Read the value saved in the specified element and store it in a scene"
+          _("Load a value"),
+          _("Load the value saved in the specified element and store it in a "
+            "scene "
             "variable.\nSpecify the structure leading to the element using / "
             "(example : Root/Level/Current)\nSpaces are forbidden in element "
             "names."),
-          _("Read _PARAM1_ from storage _PARAM0_ and store value in _PARAM3_"),
-          _("Storage"),
+          _("Load _PARAM1_ from storage _PARAM0_ and store value in _PARAM3_"),
+          "",
           "res/actions/fichier24.png",
           "res/actions/fichier.png")
       .AddParameter("string", _("Storage name"))
       .AddParameter("string", _("Group"))
       .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("scenevar", _("Scene variables"));
+      .AddParameter("scenevar", _("Scene variable"))
+      .SetHidden();
 
   extension
       .AddAction(
-          "LireFichierTxt",
-          _("Read a text"),
-          _("Read the text saved in the specified element and store it in a scene "
+          "ReadNumberFromStorage",
+          _("Load a value"),
+          _("Load the value saved in the specified element and store it in a "
             "variable.\nSpecify the structure leading to the element using / "
             "(example : Root/Level/Current)\nSpaces are forbidden in element "
             "names."),
-          _("Read _PARAM1_ from storage _PARAM0_ and store as text in "
-            "_PARAM3_"),
-          _("Storage"),
+          _("Load _PARAM1_ from storage _PARAM0_ and store value in _PARAM3_"),
+          "",
           "res/actions/fichier24.png",
           "res/actions/fichier.png")
       .AddParameter("string", _("Storage name"))
       .AddParameter("string", _("Group"))
       .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("scenevar", _("Scene variables"));
+      .AddParameter("variable", _("Variable"));
+
+  // Deprecated
+  extension
+      .AddAction(
+          "LireFichierTxt",
+          _("Load a text"),
+          _("Load the text saved in the specified element and store it in a "
+            "scene "
+            "variable.\nSpecify the structure leading to the element using / "
+            "(example : Root/Level/Current)\nSpaces are forbidden in element "
+            "names."),
+          _("Load _PARAM1_ from storage _PARAM0_ and store as text in "
+            "_PARAM3_"),
+          "",
+          "res/actions/fichier24.png",
+          "res/actions/fichier.png")
+      .AddParameter("string", _("Storage name"))
+      .AddParameter("string", _("Group"))
+      .AddCodeOnlyParameter("currentScene", "")
+      .AddParameter("scenevar", _("Scene variable"))
+      .SetHidden();
+
+  extension
+      .AddAction(
+          "ReadStringFromStorage",
+          _("Load a text"),
+          _("Load the text saved in the specified element and store it in a "
+            "variable.\nSpecify the structure leading to the element using / "
+            "(example : Root/Level/Current)\nSpaces are forbidden in element "
+            "names."),
+          _("Load _PARAM1_ from storage _PARAM0_ and store as text in "
+            "_PARAM3_"),
+          "",
+          "res/actions/fichier24.png",
+          "res/actions/fichier.png")
+      .AddParameter("string", _("Storage name"))
+      .AddParameter("string", _("Group"))
+      .AddCodeOnlyParameter("currentScene", "")
+      .AddParameter("variable", _("Variable"));
 
   extension
       .AddAction("DeleteGroupFichier",
@@ -137,7 +187,7 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
                    "element using / (example : Root/Level/Current)\nSpaces are "
                    "forbidden in element names."),
                  _("Delete _PARAM1_ from storage _PARAM0_"),
-                 _("Storage"),
+                 "",
                  "res/actions/delete24.png",
                  "res/actions/delete.png")
       .AddParameter("string", _("Storage name"))
@@ -150,7 +200,7 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
           _("Clear a storage"),
           _("Clear the specified storage, removing all data saved in it."),
           _("Delete storage _PARAM0_"),
-          _("Storage"),
+          "",
           "res/actions/delete24.png",
           "res/actions/delete.png")
       .AddParameter("string", _("Storage name"));
@@ -160,24 +210,10 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
                     _("A storage exists"),
                     _("Test if the specified storage exists."),
                     _("Storage _PARAM0_ exists"),
-                    _("Storage"),
+                    "",
                     "res/conditions/fichier24.png",
                     "res/conditions/fichier.png")
       .AddParameter("string", _("Storage name"))
-      .MarkAsAdvanced();
-
-  extension
-      .AddAction("LaunchFile",
-                 _("Open a URL or a file"),
-                 _("This action launches the specified file or URL, in a "
-                   "browser (or in a new tab if the game is using the Web "
-                   "platform and is launched inside a browser)."),
-                 _("Open URL (or file) _PARAM0_"),
-                 _("Files"),
-                 "res/actions/launchFile24.png",
-                 "res/actions/launchFile.png")
-      .AddParameter("string", _("URL (or filename)"))
-      .AddCodeOnlyParameter("currentScene", "")
       .MarkAsAdvanced();
 
   extension
@@ -185,12 +221,11 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsFileExtension(
                  _("Execute a command"),
                  _("This action executes the specified command."),
                  _("Execute _PARAM0_"),
-                 _("Files"),
+                 _("Network"),
                  "res/actions/launchFile24.png",
                  "res/actions/launchFile.png")
       .AddParameter("string", _("Command"))
       .MarkAsAdvanced();
-#endif
 }
 
 }  // namespace gd

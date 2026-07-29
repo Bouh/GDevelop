@@ -1,0 +1,178 @@
+.container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  contain: layout; /* Prevent max-width animation from forcing full-page reflow */
+  position: relative; /* Containing block for absolutely-positioned panes during close */
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  pointer-events: all;
+}
+
+/* Prevents content from collapsing to zero while the outer pane is clipped
+   by the max-width open animation. The pane clips via overflow:hidden; this
+   inner div maintains the minimum content width so layout doesn't reflow. */
+.paneContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: var(--pane-close-width, 300px);
+  min-height: 0;
+}
+
+.leftPane {
+  flex-basis: 300px;
+  flex-shrink: 0;
+  z-index: 1; /* Create a new stacking context. */
+}
+
+.rightPane {
+  flex-basis: 300px;
+  flex-shrink: 0;
+  z-index: 1; /* Create a new stacking context. */
+}
+
+@keyframes slide-in-pane {
+  from {
+    max-width: 0;
+  }
+  to {
+    max-width: var(--pane-close-width, 300px);
+  }
+}
+
+
+/* GPU-composited close animations — no layout recalculation per frame. */
+@keyframes slide-out-right-pane {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
+@keyframes slide-out-left-pane {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+@keyframes slide-in-resizer {
+  from {
+    max-width: 0;
+  }
+  to {
+    max-width: 3px;
+  }
+}
+
+/* Pane opening (drawer or not) */
+/* backwards fill-mode: applies the `from` keyframe immediately, preventing a
+   one-frame flash at the pane's natural flex-basis width before the animation starts. */
+.rightPane:not(.hidden):not(.closing) {
+  animation: slide-in-pane 0.25s ease-out backwards;
+}
+
+.leftPane:not(.hidden):not(.closing) {
+  animation: slide-in-pane 0.25s ease-out backwards;
+}
+
+.rightResizer:not(.hidden):not(.resizerClosing) {
+  animation: slide-in-resizer 0.25s ease-out backwards;
+}
+
+.leftResizer:not(.hidden):not(.resizerClosing) {
+  animation: slide-in-resizer 0.25s ease-out backwards;
+}
+
+/* Right pane closing: leaves flex flow immediately (center expands at once),
+   then slides out to the right as a GPU-composited overlay. */
+.rightPane.closing {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--pane-close-width, 300px);
+  animation: slide-out-right-pane 0.25s ease forwards;
+  z-index: 2;
+}
+
+/* Left pane closing: same approach as right — leaves flex flow immediately,
+   slides out to the left as a GPU-composited overlay. */
+.leftPane.closing {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--pane-close-width, 300px);
+  animation: slide-out-left-pane 0.25s ease forwards;
+  z-index: 2;
+}
+
+/* Resizer disappears immediately when a pane starts closing. */
+.resizerClosing {
+  opacity: 0;
+  width: 0;
+}
+
+/* A drawer has a fixed width: make the content lay out at exactly this width,
+   instead of the default 300px minimum which overflows on small screens. */
+.pane.drawer .paneContent {
+  min-width: min(calc(100vw - 82px), 320px);
+}
+
+/* Pane as drawer */
+.pane.drawer {
+  width: min(calc(100vw - 82px), 320px);
+  will-change: transform;
+  box-shadow: 0px 8px 10px -5px rgba(0, 0, 0, 0.2),
+    0px 16px 24px 2px rgba(0, 0, 0, 0.14), 0px 6px 30px 5px rgba(0, 0, 0, 0.12);
+}
+
+.rightPane.drawer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.leftPane.drawer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+/* Pane, as drawer, closed.  */
+.rightPane:not(.hidden).closedDrawer {
+  transform: translateX(100vw);
+}
+
+.leftPane:not(.hidden).closedDrawer {
+  transform: translateX(-100vw);
+}
+
+.centerPane {
+  flex: 1;
+  pointer-events: none; /* Let the pointer events go through, and the pane itself is responsible for setting them back when necessary. */
+}
+
+.hidden {
+  display: none;
+}
+
+.resizer {
+  z-index: 1; /* To allow the shadow to be visible. */
+  width: 3px;
+  cursor: ew-resize;
+  background-color: var(--theme-surface-window-background-color);
+  flex-shrink: 0;
+  pointer-events: all;
+}
+.resizer:hover,
+.resizer:focus {
+  outline: none;
+}

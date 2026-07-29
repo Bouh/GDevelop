@@ -1,8 +1,9 @@
 // @flow
 
-import optionalRequire from './OptionalRequire.js';
+import optionalRequire from './OptionalRequire';
+import optionalLazyRequire from '../Utils/OptionalLazyRequire';
 const fs = optionalRequire('fs');
-const archiver = optionalRequire('archiver');
+const lazyRequireArchiver = optionalLazyRequire('archiver');
 
 // TODO: Move in a Archiver folder?
 /**
@@ -11,10 +12,13 @@ const archiver = optionalRequire('archiver');
 export const archiveLocalFolder = ({
   path,
   outputFilename,
+  sizeLimit,
 }: {|
   path: string,
   outputFilename: string,
+  sizeLimit?: number,
 |}): Promise<string> => {
+  const archiver = lazyRequireArchiver();
   return new Promise((resolve, reject) => {
     if (!fs || !archiver) return reject(new Error('Archiver unavailable'));
 
@@ -24,9 +28,19 @@ export const archiveLocalFolder = ({
     });
 
     output.on('close', () => {
+      const fileSize = archive.pointer();
       console.log(
-        `Archive written at ${outputFilename}, ${archive.pointer()} total bytes.`
+        `Archive written at ${outputFilename}, ${fileSize} total bytes.`
       );
+      if (sizeLimit && fileSize > sizeLimit) {
+        const roundFileSizeInMb = Math.round(fileSize / (1000 * 1000));
+        reject(
+          new Error(
+            `Archive is of size ${roundFileSizeInMb} MB, which is above the limit allowed of ${sizeLimit /
+              (1000 * 1000)} MB.`
+          )
+        );
+      }
       resolve(outputFilename);
     });
 

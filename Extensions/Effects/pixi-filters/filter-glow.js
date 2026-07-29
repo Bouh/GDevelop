@@ -1,9 +1,84 @@
 /*!
- * @pixi/filter-glow - v2.5.0
- * Compiled Fri, 20 Dec 2019 18:59:17 UTC
+ * @pixi/filter-glow - v5.2.1
+ * Compiled Thu, 31 Aug 2023 09:18:38 UTC
  *
  * @pixi/filter-glow is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
- */
-!function(o,t){"object"==typeof exports&&"undefined"!=typeof module?t(exports,require("pixi.js")):"function"==typeof define&&define.amd?define(["exports","pixi.js"],t):t(o.__filters={},o.PIXI)}(this,function(o,t){"use strict";var n="attribute vec2 aVertexPosition;\nattribute vec2 aTextureCoord;\n\nuniform mat3 projectionMatrix;\n\nvarying vec2 vTextureCoord;\n\nvoid main(void)\n{\n    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);\n    vTextureCoord = aTextureCoord;\n}",e="varying vec2 vTextureCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler;\n\nuniform float distance;\nuniform float outerStrength;\nuniform float innerStrength;\nuniform vec4 glowColor;\nuniform vec4 filterArea;\nuniform vec4 filterClamp;\nconst float PI = 3.14159265358979323846264;\n\nvoid main(void) {\n    vec2 px = vec2(1.0 / filterArea.x, 1.0 / filterArea.y);\n    vec4 ownColor = texture2D(uSampler, vTextureCoord);\n    vec4 curColor;\n    float totalAlpha = 0.0;\n    float maxTotalAlpha = 0.0;\n    float cosAngle;\n    float sinAngle;\n    vec2 displaced;\n    for (float angle = 0.0; angle <= PI * 2.0; angle += %QUALITY_DIST%) {\n       cosAngle = cos(angle);\n       sinAngle = sin(angle);\n       for (float curDistance = 1.0; curDistance <= %DIST%; curDistance++) {\n           displaced.x = vTextureCoord.x + cosAngle * curDistance * px.x;\n           displaced.y = vTextureCoord.y + sinAngle * curDistance * px.y;\n           curColor = texture2D(uSampler, clamp(displaced, filterClamp.xy, filterClamp.zw));\n           totalAlpha += (distance - curDistance) * curColor.a;\n           maxTotalAlpha += (distance - curDistance);\n       }\n    }\n    maxTotalAlpha = max(maxTotalAlpha, 0.0001);\n\n    ownColor.a = max(ownColor.a, 0.0001);\n    ownColor.rgb = ownColor.rgb / ownColor.a;\n    float outerGlowAlpha = (totalAlpha / maxTotalAlpha)  * outerStrength * (1. - ownColor.a);\n    float innerGlowAlpha = ((maxTotalAlpha - totalAlpha) / maxTotalAlpha) * innerStrength * ownColor.a;\n    float resultAlpha = (ownColor.a + outerGlowAlpha);\n    gl_FragColor = vec4(mix(mix(ownColor.rgb, glowColor.rgb, innerGlowAlpha / ownColor.a), glowColor.rgb, outerGlowAlpha / resultAlpha) * resultAlpha, resultAlpha);\n}\n",r=function(o){function r(t,r,i,l,a){void 0===t&&(t=10),void 0===r&&(r=4),void 0===i&&(i=0),void 0===l&&(l=16777215),void 0===a&&(a=.1),o.call(this,n,e.replace(/%QUALITY_DIST%/gi,""+(1/a/t).toFixed(7)).replace(/%DIST%/gi,""+t.toFixed(7))),this.uniforms.glowColor=new Float32Array([0,0,0,1]),this.distance=t,this.color=l,this.outerStrength=r,this.innerStrength=i}o&&(r.__proto__=o),r.prototype=Object.create(o&&o.prototype),r.prototype.constructor=r;var i={color:{configurable:!0},distance:{configurable:!0},outerStrength:{configurable:!0},innerStrength:{configurable:!0}};return i.color.get=function(){return t.utils.rgb2hex(this.uniforms.glowColor)},i.color.set=function(o){t.utils.hex2rgb(o,this.uniforms.glowColor)},i.distance.get=function(){return this.uniforms.distance},i.distance.set=function(o){this.uniforms.distance=o},i.outerStrength.get=function(){return this.uniforms.outerStrength},i.outerStrength.set=function(o){this.uniforms.outerStrength=o},i.innerStrength.get=function(){return this.uniforms.innerStrength},i.innerStrength.set=function(o){this.uniforms.innerStrength=o},Object.defineProperties(r.prototype,i),r}(t.Filter);o.GlowFilter=r,Object.defineProperty(o,"__esModule",{value:!0})}),Object.assign(PIXI.filters,this?this.__filters:__filters);
-//# sourceMappingURL=filter-glow.js.map
+ */var __filters=function(t,o){"use strict";var i=`attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+
+uniform mat3 projectionMatrix;
+
+varying vec2 vTextureCoord;
+
+void main(void)
+{
+    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+    vTextureCoord = aTextureCoord;
+}`,u=`varying vec2 vTextureCoord;
+varying vec4 vColor;
+
+uniform sampler2D uSampler;
+
+uniform float outerStrength;
+uniform float innerStrength;
+
+uniform vec4 glowColor;
+
+uniform vec4 filterArea;
+uniform vec4 filterClamp;
+uniform bool knockout;
+uniform float alpha;
+
+const float PI = 3.14159265358979323846264;
+
+const float DIST = __DIST__;
+const float ANGLE_STEP_SIZE = min(__ANGLE_STEP_SIZE__, PI * 2.0);
+const float ANGLE_STEP_NUM = ceil(PI * 2.0 / ANGLE_STEP_SIZE);
+
+const float MAX_TOTAL_ALPHA = ANGLE_STEP_NUM * DIST * (DIST + 1.0) / 2.0;
+
+void main(void) {
+    vec2 px = vec2(1.0 / filterArea.x, 1.0 / filterArea.y);
+
+    float totalAlpha = 0.0;
+
+    vec2 direction;
+    vec2 displaced;
+    vec4 curColor;
+
+    for (float angle = 0.0; angle < PI * 2.0; angle += ANGLE_STEP_SIZE) {
+       direction = vec2(cos(angle), sin(angle)) * px;
+
+       for (float curDistance = 0.0; curDistance < DIST; curDistance++) {
+           displaced = clamp(vTextureCoord + direction * 
+                   (curDistance + 1.0), filterClamp.xy, filterClamp.zw);
+
+           curColor = texture2D(uSampler, displaced);
+
+           totalAlpha += (DIST - curDistance) * curColor.a;
+       }
+    }
+    
+    curColor = texture2D(uSampler, vTextureCoord);
+
+    float alphaRatio = (totalAlpha / MAX_TOTAL_ALPHA);
+
+    float innerGlowAlpha = (1.0 - alphaRatio) * innerStrength * curColor.a;
+    float innerGlowStrength = min(1.0, innerGlowAlpha);
+    
+    vec4 innerColor = mix(curColor, glowColor, innerGlowStrength);
+
+    float outerGlowAlpha = alphaRatio * outerStrength * (1. - curColor.a);
+    float outerGlowStrength = min(1.0 - innerColor.a, outerGlowAlpha);
+
+    if (knockout) {
+      float resultAlpha = (outerGlowAlpha + innerGlowAlpha) * alpha;
+      gl_FragColor = vec4(glowColor.rgb * resultAlpha, resultAlpha);
+    }
+    else {
+      vec4 outerGlowColor = outerGlowStrength * glowColor.rgba * alpha;
+      gl_FragColor = innerColor + outerGlowColor;
+    }
+}
+`;const e=class extends o.Filter{constructor(n){const a=Object.assign({},e.defaults,n),{outerStrength:c,innerStrength:s,color:h,knockout:g,quality:f,alpha:p}=a,r=Math.round(a.distance);super(i,u.replace(/__ANGLE_STEP_SIZE__/gi,`${(1/f/r).toFixed(7)}`).replace(/__DIST__/gi,`${r.toFixed(0)}.0`)),this.uniforms.glowColor=new Float32Array([0,0,0,1]),this.uniforms.alpha=1,Object.assign(this,{color:h,outerStrength:c,innerStrength:s,padding:r,knockout:g,alpha:p})}get color(){return o.utils.rgb2hex(this.uniforms.glowColor)}set color(n){o.utils.hex2rgb(n,this.uniforms.glowColor)}get outerStrength(){return this.uniforms.outerStrength}set outerStrength(n){this.uniforms.outerStrength=n}get innerStrength(){return this.uniforms.innerStrength}set innerStrength(n){this.uniforms.innerStrength=n}get knockout(){return this.uniforms.knockout}set knockout(n){this.uniforms.knockout=n}get alpha(){return this.uniforms.alpha}set alpha(n){this.uniforms.alpha=n}};let l=e;return l.defaults={distance:10,outerStrength:4,innerStrength:0,color:16777215,quality:.1,knockout:!1,alpha:1},t.GlowFilter=l,Object.defineProperty(t,"__esModule",{value:!0}),t}({},PIXI);Object.assign(PIXI.filters,__filters);

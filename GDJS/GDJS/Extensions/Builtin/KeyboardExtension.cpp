@@ -4,11 +4,6 @@
  * reserved. This project is released under the MIT License.
  */
 #include "KeyboardExtension.h"
-#include "GDCore/CommonTools.h"
-#include "GDCore/Events/CodeGeneration/EventsCodeGenerationContext.h"
-#include "GDCore/Events/CodeGeneration/EventsCodeGenerator.h"
-#include "GDCore/Events/CodeGeneration/ExpressionsCodeGeneration.h"
-#include "GDCore/Events/Tools/EventsCodeNameMangler.h"
 #include "GDCore/Extensions/Builtin/AllBuiltinExtensions.h"
 #include "GDCore/Tools/Localization.h"
 
@@ -23,10 +18,14 @@ KeyboardExtension::KeyboardExtension() {
       "gdjs.evtTools.input.wasKeyReleased");
   GetAllConditions()["KeyFromTextPressed"].SetFunctionName(
       "gdjs.evtTools.input.isKeyPressed");
+  GetAllConditions()["KeyFromTextJustPressed"].SetFunctionName(
+      "gdjs.evtTools.input.wasKeyJustPressed");
   GetAllConditions()["KeyFromTextReleased"].SetFunctionName(
       "gdjs.evtTools.input.wasKeyReleased");
   GetAllConditions()["AnyKeyPressed"].SetFunctionName(
       "gdjs.evtTools.input.anyKeyPressed");
+  GetAllConditions()["AnyKeyReleased"].SetFunctionName(
+      "gdjs.evtTools.input.anyKeyReleased");
   GetAllStrExpressions()["LastPressedKey"].SetFunctionName(
       "gdjs.evtTools.input.lastPressedKey");
 }

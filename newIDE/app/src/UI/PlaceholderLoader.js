@@ -1,5 +1,5 @@
 import React from 'react';
-import CircularProgress from '@material-ui/core/CircularProgress';
+import CircularProgress from './CircularProgress';
 
 const styles = {
   containerStyle: {
@@ -11,8 +11,15 @@ const styles = {
   },
 };
 
-export default props => (
+type Props = {|
+  style?: any,
+  size?: number,
+|};
+
+const PlaceholderLoader = (props: Props) => (
   <div style={{ ...styles.containerStyle, ...props.style }}>
-    <CircularProgress size={40} />
+    <CircularProgress size={props.size || 40} />
   </div>
 );
+
+export default PlaceholderLoader;

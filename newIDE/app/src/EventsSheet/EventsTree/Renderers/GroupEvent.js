@@ -3,7 +3,7 @@ import { t } from '@lingui/macro';
 
 import * as React from 'react';
 import classNames from 'classnames';
-import TextField from '../../../UI/TextField';
+import TextField, { type TextFieldInterface } from '../../../UI/TextField';
 import {
   largeSelectedArea,
   largeSelectableArea,
@@ -11,28 +11,52 @@ import {
   disabledText,
 } from '../ClassNames';
 import { type EventRendererProps } from './EventRenderer';
-const gd = global.gd;
+import {
+  shouldActivate,
+  shouldCloseOrCancel,
+  shouldSubmit,
+  shouldValidate,
+} from '../../../UI/KeyboardShortcuts/InteractionKeys';
+import { Trans } from '@lingui/macro';
+import { dataObjectToProps } from '../../../Utils/HTMLDataset';
+import UnsavedChangesContext, {
+  type UnsavedChanges,
+} from '../../../MainFrame/UnsavedChangesContext';
+const gd: libGDevelop = global.gd;
 
 const styles = {
   container: {
-    height: 40,
+    height: '2.5em',
     display: 'flex',
     alignItems: 'center',
     padding: 5,
     overflow: 'hidden',
   },
   title: {
-    fontSize: 18,
+    fontSize: '1.3em',
+    width: '100%',
   },
 };
 
-export default class GroupEvent extends React.Component<EventRendererProps, *> {
+export default class GroupEvent extends React.Component<
+  EventRendererProps,
+  any
+> {
+  static contextType: React.Context<UnsavedChanges> = UnsavedChangesContext;
+
+  // $FlowFixMe[missing-local-annot]
   state = {
     editing: false,
+    editingPreviousValue: null,
   };
-  _textField: ?TextField = null;
+  _textField: ?TextFieldInterface = null;
 
   edit = () => {
+    if (this.state.editing) return;
+    const groupEvent = gd.asGroupEvent(this.props.event);
+    if (!this.state.editingPreviousValue) {
+      this.setState({ editingPreviousValue: groupEvent.getName() });
+    }
     this.setState(
       {
         editing: true,
@@ -47,9 +71,14 @@ export default class GroupEvent extends React.Component<EventRendererProps, *> {
     this.setState({
       editing: false,
     });
+    const groupEvent = gd.asGroupEvent(this.props.event);
+    if (groupEvent.getName() !== this.state.editingPreviousValue) {
+      this.props.onEndEditingEvent();
+      this.setState({ editingPreviousValue: null });
+    }
   };
 
-  render() {
+  render(): any {
     var groupEvent = gd.asGroupEvent(this.props.event);
 
     const r = groupEvent.getBackgroundColorR(),
@@ -67,17 +96,37 @@ export default class GroupEvent extends React.Component<EventRendererProps, *> {
         style={{
           ...styles.container,
           backgroundColor: `rgb(${r}, ${g}, ${b})`,
+          borderRadius:
+            this.props.screenType === 'touch' ? '0 1px 1px 0' : '0 2px 2px 0',
+          overflow: 'hidden',
         }}
         onClick={this.edit}
+        onKeyUp={event => {
+          if (shouldActivate(event)) {
+            this.edit();
+          }
+        }}
+        tabIndex={0}
+        id={`${this.props.idPrefix}-group-${
+          groupEvent.isFolded() ? 'folded' : 'unfolded'
+        }`}
       >
         {this.state.editing ? (
+          // $FlowFixMe[incompatible-type]
           <TextField
+            margin="none"
             ref={textField => (this._textField = textField)}
             value={groupEvent.getName()}
-            hintText={t`<Enter group name>`}
+            translatableHintText={t`<Enter group name>`}
             onBlur={this.endEditing}
             onChange={(e, text) => {
               groupEvent.setName(text);
+
+              // The group is modified live as the user types, so flag the
+              // project as having unsaved changes immediately.
+              const unsavedChanges: UnsavedChanges = this.context;
+              unsavedChanges.triggerUnsavedChanges();
+
               this.forceUpdate();
             }}
             style={styles.title}
@@ -85,11 +134,18 @@ export default class GroupEvent extends React.Component<EventRendererProps, *> {
               color: textColor,
               WebkitTextFillColor: textColor,
             }}
-            underlineFocusStyle={{
-              borderColor: textColor,
-            }}
             fullWidth
-            id="group-title"
+            onKeyUp={event => {
+              if (shouldCloseOrCancel(event)) {
+                this.endEditing();
+              }
+            }}
+            onKeyDown={event => {
+              if (shouldValidate(event) || shouldSubmit(event)) {
+                this.endEditing();
+              }
+            }}
+            underlineShow={false}
           />
         ) : (
           <span
@@ -98,8 +154,13 @@ export default class GroupEvent extends React.Component<EventRendererProps, *> {
               [disabledText]: this.props.disabled,
             })}
             style={{ ...styles.title, color: textColor }}
+            {...dataObjectToProps({ editableText: 'true' })}
           >
-            {groupEvent.getName() || '<Enter group name>'}
+            {groupEvent.getName() ? (
+              groupEvent.getName()
+            ) : (
+              <Trans>{`<Enter group name>`}</Trans>
+            )}
           </span>
         )}
       </div>

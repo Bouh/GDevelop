@@ -1,75 +1,98 @@
-import { createPathEditorHeader, fileExists } from '../utils/path-editor.js';
-
-const electron = require('electron');
-const electronWindow = electron.remote.getCurrentWindow();
-const ipcRenderer = electron.ipcRenderer;
-const fs = require('fs');
-const remote = electron.remote;
+import {
+  closeWindow,
+  onMessageFromParentEditor,
+  sendMessageToParentEditor,
+  setTitle,
+} from '../utils/parent-editor-interface.js';
+import { createExternalEditorHeader } from '../utils/external-editor-header.js';
+import { fromByteArray } from '../utils/base64.js';
 
 let yarn = null;
 
-const saveAndClose = pathEditorHeader => {
-  const savePath = pathEditorHeader.state.fullPath;
-  yarn.data.saveTo(savePath, yarn.data.getSaveData('json'), () => {
-    ipcRenderer.send('yarn-changes-saved', savePath);
-    remote.getCurrentWindow().close();
-  });
-};
-
-const closeWindow = () => {
-  remote.getCurrentWindow().close();
-};
+function convertJsonStringToDataUrl(jsonString) {
+  const base64 = fromByteArray(new TextEncoder().encode(jsonString));
+  return `data:application/json;base64,${base64}`;
+}
 
 const editorFrameEl = document.getElementById('yarn-frame');
 window.addEventListener('yarnReady', e => {
   yarn = e;
-  yarn.app.fs = fs;
-  yarn.app.electron = electron;
-  ipcRenderer.send('yarn-ready');
+  yarn.data.restoreFromLocalStorage(false);
+  sendMessageToParentEditor('external-editor-ready');
 });
 editorFrameEl.src = 'yarn-editor/index.html';
 
 // Called to load yarn data. Should be called after the window is fully loaded.
-ipcRenderer.on('yarn-open', (event, receivedData) => {
-  // Make the header.
-  const pathEditorHeaderDiv = document.getElementById('path-editor-header');
-  const pathEditorHeader = createPathEditorHeader({
-    parentElement: pathEditorHeaderDiv,
-    editorContentDocument: document,
-    onSaveToGd: saveAndClose,
-    onCancelChanges: closeWindow,
-    projectPath: receivedData.projectPath,
-    initialResourcePath: receivedData.resourcePath,
-    extension: '.json',
-  });
-  
-  // Inject custom Apply button.
-  const saveToGdButton = yarn.document
-    .getElementsByClassName('menu')[0]
-    .cloneNode(true);
-  saveToGdButton.onclick = () => saveAndClose(pathEditorHeader);
-  yarn.document
-    .getElementsByClassName('app-menu')[0]
-    .appendChild(saveToGdButton);
-  saveToGdButton.childNodes[0].firstChild.data = 'Apply';
+onMessageFromParentEditor(
+  'open-external-editor-input',
+  async externalEditorInput => {
+    const resource = externalEditorInput.resources[0] || null;
 
-  // Process the json file to open, if any.
-  if (fileExists(receivedData.resourcePath)) {
-    receivedData.externalEditorData = fs
-      .readFileSync(receivedData.resourcePath, 'utf8')
-      .toString();
+    const saveAndClose = () => {
+      const jsonString = yarn.data.getSaveData('json');
+      const dataUrl = convertJsonStringToDataUrl(jsonString);
+      const { state } = externalEditorHeader;
 
-    yarn.data.loadData(receivedData.externalEditorData, 'json', true);
-    electronWindow.setTitle(
-      'GDevelop Dialogue Tree Editor (Yarn) - ' + receivedData.resourcePath
+      sendMessageToParentEditor('save-external-editor-output', {
+        resources: [
+          {
+            name: state.isOverwritingExistingResource ? state.name : undefined,
+            localFilePath: state.isOverwritingExistingResource
+              ? resource.localFilePath
+              : undefined,
+            extension: '.json',
+            dataUrl,
+          },
+        ],
+        baseNameForNewResources: state.name,
+        externalEditorData: null,
+      });
+      closeWindow();
+    };
+
+    // Make the header.
+    const pathEditorHeaderDiv = document.getElementById(
+      'external-editor-header'
     );
+    const externalEditorHeader = createExternalEditorHeader({
+      parentElement: pathEditorHeaderDiv,
+      editorContentDocument: document,
+      onSaveChanges: saveAndClose,
+      onCancelChanges: closeWindow,
+      name: externalEditorInput.name,
+    });
 
-    pathEditorHeader.toggle();
-  } else {
-    // Set up a new path for the JSON to be saved if none was passed.
-    receivedData.resourcePath = receivedData.projectPath + '/NewFile.json';
+    // Inject custom Apply button.
+    const saveToGdButton = yarn.document
+      .getElementsByClassName('search-tags')[0]
+      .cloneNode(true);
+    saveToGdButton.onclick = () => saveAndClose();
+    yarn.document
+      .getElementsByClassName('search-tags')[0]
+      .parentElement.appendChild(saveToGdButton);
+    saveToGdButton.childNodes[0].checked = 'checked';
+    saveToGdButton.childNodes[2].innerHTML = 'Apply';
+    saveToGdButton.childNodes[2].style = 'background-color: white;';
+    yarn.document.getElementsByClassName('app-search')[0].style = 'right: 45px';
+    saveToGdButton.style = 'padding-left: 30px;';
+
+    yarn.data.editingPath('');
+    yarn.data.editingType('json');
+
+    const isOverwritingExistingResource =
+      resource && resource.name && resource.dataUrl;
+    if (isOverwritingExistingResource) {
+      try {
+        const response = await fetch(resource.dataUrl);
+        const resourceData = await response.json();
+        yarn.data.loadData(JSON.stringify(resourceData), 'json', true);
+        externalEditorHeader.setOverwriteExistingResource();
+      } catch (error) {
+        console.error('Error while loading the resource - ignoring it.', error);
+      }
+    }
+    setTitle(
+      'GDevelop Dialogue Tree Editor (Yarn) - ' + externalEditorInput.name
+    );
   }
-
-  yarn.data.editingPath(receivedData.resourcePath);
-  yarn.data.editingType('json');
-});
+);

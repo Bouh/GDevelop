@@ -4,40 +4,41 @@
  * reserved. This project is released under the MIT License.
  */
 #include "GDCore/Extensions/Metadata/MetadataProvider.h"
+
 #include <algorithm>
+
 #include "GDCore/Extensions/Metadata/BehaviorMetadata.h"
+#include "GDCore/Extensions/Metadata/EffectMetadata.h"
 #include "GDCore/Extensions/Metadata/InstructionMetadata.h"
 #include "GDCore/Extensions/Metadata/ObjectMetadata.h"
-#include "GDCore/Extensions/Metadata/EffectMetadata.h"
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Extensions/PlatformExtension.h"
+#include "GDCore/Project/Layout.h"  // For GetTypeOfObject and GetTypeOfBehavior
+#include "GDCore/Project/ObjectsContainersList.h"
 #include "GDCore/String.h"
+#include "GDCore/Events/Parsers/ExpressionParser2.h"
 
 using namespace std;
 
 namespace gd {
 
-gd::BehaviorMetadata MetadataProvider::badBehaviorInfo;
+gd::BehaviorMetadata MetadataProvider::badBehaviorMetadata;
 gd::ObjectMetadata MetadataProvider::badObjectInfo;
 gd::EffectMetadata MetadataProvider::badEffectMetadata;
 gd::InstructionMetadata MetadataProvider::badInstructionMetadata;
 gd::ExpressionMetadata MetadataProvider::badExpressionMetadata;
-gd::ExpressionMetadata MetadataProvider::badStrExpressionMetadata;
 gd::PlatformExtension MetadataProvider::badExtension;
 
 ExtensionAndMetadata<BehaviorMetadata>
 MetadataProvider::GetExtensionAndBehaviorMetadata(const gd::Platform& platform,
                                                   gd::String behaviorType) {
   for (auto& extension : platform.GetAllPlatformExtensions()) {
-    auto behaviorTypes = extension->GetBehaviorsTypes();
-    for (std::size_t j = 0; j < behaviorTypes.size(); ++j) {
-      if (behaviorTypes[j] == behaviorType)
-        return ExtensionAndMetadata<BehaviorMetadata>(
-            *extension, extension->GetBehaviorMetadata(behaviorType));
-    }
+    if (extension->HasBehavior(behaviorType))
+      return ExtensionAndMetadata<BehaviorMetadata>(
+          *extension, extension->GetBehaviorMetadata(behaviorType));
   }
 
-  return ExtensionAndMetadata<BehaviorMetadata>(badExtension, badBehaviorInfo);
+  return ExtensionAndMetadata<BehaviorMetadata>(badExtension, badBehaviorMetadata);
 }
 
 const BehaviorMetadata& MetadataProvider::GetBehaviorMetadata(
@@ -135,11 +136,11 @@ MetadataProvider::GetExtensionAndConditionMetadata(const gd::Platform& platform,
 
     const auto& objects = extension->GetExtensionObjectsTypes();
     for (const gd::String& extObjectType : objects) {
-      const auto& allObjetsConditions =
+      const auto& allObjectsConditions =
           extension->GetAllConditionsForObject(extObjectType);
-      if (allObjetsConditions.find(conditionType) != allObjetsConditions.end())
+      if (allObjectsConditions.find(conditionType) != allObjectsConditions.end())
         return ExtensionAndMetadata<InstructionMetadata>(
-            *extension, allObjetsConditions.find(conditionType)->second);
+            *extension, allObjectsConditions.find(conditionType)->second);
     }
 
     const auto& autos = extension->GetBehaviorsTypes();
@@ -201,8 +202,7 @@ MetadataProvider::GetExtensionAndBehaviorExpressionMetadata(
     const gd::Platform& platform, gd::String autoType, gd::String exprType) {
   auto& extensions = platform.GetAllPlatformExtensions();
   for (auto& extension : extensions) {
-    const auto& autos = extension->GetBehaviorsTypes();
-    if (find(autos.begin(), autos.end(), autoType) != autos.end()) {
+    if (extension->HasBehavior(autoType)) {
       const auto& allAutoExpressions =
           extension->GetAllExpressionsForBehavior(autoType);
       if (allAutoExpressions.find(exprType) != allAutoExpressions.end())
@@ -276,7 +276,7 @@ MetadataProvider::GetExtensionAndObjectStrExpressionMetadata(
   }
 
   return ExtensionAndMetadata<ExpressionMetadata>(badExtension,
-                                                  badStrExpressionMetadata);
+                                                  badExpressionMetadata);
 }
 
 const gd::ExpressionMetadata& MetadataProvider::GetObjectStrExpressionMetadata(
@@ -291,8 +291,7 @@ MetadataProvider::GetExtensionAndBehaviorStrExpressionMetadata(
     const gd::Platform& platform, gd::String autoType, gd::String exprType) {
   auto& extensions = platform.GetAllPlatformExtensions();
   for (auto& extension : extensions) {
-    const auto& autos = extension->GetBehaviorsTypes();
-    if (find(autos.begin(), autos.end(), autoType) != autos.end()) {
+    if (extension->HasBehavior(autoType)) {
       const auto& allBehaviorStrExpressions =
           extension->GetAllStrExpressionsForBehavior(autoType);
       if (allBehaviorStrExpressions.find(exprType) !=
@@ -313,7 +312,7 @@ MetadataProvider::GetExtensionAndBehaviorStrExpressionMetadata(
   }
 
   return ExtensionAndMetadata<ExpressionMetadata>(badExtension,
-                                                  badStrExpressionMetadata);
+                                                  badExpressionMetadata);
 }
 
 const gd::ExpressionMetadata&
@@ -337,7 +336,7 @@ MetadataProvider::GetExtensionAndStrExpressionMetadata(
   }
 
   return ExtensionAndMetadata<ExpressionMetadata>(badExtension,
-                                                  badStrExpressionMetadata);
+                                                  badExpressionMetadata);
 }
 
 const gd::ExpressionMetadata& MetadataProvider::GetStrExpressionMetadata(
@@ -345,197 +344,131 @@ const gd::ExpressionMetadata& MetadataProvider::GetStrExpressionMetadata(
   return GetExtensionAndStrExpressionMetadata(platform, exprType).GetMetadata();
 }
 
-bool MetadataProvider::HasAction(const gd::Platform& platform,
-                                 gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-
-  for (auto& extension : extensions) {
-    const auto& actions = extension->GetAllActions();
-    if (actions.find(name) != actions.end()) return true;
+const gd::ExpressionMetadata& MetadataProvider::GetAnyExpressionMetadata(
+    const gd::Platform& platform, gd::String exprType) {
+  const auto& numberExpressionMetadata =
+      GetExpressionMetadata(platform, exprType);
+  if (&numberExpressionMetadata != &badExpressionMetadata) {
+    return numberExpressionMetadata;
   }
-
-  return false;
+  const auto& stringExpressionMetadata =
+      GetStrExpressionMetadata(platform, exprType);
+  if (&stringExpressionMetadata != &badExpressionMetadata) {
+    return stringExpressionMetadata;
+  }
+  return badExpressionMetadata;
 }
 
-bool MetadataProvider::HasObjectAction(const gd::Platform& platform,
-                                       gd::String objectType,
-                                       gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& actions = extension->GetAllActionsForObject(objectType);
-    if (actions.find(name) != actions.end()) return true;
+const gd::ExpressionMetadata& MetadataProvider::GetObjectAnyExpressionMetadata(
+    const gd::Platform& platform, gd::String objectType, gd::String exprType) {
+  const auto& numberExpressionMetadata =
+      GetObjectExpressionMetadata(platform, objectType, exprType);
+  if (&numberExpressionMetadata != &badExpressionMetadata) {
+    return numberExpressionMetadata;
   }
-
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& actions = extension->GetAllActionsForObject("");
-    if (actions.find(name) != actions.end()) return true;
+  const auto& stringExpressionMetadata =
+      GetObjectStrExpressionMetadata(platform, objectType, exprType);
+  if (&stringExpressionMetadata != &badExpressionMetadata) {
+    return stringExpressionMetadata;
   }
-
-  return false;
+  return badExpressionMetadata;
 }
 
-bool MetadataProvider::HasBehaviorAction(const gd::Platform& platform,
-                                         gd::String behaviorType,
-                                         gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& actions = extension->GetAllActionsForBehavior(behaviorType);
-    if (actions.find(name) != actions.end()) return true;
+const gd::ExpressionMetadata&
+MetadataProvider::GetBehaviorAnyExpressionMetadata(const gd::Platform& platform,
+                                                   gd::String autoType,
+                                                   gd::String exprType) {
+  const auto& numberExpressionMetadata =
+      GetBehaviorExpressionMetadata(platform, autoType, exprType);
+  if (&numberExpressionMetadata != &badExpressionMetadata) {
+    return numberExpressionMetadata;
   }
-
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& actions = extension->GetAllActionsForBehavior("");
-    if (actions.find(name) != actions.end()) return true;
+  const auto& stringExpressionMetadata =
+      GetBehaviorStrExpressionMetadata(platform, autoType, exprType);
+  if (&stringExpressionMetadata != &badExpressionMetadata) {
+    return stringExpressionMetadata;
   }
-
-  return false;
+  return badExpressionMetadata;
 }
 
-bool MetadataProvider::HasCondition(const gd::Platform& platform,
-                                    gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& conditions = extension->GetAllConditions();
-    if (conditions.find(name) != conditions.end()) return true;
+const gd::ExpressionMetadata& MetadataProvider::GetFunctionCallMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& node) {
+
+  if (!node.behaviorName.empty()) {
+    gd::String behaviorType =
+        objectsContainersList.GetTypeOfBehavior(node.behaviorName);
+    return MetadataProvider::GetBehaviorAnyExpressionMetadata(
+            platform, behaviorType, node.functionName);
+  }
+  else if (!node.objectName.empty()) {
+    gd::String objectType =
+        objectsContainersList.GetTypeOfObject(node.objectName);
+    return MetadataProvider::GetObjectAnyExpressionMetadata(
+                  platform, objectType, node.functionName);
   }
 
-  return false;
+  return MetadataProvider::GetAnyExpressionMetadata(platform, node.functionName);
 }
 
-bool MetadataProvider::HasObjectCondition(const gd::Platform& platform,
-                                          gd::String objectType,
-                                          gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& conditions = extension->GetAllConditionsForObject(objectType);
-    if (conditions.find(name) != conditions.end()) return true;
-  }
-
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& conditions = extension->GetAllConditionsForObject("");
-    if (conditions.find(name) != conditions.end()) return true;
-  }
-
-  return false;
+const gd::ParameterMetadata* MetadataProvider::GetFunctionCallParameterMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& functionCall,
+    ExpressionNode& parameter) {
+      int parameterIndex = -1;
+      for (int i = 0; i < functionCall.parameters.size(); i++) {
+        if (functionCall.parameters.at(i).get() == &parameter) {
+          parameterIndex = i;
+          break;
+        }
+      }
+      if (parameterIndex < 0) {
+        return nullptr;
+      }
+      return MetadataProvider::GetFunctionCallParameterMetadata(
+          platform,
+          objectsContainersList,
+          functionCall,
+          parameterIndex);
 }
 
-bool MetadataProvider::HasBehaviorCondition(const gd::Platform& platform,
-                                            gd::String behaviorType,
-                                            gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& conditions =
-        extension->GetAllConditionsForBehavior(behaviorType);
-    if (conditions.find(name) != conditions.end()) return true;
-  }
+const gd::ParameterMetadata* MetadataProvider::GetFunctionCallParameterMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& functionCall,
+    int parameterIndex) {
+      // Search the parameter metadata index skipping invisible ones.
+      size_t visibleParameterIndex = 0;
+      size_t metadataParameterIndex =
+          ExpressionParser2::WrittenParametersFirstIndex(
+              functionCall.objectName, functionCall.behaviorName);
+      const gd::ExpressionMetadata &metadata = MetadataProvider::GetFunctionCallMetadata(
+          platform, objectsContainersList, functionCall);
 
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& conditions = extension->GetAllConditionsForBehavior("");
-    if (conditions.find(name) != conditions.end()) return true;
-  }
+      if (IsBadExpressionMetadata(metadata)) {
+        return nullptr;
+      }
 
-  return false;
-}
-
-bool MetadataProvider::HasExpression(const gd::Platform& platform,
-                                     gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& expressions = extension->GetAllExpressions();
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  return false;
-}
-
-bool MetadataProvider::HasObjectExpression(const gd::Platform& platform,
-                                           gd::String objectType,
-                                           gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& expressions = extension->GetAllExpressionsForObject(objectType);
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& expressions = extension->GetAllExpressionsForObject("");
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  return false;
-}
-
-bool MetadataProvider::HasBehaviorExpression(const gd::Platform& platform,
-                                             gd::String behaviorType,
-                                             gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& expressions =
-        extension->GetAllExpressionsForBehavior(behaviorType);
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& expressions = extension->GetAllExpressionsForBehavior("");
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  return false;
-}
-
-bool MetadataProvider::HasStrExpression(const gd::Platform& platform,
-                                        gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& expressions = extension->GetAllStrExpressions();
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  return false;
-}
-
-bool MetadataProvider::HasObjectStrExpression(const gd::Platform& platform,
-                                              gd::String objectType,
-                                              gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& expressions =
-        extension->GetAllStrExpressionsForObject(objectType);
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& expressions = extension->GetAllStrExpressionsForObject("");
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  return false;
-}
-
-bool MetadataProvider::HasBehaviorStrExpression(const gd::Platform& platform,
-                                                gd::String behaviorType,
-                                                gd::String name) {
-  auto& extensions = platform.GetAllPlatformExtensions();
-  for (auto& extension : extensions) {
-    const auto& expressions =
-        extension->GetAllStrExpressionsForBehavior(behaviorType);
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  // Then check in functions of "Base object".
-  for (auto& extension : extensions) {
-    const auto& expressions = extension->GetAllStrExpressionsForBehavior("");
-    if (expressions.find(name) != expressions.end()) return true;
-  }
-
-  return false;
+      // TODO use a badMetadata instead of a nullptr?
+      const gd::ParameterMetadata* parameterMetadata = nullptr;
+      while (metadataParameterIndex <
+             metadata.GetParameters().GetParametersCount()) {
+        if (!metadata.GetParameters().GetParameter(metadataParameterIndex)
+                 .IsCodeOnly()) {
+          if (visibleParameterIndex == parameterIndex) {
+            parameterMetadata =
+                &metadata.GetParameters().GetParameter(metadataParameterIndex);
+          }
+          visibleParameterIndex++;
+        }
+        metadataParameterIndex++;
+      }
+      const int visibleParameterCount = visibleParameterIndex;
+      // It can be null if there are too many parameters in the expression, this text node is
+      // not actually linked to a parameter expected by the function call.
+      return parameterMetadata;
 }
 
 MetadataProvider::~MetadataProvider() {}

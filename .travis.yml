@@ -1,104 +1,81 @@
+# Travis CI configuration to build and run all tests
+# (and typing/formatting) for the Core, newIDE, GDJS.
+#
+# See also Semaphore CI for quick tests (not building GDevelop.js, so
+# faster but not always reliable).
+
+dist: noble # Ubuntu 24.04 LTS
 language: cpp
 sudo: false
 compiler:
-  - gcc
   - clang
+branches:
+  only:
+    - master
 
 # Cache .npm folder for faster npm install
 cache:
   directories:
     - $HOME/.npm
 
-env:
-  global:
-    - GCC_VERSION="4.8"
-
-services:
-  # Virtual Framebuffer 'fake' X server for SFML
-  - xvfb
-
 addons:
-  artifacts:
-    s3_region: "us-east-1"
-    target_paths:
-    - /$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)/commit/$(git rev-parse HEAD)
-    - /$(if [ "$TRAVIS_PULL_REQUEST" == "false" ]; then echo $TRAVIS_BRANCH; else echo $TRAVIS_PULL_REQUEST_BRANCH; fi)/latest
-    paths:
-    - Binaries/Output/libGD.js/Release
   apt:
     sources:
-    - ubuntu-toolchain-r-test
+      - ubuntu-toolchain-r-test
     packages:
-    # Build dependencies:
-    - cmake
-    - p7zip-full
-    - g++-4.8
-    # SFML dependencies:
-    - libopenal-dev
-    - libjpeg-dev
-    - libglew-dev
-    - libudev-dev
-    - libxrandr-dev
-    - libsndfile1-dev
-    - libglu1-mesa-dev
-    - libfreetype6-dev
-
-before_install:
-  #Activate X Virtual Framebuffer to allow tests to
-  #use SFML.
-  - "export DISPLAY=:99.0"
-  # This workaround is required to avoid libstdc++ errors (Emscripten requires a recent version of libstdc++)
-  - wget -q -O libstdc++6 http://security.ubuntu.com/ubuntu/pool/main/g/gcc-5/libstdc++6_5.4.0-6ubuntu1~16.04.12_amd64.deb
-  - sudo dpkg --force-all -i libstdc++6
+      # Build dependencies:
+      - cmake
+      - p7zip-full
+      # Install libstdc++ dev for clang linking
+      - libstdc++-14-dev
 
 install:
-#Get the correct version of gcc/g++
-  - if [ "$CXX" = "g++" ]; then export CXX="g++-${GCC_VERSION}" CC="gcc-${GCC_VERSION}"; fi
-#Compile the tests only for GDCore and GDCpp
+  # Ensure we use a recent version of Node.js (and npm).
+  - nvm install v16 && nvm use v16
+  #Compile the tests only for GDCore
   - mkdir .build-tests
   - cd .build-tests
   - cmake -DBUILD_GDJS=FALSE -DBUILD_TESTS=TRUE -DCMAKE_CXX_COMPILER=$(which $CXX) -DCMAKE_C_COMPILER=$(which $CC) ..
   - make -j 4
   - cd ..
-# Install Emscripten (for GDevelop.js)
-  - git clone https://github.com/juj/emsdk.git
-  - cd emsdk
-  - ./emsdk install sdk-fastcomp-1.37.37-64bit
-  - ./emsdk activate sdk-fastcomp-1.37.37-64bit
-  - source ./emsdk_env.sh
-  - cd ..
-# Install GDevelop.js dependencies and compile it
-  - cd GDevelop.js
-  - npm install -g grunt-cli
-  - npm install
-  - npm run build
-  - cd ..
-#Install newIDE tests dependencies
+  # Install Emscripten (for GDevelop.js)
+  # Specify the tag for the core repository to avois breaking changes.
+  - git clone --depth 1 --branch 3.1.21 https://github.com/juj/emsdk.git
+  - cd emsdk && ./emsdk install 3.1.21 && ./emsdk activate 3.1.21 && cd ..
+  # Install GDevelop.js dependencies
+  - cd GDevelop.js && npm install && cd ..
+  # Build GDevelop.js
+  # (in a subshell to avoid Emscripten polluting the Node.js and npm version for the rest of the build)
+  - (set -e; cd GDevelop.js && source ../emsdk/emsdk_env.sh && npm run build && cd ..)
+  # Install newIDE tests dependencies
+  - npm -v
   - cd newIDE/app && npm install
   - cd ../..
-#Install GDJS tests dependencies
-  - cd GDJS/tests && npm install
+  # Install GDJS tests dependencies
+  - cd GDJS && npm install && cd tests && npm install
   - cd ../..
 
 script:
-# GDCore and GDCpp game engine tests:
+  # GDCore tests:
   - cd .build-tests
-  - Core/GDCore_tests
-  - GDCpp/GDCpp_tests
-  - Extensions/PathfindingBehavior/PathfindingBehavior_Runtime_tests
-  - Extensions/LinkedObjects/LinkedObjects_Runtime_tests
+  - for i in {1..20}; do echo "Run $i"; Core/GDCore_tests; done
   - cd ..
-# GDevelop.js tests
+  # GDevelop.js tests
   - cd GDevelop.js
   - npm test
   - cd ..
-# newIDE tests:
+  # newIDE tests:
   - cd newIDE/app
   - npm test
   - npm run flow
   - npm run check-format
+  - npm run check-script-types
   - cd ../..
+  # GDJS tests:
+  - cd GDJS
+  - npm run check-format
+  - cd ..
 # GDJS game engine tests, disabled on Travis CI because ChromeHeadless can't be started.
-# See them running on Semaphore-CI instead: https://semaphoreci.com/4ian/gd
+# See them running on Semaphore-CI instead: https://gdevelop.semaphoreci.com/projects/GDevelop
 #  - cd GDJS/tests && npm test
 #  - cd ../..

@@ -15,6 +15,21 @@ const isWin = /^win/.test(process.platform);
 
 const newIdeAppPath = path.join(__dirname, '..');
 
+// These packages are dependencies of @lingui/cli. They are used to check
+// that translations are valid ICU messages before running "lingui compile"
+// (which crashes at the first invalid translation, leaving all the
+// remaining locales - notably "en" - without a compiled catalog).
+let PO = null;
+let parseIcuMessage = null;
+try {
+  PO = require('pofile');
+  parseIcuMessage = require('messageformat-parser').parse;
+} catch (error) {
+  shell.echo(
+    `⚠️ Can't load "pofile" or "messageformat-parser" (${error}) - invalid translations won't be detected before compilation.`
+  );
+}
+
 const readUtf8File = path =>
   new Promise((resolve, reject) => {
     fs.readFile(path, 'utf8', function(err, content) {
@@ -47,7 +62,7 @@ if (isWin) {
   );
   shell.exit(0);
 } else {
-  msgcat = shell.exec('type msgcat 2>/dev/null', { silent: true }).stdout;
+  msgcat = shell.exec('which msgcat 2>/dev/null', { silent: true }).stdout;
   if (!msgcat) {
     msgcat = shell.exec('find /usr -name "msgcat" -print -quit 2>/dev/null', {
       silent: true,
@@ -63,7 +78,9 @@ if (!msgcat) {
   shell.echo(
     `ℹ️ Install "gettext" with "brew install gettext" (macOS) or your Linux package manager.`
   );
-  shell.exit(0);
+  // On a CI, this is a fatal error: continuing would silently produce
+  // outdated (or missing, in the case of "en") compiled catalogs.
+  shell.exit(process.env.CI ? 1 : 0);
 }
 
 const computeTranslationRatio = compiledCatalog => {
@@ -132,6 +149,48 @@ const sanitizeMessagePo = path => {
   });
 };
 
+// Check that every translation is a valid ICU message, and empty the invalid
+// ones (so that they fall back to the English source string). A single invalid
+// translation (for example, corrupted on Crowdin) would otherwise make
+// "lingui compile" crash, leaving all the locales compiled after it - "en"
+// included - without an up-to-date "messages.js". A missing "en/messages.js"
+// makes English strings with parameters displayed with raw placeholders (like
+// "{numberOfAssetPacks}") in production builds.
+const validateMessagePo = path => {
+  if (!PO || !parseIcuMessage) {
+    return Promise.resolve({ invalidMessages: [] });
+  }
+
+  return readUtf8File(path).then(content => {
+    const catalog = PO.parse(content);
+    const invalidMessages = [];
+    catalog.items.forEach(item => {
+      const hasInvalidTranslation = item.msgstr.some(translation => {
+        if (!translation) return false;
+        try {
+          parseIcuMessage(translation);
+          return false;
+        } catch (error) {
+          return true;
+        }
+      });
+
+      if (hasInvalidTranslation) {
+        invalidMessages.push({ msgid: item.msgid });
+        item.msgstr = item.msgstr.map(() => '');
+      }
+    });
+
+    if (invalidMessages.length === 0) {
+      return { invalidMessages };
+    }
+
+    return writeUtf8File(path, catalog.toString()).then(() => ({
+      invalidMessages,
+    }));
+  });
+};
+
 const lintMessagePo = (locale, path) => {
   return readUtf8File(path).then(content => {
     const errors = [];
@@ -146,19 +205,28 @@ const lintMessagePo = (locale, path) => {
 
     if (operatorWithBracketsCount !== 4 && operatorWithBracketsCount !== 8) {
       errors.push({
-        str:
-          'Unexpected number of <operator>: verify the <operator> translations',
+        str: `Unexpected number of <operator> (${operatorWithBracketsCount}): verify the <operator> translations`,
       });
     }
-    if (valueWithBracketsCount !== 4 && valueWithBracketsCount !== 8) {
+    if (valueWithBracketsCount !== 6 && valueWithBracketsCount !== 12) {
       errors.push({
-        str: 'Unexpected number of <value>: verify the <value> translations',
+        str: `Unexpected number of <value> (${valueWithBracketsCount}): verify the <value> translations`,
       });
     }
-    if (subjectWithBracketsCount !== 4 && subjectWithBracketsCount !== 8) {
+    if (subjectWithBracketsCount !== 12 && subjectWithBracketsCount !== 24) {
+      errors.push({
+        str: `Unexpected number of <subject> (${subjectWithBracketsCount}): verify the <subject> translations`,
+      });
+    }
+    if (
+      content.indexOf(`msgid "<subject> <operator> <value>"
+msgstr "<subject> <operator> <value>"`) === -1 &&
+      content.indexOf(`msgid "<subject> <operator> <value>"
+msgstr ""`) === -1
+    ) {
       errors.push({
         str:
-          'Unexpected number of <subject>: verify the <subject> translations',
+          "Can't find an untranslated <subject> <operator> <value>: Double check these translations, they are surely wrongly done!",
       });
     }
 
@@ -238,12 +306,12 @@ getLocales()
 
     const successesLocales = successes.map(({ locale }) => locale).join(',');
     if (successesLocales) {
-      shell.echo(`ℹ️ Concatened translations for ${successesLocales}.`);
+      shell.echo(`ℹ️ Concatenated translations for ${successesLocales}.`);
     }
     if (failures.length) {
       failures.forEach(({ locale, shellOutput }) => {
         shell.echo(
-          `❌ Error(s) occurred while concatening translations for ${locale}: ` +
+          `❌ Error(s) occurred while concatenating translations for ${locale}: ` +
             shellOutput.stderr
         );
       });
@@ -285,28 +353,75 @@ getLocales()
     ).then(() => locales);
   })
   .then(locales => {
+    // Empty (and warn about) translations that are not valid ICU messages
+    // and would make "lingui compile" crash.
+    return Promise.all(
+      locales.map(locale =>
+        validateMessagePo(getLocaleCatalogPath(locale)).then(results => {
+          if (results.invalidMessages.length) {
+            shell.echo(
+              `🚩 Found invalid translations for locale ${locale} (emptied to fall back to the source string - fix them on Crowdin):`
+            );
+            results.invalidMessages.forEach(({ msgid }) => {
+              shell.echo(`  * ${msgid}`);
+            });
+          }
+        })
+      )
+    ).then(() => locales);
+  })
+  .then(locales => {
     // Launch "lingui compile" for transforming .PO files into
     // js files ready to be used with @lingui/react newIDE translations
-    shell.exec('node node_modules/.bin/lingui compile', {
+    const compileResult = shell.exec('node node_modules/.bin/lingui compile', {
       cwd: newIdeAppPath,
     });
+    if (compileResult.code !== 0) {
+      shell.echo(
+        `❌ "lingui compile" failed - some locales are missing an up-to-date "messages.js". Verify the translations reported in the error above (and fix them on Crowdin).`
+      );
+      shell.exit(1);
+      return;
+    }
+
+    // The English catalog is removed by extract-all-translations and must be
+    // re-created by "lingui compile". If it's missing, English strings with
+    // parameters would be displayed with raw placeholders (like "{name}")
+    // in production builds (but not in development, as LinguiJS compiles
+    // missing messages on the fly only in development).
+    if (!fs.existsSync(getLocaleCompiledCatalogPath('en'))) {
+      shell.echo(
+        `❌ "${getLocaleCompiledCatalogPath(
+          'en'
+        )}" was not created by "lingui compile".`
+      );
+      shell.exit(1);
+      return;
+    }
 
     return locales;
   })
   .then(locales => {
     // Compute some stats about the languages...
-    return Promise.all(
-      locales.map(locale => {
-        const compiledCatalog = require(getLocaleCompiledCatalogPath(locale));
+    return locales
+      .map(locale => {
+        try {
+          const compiledCatalog = require(getLocaleCompiledCatalogPath(locale));
 
-        return {
-          languageCode: locale,
-          languageName: getLocaleName(locale),
-          languageNativeName: getLocaleNativeName(locale),
-          translationRatio: computeTranslationRatio(compiledCatalog),
-        };
+          return {
+            languageCode: locale,
+            languageName: getLocaleName(locale),
+            languageNativeName: getLocaleNativeName(locale),
+            translationRatio: computeTranslationRatio(compiledCatalog),
+          };
+        } catch (error) {
+          shell.echo(
+            `⚠️ Can't find catalog for ${locale} (${error}) - ignoring this language.`
+          );
+          return null;
+        }
       })
-    );
+      .filter(Boolean);
   })
   .then(
     // ... and store the stats in LocaleMetadata.js, to be displayed/used

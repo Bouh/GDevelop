@@ -30,6 +30,8 @@
     "loadingScreen": {
       "showGDevelopSplash": true
     },
+    "authorIds": [],
+    "authorUsernames": [],
     "extensions": [
       {
         "name": "BuiltinObject"
@@ -149,6 +151,7 @@
           "type": "Sprite",
           "updateIfNotVisible": false,
           "variables": [],
+          "effects": [],
           "behaviors": [],
           "animations": [
             {

@@ -3,16 +3,22 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef GDCORE_OBJECT_H
-#define GDCORE_OBJECT_H
-#include <SFML/System/Vector2.hpp>
+#pragma once
+
 #include <map>
 #include <memory>
 #include <vector>
-#include "GDCore/Project/BehaviorContent.h"
+
+#include "GDCore/Project/Behavior.h"
+#include "GDCore/Project/BehaviorsContainer.h"
+#include "GDCore/Project/EffectsContainer.h"
+#include "GDCore/Project/ObjectConfiguration.h"
 #include "GDCore/Project/VariablesContainer.h"
+#include "GDCore/Project/MemoryTrackedRegistry.h"
 #include "GDCore/String.h"
 #include "GDCore/Tools/MakeUnique.h"
+#include "GDCore/Vector2.h"
+
 namespace gd {
 class PropertyDescriptor;
 class Project;
@@ -20,12 +26,13 @@ class Layout;
 class ArbitraryResourceWorker;
 class InitialInstance;
 class SerializerElement;
+class EffectsContainer;
 }  // namespace gd
 
 namespace gd {
 
 /**
- * \brief Base class used to represent an object of a platform
+ * \brief Represent an object of a platform
  *
  * \ingroup PlatformDefinition
  */
@@ -33,9 +40,19 @@ class GD_CORE_API Object {
  public:
   /**
    * Create a new object with the name passed as argument.
-   * \param name Object's name
    */
-  Object(const gd::String& name);
+  Object(const gd::String& name,
+         const gd::String& type,
+         std::unique_ptr<gd::ObjectConfiguration> configuration);
+
+  /**
+   * Create a new object with the name passed as argument.
+   *
+   * Object takes the ownership of the configuration.
+   */
+  Object(const gd::String& name,
+         const gd::String& type,
+         gd::ObjectConfiguration* configuration);
 
   /**
    * Copy constructor. Calls Init().
@@ -67,6 +84,15 @@ class GD_CORE_API Object {
     return gd::make_unique<gd::Object>(*this);
   }
 
+  void CopyWithoutConfiguration(const gd::Object& object);
+
+  /**
+   * \brief Return the object configuration.
+   */
+  gd::ObjectConfiguration& GetConfiguration();
+
+  const gd::ObjectConfiguration& GetConfiguration() const;
+
   /** \name Common properties
    * Members functions related to common properties
    */
@@ -80,113 +106,41 @@ class GD_CORE_API Object {
    */
   const gd::String& GetName() const { return name; };
 
+  /** \brief Change the asset store id of the object.
+   */
+  void SetAssetStoreId(const gd::String& assetStoreId_) {
+    assetStoreId = assetStoreId_;
+  };
+
+  /** \brief Return the asset store id of the object.
+   */
+  const gd::String& GetAssetStoreId() const { return assetStoreId; };
+
   /** \brief Change the type of the object.
    */
-  void SetType(const gd::String& type_) { type = type_; }
+  void SetType(const gd::String& type_) { configuration->SetType(type_); }
 
   /** \brief Return the type of the object.
    */
-  const gd::String& GetType() const { return type; }
+  const gd::String& GetType() const { return configuration->GetType(); }
 
-  /** \brief Change the tags of the object.
+  /**
+   * Set when the object resources must be preloaded: `with-scene`(default),
+   * `manually`.
    */
-  void SetTags(const gd::String& tags_) { tags = tags_; }
+  void SetResourcesPreloading(gd::String resourcesPreloading_) {
+    resourcesPreloading = resourcesPreloading_;
+  }
 
-  /** \brief Return the tags of the object.
+  /**
+   * Get when the object resources must be preloaded: `with-scene`(default),
+   * `manually`.
    */
-  const gd::String& GetTags() const { return tags; }
+  const gd::String& GetResourcesPreloading() const {
+    return resourcesPreloading;
+  }
+
   ///@}
-
-#if defined(GD_IDE_ONLY)
-  /** \name Resources management
-   * Members functions related to managing resources used by the object
-   */
-  ///@{
-  /**
-   * \brief Called ( e.g. during compilation ) so as to inventory internal
-   * resources and sometimes update their filename. Implementation example:
-   * \code
-   * worker.ExposeImage(myImage);
-   * worker.ExposeFile(myResourceFile);
-   * \endcode
-   *
-   * \see ArbitraryResourceWorker
-   */
-  virtual void ExposeResources(gd::ArbitraryResourceWorker& worker) { return; };
-
-  /**
-   * Redefine this function to return true if your object can use shaders.
-   */
-  virtual bool SupportShaders() { return false; }
-  ///@}
-
-  /** \name Object properties
-   * Reading and updating object properties
-   */
-  ///@{
-  /**
-   * \brief Called when the IDE wants to know about the custom properties of the
-   object.
-   *
-   * Usage example:
-   \code
-      std::map<gd::String, gd::PropertyDescriptor> properties;
-      properties[ToString(_("Text"))].SetValue("Hello world!");
-
-      return properties;
-   \endcode
-   *
-   * \return a std::map with properties names as key.
-   * \see gd::PropertyDescriptor
-   */
-  virtual std::map<gd::String, gd::PropertyDescriptor> GetProperties(
-      gd::Project& project) const;
-
-  /**
-   * \brief Called when the IDE wants to update a custom property of the object
-   *
-   * \return false if the new value cannot be set
-   */
-  virtual bool UpdateProperty(const gd::String& name,
-                              const gd::String& value,
-                              gd::Project& project) {
-    return false;
-  };
-  ///@}
-
-  /** \name Drawing and editing initial instances
-   * Members functions related to drawing and editing initial instances of this
-   * object
-   */
-  ///@{
-  /**
-   * \brief Called when the IDE wants to know about the custom properties of an
-   * initial instance of this object.
-   *
-   * \return a std::map with properties names as key and values.
-   * \see gd::InitialInstance
-   */
-  virtual std::map<gd::String, gd::PropertyDescriptor>
-  GetInitialInstanceProperties(const gd::InitialInstance& instance,
-                               gd::Project& project,
-                               gd::Layout& layout);
-
-  /**
-   * \brief Called when the IDE wants to update a custom property of an initial
-   * instance of this object.
-   *
-   * \return false if the new value cannot be set
-   * \see gd::InitialInstance
-   */
-  virtual bool UpdateInitialInstanceProperty(gd::InitialInstance& instance,
-                                             const gd::String& name,
-                                             const gd::String& value,
-                                             gd::Project& project,
-                                             gd::Layout& layout) {
-    return false;
-  };
-    ///@}
-#endif
 
   /** \name Behaviors management
    * Members functions related to behaviors management.
@@ -200,14 +154,14 @@ class GD_CORE_API Object {
   std::vector<gd::String> GetAllBehaviorNames() const;
 
   /**
-   * \brief Return a reference to the behavior called \a name.
+   * \brief Return a reference to the content of the behavior called \a name.
    */
-  BehaviorContent& GetBehavior(const gd::String& name);
+  Behavior& GetBehavior(const gd::String& name);
 
   /**
-   * \brief Return a reference to the behavior called \a name.
+   * \brief Return a reference to the content of the behavior called \a name.
    */
-  const BehaviorContent& GetBehavior(const gd::String& name) const;
+  const Behavior& GetBehavior(const gd::String& name) const;
 
   /**
    * \brief Return true if object has a behavior called \a name.
@@ -226,14 +180,6 @@ class GD_CORE_API Object {
   bool RenameBehavior(const gd::String& name, const gd::String& newName);
 
   /**
-   * \brief Add the specified behavior content to the object
-   *
-   * \return A reference to the newly added behavior content.
-   */
-  gd::BehaviorContent& AddBehavior(const gd::BehaviorContent& behavior);
-
-#if defined(GD_IDE_ONLY)
-  /**
    * \brief Add the behavior of the specified \a type with the specified \a
    * name.
    *
@@ -242,19 +188,30 @@ class GD_CORE_API Object {
    * \return A pointer to the newly added behavior content. NULL if the creation
    * failed.
    */
-  gd::BehaviorContent* AddNewBehavior(gd::Project& project,
-                                      const gd::String& type,
-                                      const gd::String& name);
-#endif
+  gd::Behavior* AddNewBehavior(const gd::Project& project,
+                               const gd::String& type,
+                               const gd::String& name);
 
   /**
    * \brief Get a read-only access to the map containing the behaviors with
    * their properties.
    */
-  const std::map<gd::String, std::unique_ptr<gd::BehaviorContent>>&
+  const std::map<gd::String, std::unique_ptr<gd::Behavior>>&
   GetAllBehaviorContents() const {
-    return behaviors;
+    return behaviors.GetAllBehaviorContents();
   };
+
+  /**
+   * \brief Provide access to the gd::BehaviorsContainer member containing the
+   * object behaviors
+   */
+  const gd::BehaviorsContainer& GetBehaviors() const { return behaviors; }
+
+  /**
+   * \brief Provide access to the gd::BehaviorsContainer member containing the
+   * object behaviors
+   */
+  gd::BehaviorsContainer& GetBehaviors() { return behaviors; }
   ///@}
 
   /** \name Variable management
@@ -272,55 +229,81 @@ class GD_CORE_API Object {
    * object variables
    */
   gd::VariablesContainer& GetVariables() { return objectVariables; }
-///@}
+  ///@}
 
-/** \name Serialization
- * Members functions related to serialization of the object
- */
-///@{
-#if defined(GD_IDE_ONLY)
+  /**
+   * \name Effects management
+   * Member functions related to effects management.
+   */
+  ///@{
+  /**
+   * \brief Provide access to the gd::EffectsContainer member containing the
+   * effects.
+   */
+  const gd::EffectsContainer& GetEffects() const { return effectsContainer; }
+
+  /**
+   * \brief Provide access to the gd::EffectsContainer member containing the
+   * effects.
+   */
+  gd::EffectsContainer& GetEffects() { return effectsContainer; }
+  ///@}
+
+  /** \name Serialization
+   * Members functions related to serialization of the object
+   */
+  ///@{
   /**
    * \brief Serialize the object.
    * \see DoSerializeTo
    */
   void SerializeTo(SerializerElement& element) const;
-#endif
 
   /**
    * \brief Unserialize the object.
    * \see DoUnserializeFrom
    */
   void UnserializeFrom(gd::Project& project, const SerializerElement& element);
+
+  /**
+   * \brief Reset the persistent UUID, used to recognize
+   * the same object between serialization.
+   */
+  Object& ResetPersistentUuid();
+
+  /**
+   * \brief Return the persistent UUID, used to recognize
+   * the same object between serialization.
+   */
+  const gd::String& GetPersistentUuid() const;
   ///@}
 
  protected:
-  gd::String name;  ///< The full name of the object
-  gd::String type;  ///< Which type is the object. ( To test if we can do
-                    ///< something reserved to some objects with it )
-  std::map<gd::String, std::unique_ptr<gd::BehaviorContent>>
-      behaviors;  ///< Contains all behaviors and their properties for the
-                  ///< object. Behavior contents are the ownership of the
-                  ///< object.
+  gd::MemoryTracked _memoryTracked{this, "gdObject"};
+
+  gd::String name;          ///< The full name of the object
+  gd::String assetStoreId;  ///< The ID of the asset if the object comes from
+                            ///< the store.
+  std::unique_ptr<gd::ObjectConfiguration> configuration;
+  gd::BehaviorsContainer
+      behaviors; ///< Contains all behaviors and their properties for the
+                 ///< object. Behavior contents are the ownership of the
+                 ///< object.
   gd::VariablesContainer
       objectVariables;  ///< List of the variables of the object
-  gd::String tags; ///< Comma-separated list of tags
-
-  /**
-   * \brief Derived objects can redefine this method to load custom attributes.
-   */
-  virtual void DoUnserializeFrom(gd::Project& project,
-                                 const SerializerElement& element){};
-
-#if defined(GD_IDE_ONLY)
-  /**
-   * \brief Derived objects can redefine this method to save custom attributes.
-   */
-  virtual void DoSerializeTo(SerializerElement& element) const {};
-#endif
+  gd::EffectsContainer
+      effectsContainer;  ///< The effects container for the object.
+  mutable gd::String persistentUuid;  ///< A persistent random version 4 UUID,
+                                      ///< useful for computing changesets.
+  /** When set to `"manually"`, its resources are not preloaded with the scene. */
+  gd::String resourcesPreloading = "with-scene";
 
   /**
    * Initialize object using another object. Used by copy-ctor and assign-op.
    * Don't forget to update me if members were changed!
+   *
+   * It's needed because there is no default copy for a map of unique_ptr like
+   * behaviors and it must be a deep copy.
    */
   void Init(const gd::Object& object);
 };
@@ -340,15 +323,3 @@ struct ObjectHasName : public std::binary_function<std::unique_ptr<gd::Object>,
 };
 
 }  // namespace gd
-
-/**
- * An object list is a vector containing (smart) pointers to objects.
- */
-using ObjList = std::vector<std::unique_ptr<gd::Object>>;
-
-/**
- * Objects are usually managed thanks to (smart) pointers.
- */
-using ObjSPtr = std::unique_ptr<gd::Object>;
-
-#endif  // GDCORE_OBJECT_H

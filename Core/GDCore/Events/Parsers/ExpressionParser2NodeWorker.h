@@ -7,20 +7,21 @@
 #define GDCORE_EXPRESSIONPARSER2NODEWORKER_H
 
 namespace gd {
-class ExpressionNode;
-class SubExpressionNode;
-class OperatorNode;
-class UnaryOperatorNode;
-class NumberNode;
-class TextNode;
-class VariableNode;
-class VariableAccessorNode;
-class VariableBracketAccessorNode;
-class IdentifierOrFunctionOrEmptyNode;
-class IdentifierNode;
-class FunctionOrEmptyNode;
-class FunctionNode;
-class EmptyNode;
+struct ExpressionNode;
+struct SubExpressionNode;
+struct OperatorNode;
+struct UnaryOperatorNode;
+struct NumberNode;
+struct TextNode;
+struct VariableNode;
+struct VariableAccessorNode;
+struct VariableBracketAccessorNode;
+struct IdentifierOrFunctionCallOrObjectFunctionNameOrEmptyNode;
+struct IdentifierNode;
+struct FunctionCallOrObjectFunctionNameOrEmptyNode;
+struct ObjectFunctionNameNode;
+struct FunctionCallNode;
+struct EmptyNode;
 }  // namespace gd
 
 namespace gd {
@@ -33,20 +34,21 @@ namespace gd {
  * \see gd::ExpressionNode
  */
 class GD_CORE_API ExpressionParser2NodeWorker {
-  friend class ExpressionNode;
-  friend class SubExpressionNode;
-  friend class OperatorNode;
-  friend class UnaryOperatorNode;
-  friend class NumberNode;
-  friend class TextNode;
-  friend class VariableNode;
-  friend class VariableAccessorNode;
-  friend class VariableBracketAccessorNode;
-  friend class IdentifierOrFunctionOrEmptyNode;
-  friend class IdentifierNode;
-  friend class FunctionOrEmptyNode;
-  friend class FunctionNode;
-  friend class EmptyNode;
+  friend struct ExpressionNode;
+  friend struct SubExpressionNode;
+  friend struct OperatorNode;
+  friend struct UnaryOperatorNode;
+  friend struct NumberNode;
+  friend struct TextNode;
+  friend struct VariableNode;
+  friend struct VariableAccessorNode;
+  friend struct VariableBracketAccessorNode;
+  friend struct IdentifierOrFunctionCallOrObjectFunctionNameOrEmptyNode;
+  friend struct IdentifierNode;
+  friend struct FunctionCallOrObjectFunctionNameOrEmptyNode;
+  friend struct ObjectFunctionNameNode;
+  friend struct FunctionCallNode;
+  friend struct EmptyNode;
 
  public:
   virtual ~ExpressionParser2NodeWorker();
@@ -62,7 +64,8 @@ class GD_CORE_API ExpressionParser2NodeWorker {
   virtual void OnVisitVariableBracketAccessorNode(
       VariableBracketAccessorNode& node) = 0;
   virtual void OnVisitIdentifierNode(IdentifierNode& node) = 0;
-  virtual void OnVisitFunctionNode(FunctionNode& node) = 0;
+  virtual void OnVisitObjectFunctionNameNode(ObjectFunctionNameNode& node) = 0;
+  virtual void OnVisitFunctionCallNode(FunctionCallNode& node) = 0;
   virtual void OnVisitEmptyNode(EmptyNode& node) = 0;
 };
 

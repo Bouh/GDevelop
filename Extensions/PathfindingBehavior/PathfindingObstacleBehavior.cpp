@@ -7,7 +7,7 @@ This project is released under the MIT License.
 #include "PathfindingObstacleBehavior.h"
 #include "GDCore/Project/PropertyDescriptor.h"
 #include "GDCore/Tools/Localization.h"
-#include "GDCpp/Runtime/Serialization/SerializerElement.h"
+#include "GDCore/Serialization/SerializerElement.h"
 
 void PathfindingObstacleBehavior::InitializeContent(
     gd::SerializerElement& behaviorContent) {
@@ -18,14 +18,16 @@ void PathfindingObstacleBehavior::InitializeContent(
 #if defined(GD_IDE_ONLY)
 std::map<gd::String, gd::PropertyDescriptor>
 PathfindingObstacleBehavior::GetProperties(
-    const gd::SerializerElement& behaviorContent, gd::Project& project) const {
+    const gd::SerializerElement& behaviorContent) const {
   std::map<gd::String, gd::PropertyDescriptor> properties;
-  properties[_("Impassable obstacle")]
+  properties["Impassable"]
+      .SetLabel(_("Impassable obstacle"))
       .SetValue(behaviorContent.GetBoolAttribute("impassable") ? "true"
                                                                : "false")
       .SetType("Boolean");
-  properties[_("Cost (if not impassable)")].SetValue(
-      gd::String::From(behaviorContent.GetDoubleAttribute("cost")));
+  properties["Cost"]
+      .SetLabel(_("Cost (if not impassable)"))
+      .SetValue(gd::String::From(behaviorContent.GetDoubleAttribute("cost")));
 
   return properties;
 }
@@ -33,16 +35,15 @@ PathfindingObstacleBehavior::GetProperties(
 bool PathfindingObstacleBehavior::UpdateProperty(
     gd::SerializerElement& behaviorContent,
     const gd::String& name,
-    const gd::String& value,
-    gd::Project& project) {
-  if (name == _("Impassable obstacle")) {
+    const gd::String& value) {
+  if (name == "Impassable") {
     behaviorContent.SetAttribute("impassable", (value != "0"));
     return true;
   }
 
   if (value.To<float>() < 0) return false;
 
-  if (name == _("Cost (if not impassable)"))
+  if (name == "Cost")
     behaviorContent.SetAttribute("cost", value.To<float>());
   else
     return false;

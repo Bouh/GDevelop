@@ -8,6 +8,9 @@ import {
   getObjectOrObjectGroupListItemValue,
   getObjectListItemKey,
 } from './Keys';
+import HighlightedText from '../../../UI/Search/HighlightedText';
+import { styles } from '../InstructionOrObjectSelector';
+import { type HTMLDataset } from '../../../Utils/HTMLDataset';
 
 type Props = {|
   project: gdProject,
@@ -15,6 +18,11 @@ type Props = {|
   iconSize: number,
   onClick: () => void,
   selectedValue: ?string,
+  matchesCoordinates: number[][],
+  id?: ?string,
+  data?: HTMLDataset,
+  withIndent?: boolean,
+  keyPrefix?: string,
 |};
 
 export const renderObjectListItem = ({
@@ -23,25 +31,40 @@ export const renderObjectListItem = ({
   iconSize,
   onClick,
   selectedValue,
-}: Props) => {
+  matchesCoordinates,
+  id,
+  data,
+  withIndent,
+  keyPrefix,
+}: Props): React.Node => {
   const objectName: string = objectWithContext.object.getName();
   return (
+    // $FlowFixMe[incompatible-type]
     <ListItem
-      key={getObjectListItemKey(objectWithContext)}
+      id={id}
+      data={data}
+      key={(keyPrefix || '') + getObjectListItemKey(objectWithContext)}
       selected={
         selectedValue === getObjectOrObjectGroupListItemValue(objectName)
       }
-      primaryText={objectName}
+      style={withIndent ? styles.indentedListItem : undefined}
+      primaryText={
+        <HighlightedText
+          text={objectName}
+          matchesCoordinates={matchesCoordinates}
+        />
+      }
       leftIcon={
         <ListIcon
           iconSize={iconSize}
           src={ObjectsRenderingService.getThumbnail(
             project,
-            objectWithContext.object
+            objectWithContext.object.getConfiguration()
           )}
         />
       }
       onClick={onClick}
+      disableAutoTranslate
     />
   );
 };

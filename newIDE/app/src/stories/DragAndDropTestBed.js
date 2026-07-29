@@ -23,24 +23,26 @@ const DragSourceAndDropTargetBox = ({ name }: {| name: string |}) => (
       console.log('Selection to be dropped on' + name);
     }}
   >
-    {({ connectDragSource, connectDropTarget, isOver, canDrop }) =>
-      connectDropTarget(
-        connectDragSource(
-          <div
-            style={{
-              backgroundColor: 'blue',
-              color: 'white',
-              height: 100,
-              width: 100,
-              margin: 20,
-            }}
-          >
-            This is a box called {name}.{isOver && <div>Hovered</div>}
-            {canDrop && <div>Can drop here</div>}
-          </div>
-        )
-      )
-    }
+    {({ connectDragSource, connectDropTarget, isOver, canDrop }) => {
+      const connectedDragSource = connectDragSource(
+        <div
+          style={{
+            backgroundColor: 'blue',
+            color: 'white',
+            height: 100,
+            width: 100,
+            margin: 20,
+          }}
+        >
+          This is a box called {name}.{isOver && <div>Hovered</div>}
+          {canDrop && <div>Can drop here</div>}
+        </div>
+      );
+
+      return connectedDragSource
+        ? connectDropTarget(connectedDragSource)
+        : null;
+    }}
   </DragSourceAndDropTarget>
 );
 
@@ -74,7 +76,7 @@ const DropTargetBox = ({ name }: {| name: string |}) => (
   </DropTarget>
 );
 
-export default (props: Props) => (
+const DragAndDropTestBed = (props: Props): React.MixedElement => (
   <div>
     <DragSourceAndDropTargetBox name="box1" />
     <DragSourceAndDropTargetBox name="box2, cant-drop-here" />
@@ -83,3 +85,5 @@ export default (props: Props) => (
     <DropTargetBox name="box5, drop target but cant-drop-here" />
   </div>
 );
+
+export default DragAndDropTestBed;

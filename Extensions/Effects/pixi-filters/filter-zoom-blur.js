@@ -1,9 +1,104 @@
 /*!
- * @pixi/filter-zoom-blur - v2.6.0
- * Compiled Fri, 20 Dec 2019 18:59:17 UTC
+ * @pixi/filter-zoom-blur - v5.1.1
+ * Compiled Thu, 31 Aug 2023 09:18:38 UTC
  *
  * @pixi/filter-zoom-blur is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
- */
-!function(n,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports,require("pixi.js")):"function"==typeof define&&define.amd?define(["exports","pixi.js"],e):e(n.__filters={},n.PIXI)}(this,function(n,e){"use strict";var t="attribute vec2 aVertexPosition;\nattribute vec2 aTextureCoord;\n\nuniform mat3 projectionMatrix;\n\nvarying vec2 vTextureCoord;\n\nvoid main(void)\n{\n    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);\n    vTextureCoord = aTextureCoord;\n}",r="varying vec2 vTextureCoord;\nuniform sampler2D uSampler;\nuniform vec4 filterArea;\n\nuniform vec2 uCenter;\nuniform float uStrength;\nuniform float uInnerRadius;\nuniform float uRadius;\n\nconst float MAX_KERNEL_SIZE = 32.0;\n\nfloat random(vec3 scale, float seed) {\n    // use the fragment position for a different seed per-pixel\n    return fract(sin(dot(gl_FragCoord.xyz + seed, scale)) * 43758.5453 + seed);\n}\n\nvoid main() {\n\n    float minGradient = uInnerRadius * 0.3;\n    float innerRadius = (uInnerRadius + minGradient * 0.5) / filterArea.x;\n\n    float gradient = uRadius * 0.3;\n    float radius = (uRadius - gradient * 0.5) / filterArea.x;\n\n    float countLimit = MAX_KERNEL_SIZE;\n\n    vec2 dir = vec2(uCenter.xy / filterArea.xy - vTextureCoord);\n    float dist = length(vec2(dir.x, dir.y * filterArea.y / filterArea.x));\n\n    float strength = uStrength;\n\n    float delta = 0.0;\n    float gap;\n    if (dist < innerRadius) {\n        delta = innerRadius - dist;\n        gap = minGradient;\n    } else if (radius >= 0.0 && dist > radius) { // radius < 0 means it's infinity\n        delta = dist - radius;\n        gap = gradient;\n    }\n\n    if (delta > 0.0) {\n        float normalCount = gap / filterArea.x;\n        delta = (normalCount - delta) / normalCount;\n        countLimit *= delta;\n        strength *= delta;\n        if (countLimit < 1.0)\n        {\n            gl_FragColor = texture2D(uSampler, vTextureCoord);\n            return;\n        }\n    }\n\n    // randomize the lookup values to hide the fixed number of samples\n    float offset = random(vec3(12.9898, 78.233, 151.7182), 0.0);\n\n    float total = 0.0;\n    vec4 color = vec4(0.0);\n\n    dir *= strength;\n\n    for (float t = 0.0; t < MAX_KERNEL_SIZE; t++) {\n        float percent = (t + offset) / MAX_KERNEL_SIZE;\n        float weight = 4.0 * (percent - percent * percent);\n        vec2 p = vTextureCoord + dir * percent;\n        vec4 sample = texture2D(uSampler, p);\n\n        // switch to pre-multiplied alpha to correctly blur transparent images\n        // sample.rgb *= sample.a;\n\n        color += sample * weight;\n        total += weight;\n\n        if (t > countLimit){\n            break;\n        }\n    }\n\n    color /= total;\n    // switch back from pre-multiplied alpha\n    color.rgb /= color.a + 0.00001;\n\n    gl_FragColor = color;\n}\n",i=function(n){function e(e,i,o,a){void 0===e&&(e=.1),void 0===i&&(i=[0,0]),void 0===o&&(o=0),void 0===a&&(a=-1),n.call(this,t,r),this.center=i,this.strength=e,this.innerRadius=o,this.radius=a}n&&(e.__proto__=n),e.prototype=Object.create(n&&n.prototype),e.prototype.constructor=e;var i={center:{configurable:!0},strength:{configurable:!0},innerRadius:{configurable:!0},radius:{configurable:!0}};return i.center.get=function(){return this.uniforms.uCenter},i.center.set=function(n){this.uniforms.uCenter=n},i.strength.get=function(){return this.uniforms.uStrength},i.strength.set=function(n){this.uniforms.uStrength=n},i.innerRadius.get=function(){return this.uniforms.uInnerRadius},i.innerRadius.set=function(n){this.uniforms.uInnerRadius=n},i.radius.get=function(){return this.uniforms.uRadius},i.radius.set=function(n){(n<0||n===1/0)&&(n=-1),this.uniforms.uRadius=n},Object.defineProperties(e.prototype,i),e}(e.Filter);n.ZoomBlurFilter=i,Object.defineProperty(n,"__esModule",{value:!0})}),Object.assign(PIXI.filters,this?this.__filters:__filters);
-//# sourceMappingURL=filter-zoom-blur.js.map
+ */var __filters=function(i,u){"use strict";var l=`attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+
+uniform mat3 projectionMatrix;
+
+varying vec2 vTextureCoord;
+
+void main(void)
+{
+    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+    vTextureCoord = aTextureCoord;
+}`,d=`varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec4 filterArea;
+
+uniform vec2 uCenter;
+uniform float uStrength;
+uniform float uInnerRadius;
+uniform float uRadius;
+
+const float MAX_KERNEL_SIZE = \${maxKernelSize};
+
+// author: http://byteblacksmith.com/improvements-to-the-canonical-one-liner-glsl-rand-for-opengl-es-2-0/
+highp float rand(vec2 co, float seed) {
+    const highp float a = 12.9898, b = 78.233, c = 43758.5453;
+    highp float dt = dot(co + seed, vec2(a, b)), sn = mod(dt, 3.14159);
+    return fract(sin(sn) * c + seed);
+}
+
+void main() {
+
+    float minGradient = uInnerRadius * 0.3;
+    float innerRadius = (uInnerRadius + minGradient * 0.5) / filterArea.x;
+
+    float gradient = uRadius * 0.3;
+    float radius = (uRadius - gradient * 0.5) / filterArea.x;
+
+    float countLimit = MAX_KERNEL_SIZE;
+
+    vec2 dir = vec2(uCenter.xy / filterArea.xy - vTextureCoord);
+    float dist = length(vec2(dir.x, dir.y * filterArea.y / filterArea.x));
+
+    float strength = uStrength;
+
+    float delta = 0.0;
+    float gap;
+    if (dist < innerRadius) {
+        delta = innerRadius - dist;
+        gap = minGradient;
+    } else if (radius >= 0.0 && dist > radius) { // radius < 0 means it's infinity
+        delta = dist - radius;
+        gap = gradient;
+    }
+
+    if (delta > 0.0) {
+        float normalCount = gap / filterArea.x;
+        delta = (normalCount - delta) / normalCount;
+        countLimit *= delta;
+        strength *= delta;
+        if (countLimit < 1.0)
+        {
+            gl_FragColor = texture2D(uSampler, vTextureCoord);
+            return;
+        }
+    }
+
+    // randomize the lookup values to hide the fixed number of samples
+    float offset = rand(vTextureCoord, 0.0);
+
+    float total = 0.0;
+    vec4 color = vec4(0.0);
+
+    dir *= strength;
+
+    for (float t = 0.0; t < MAX_KERNEL_SIZE; t++) {
+        float percent = (t + offset) / MAX_KERNEL_SIZE;
+        float weight = 4.0 * (percent - percent * percent);
+        vec2 p = vTextureCoord + dir * percent;
+        vec4 sample = texture2D(uSampler, p);
+
+        // switch to pre-multiplied alpha to correctly blur transparent images
+        // sample.rgb *= sample.a;
+
+        color += sample * weight;
+        total += weight;
+
+        if (t > countLimit){
+            break;
+        }
+    }
+
+    color /= total;
+    // switch back from pre-multiplied alpha
+    // color.rgb /= color.a + 0.00001;
+
+    gl_FragColor = color;
+}
+`,a=Object.getOwnPropertySymbols,f=Object.prototype.hasOwnProperty,c=Object.prototype.propertyIsEnumerable,m=(n,t)=>{var r={};for(var e in n)f.call(n,e)&&t.indexOf(e)<0&&(r[e]=n[e]);if(n!=null&&a)for(var e of a(n))t.indexOf(e)<0&&c.call(n,e)&&(r[e]=n[e]);return r};const o=class extends u.Filter{constructor(n){const t=Object.assign(o.defaults,n),{maxKernelSize:r}=t,e=m(t,["maxKernelSize"]);super(l,d.replace("${maxKernelSize}",r.toFixed(1))),Object.assign(this,e)}get center(){return this.uniforms.uCenter}set center(n){this.uniforms.uCenter=n}get strength(){return this.uniforms.uStrength}set strength(n){this.uniforms.uStrength=n}get innerRadius(){return this.uniforms.uInnerRadius}set innerRadius(n){this.uniforms.uInnerRadius=n}get radius(){return this.uniforms.uRadius}set radius(n){(n<0||n===1/0)&&(n=-1),this.uniforms.uRadius=n}};let s=o;return s.defaults={strength:.1,center:[0,0],innerRadius:0,radius:-1,maxKernelSize:32},i.ZoomBlurFilter=s,Object.defineProperty(i,"__esModule",{value:!0}),i}({},PIXI);Object.assign(PIXI.filters,__filters);

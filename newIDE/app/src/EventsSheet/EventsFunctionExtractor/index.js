@@ -1,9 +1,14 @@
 // @flow
 import { unserializeFromJSObject } from '../../Utils/Serializer';
-import { mapVector } from '../../Utils/MapFor';
 import { getFreeEventsFunctionType } from '../../EventsFunctionsExtensionsLoader';
 import getObjectGroupByName from '../../Utils/GetObjectGroupByName';
-const gd = global.gd;
+import {
+  ProjectScopedContainersAccessor,
+  type EventsScope,
+} from '../../InstructionOrExpression/EventsScope';
+import newNameGenerator from '../../Utils/NewNameGenerator';
+
+const gd: libGDevelop = global.gd;
 
 /**
  * Set up an events function with the given serialized events,
@@ -13,11 +18,13 @@ const gd = global.gd;
 export const setupFunctionFromEvents = ({
   globalObjectsContainer,
   objectsContainer,
+  scope,
   serializedEvents,
   project,
   eventsFunction,
 }: {
   project: gdProject,
+  scope: EventsScope,
   globalObjectsContainer: gdObjectsContainer,
   objectsContainer: gdObjectsContainer,
   serializedEvents: Object,
@@ -34,12 +41,16 @@ export const setupFunctionFromEvents = ({
   );
 
   // Analyze events...
+  const projectScopedContainers = new ProjectScopedContainersAccessor(
+    scope
+  ).get();
   const eventsContextAnalyzer = new gd.EventsContextAnalyzer(
-    gd.JsPlatform.get(),
-    globalObjectsContainer,
-    objectsContainer
+    gd.JsPlatform.get()
   );
-  eventsContextAnalyzer.launch(eventsFunction.getEvents());
+  eventsContextAnalyzer.launch(
+    eventsFunction.getEvents(),
+    projectScopedContainers
+  );
   const eventsContext = eventsContextAnalyzer.getEventsContext();
 
   // ...to extract objects and groups
@@ -80,20 +91,16 @@ export const setupFunctionFromEvents = ({
 
   // Create parameters for these objects (or these groups without any object directly referenced)
   const parameters = eventsFunction.getParameters();
-  parameters.clear();
+  parameters.clearParameters();
   [...parameterGroupNames, ...parameterObjectNames].forEach(objectName => {
-    const newParameter = new gd.ParameterMetadata();
-    newParameter.setType('objectList');
-    newParameter.setName(objectName);
-    newParameter.setExtraInfo(
-      gd.getTypeOfObject(
-        globalObjectsContainer,
-        objectsContainer,
-        objectName,
-        true
-      )
-    );
-    parameters.push_back(newParameter);
+    parameters
+      .addNewParameter(objectName)
+      .setType('objectList')
+      .setExtraInfo(
+        projectScopedContainers
+          .getObjectsContainersList()
+          .getTypeOfObject(objectName)
+      );
 
     const behaviorNames: Array<string> = eventsContext
       .getBehaviorNamesOfObjectOrGroup(objectName)
@@ -101,17 +108,15 @@ export const setupFunctionFromEvents = ({
       .toJSArray();
 
     behaviorNames.forEach(behaviorName => {
-      const newParameter = new gd.ParameterMetadata();
-      newParameter.setType('behavior');
-      newParameter.setName(behaviorName);
-      newParameter.setExtraInfo(
-        gd.getTypeOfBehavior(
-          globalObjectsContainer,
-          objectsContainer,
-          behaviorName
-        )
-      );
-      parameters.push_back(newParameter);
+      parameters
+        .addNewParameter(behaviorName)
+        .setType('behavior')
+        .setName(behaviorName)
+        .setExtraInfo(
+          projectScopedContainers
+            .getObjectsContainersList()
+            .getTypeOfBehavior(behaviorName, false)
+        );
     });
   });
 
@@ -141,17 +146,19 @@ export const createNewInstructionForEventsFunction = (
 
   action.setType(getFreeEventsFunctionType(extensionName, eventsFunction));
   action.setParametersCount(
-    eventsFunction.getParameters().size() +
+    eventsFunction.getParameters().getParametersCount() +
       runtimeSceneParameterCount +
       contextParameterCount
   );
 
-  mapVector(eventsFunction.getParameters(), (parameterMetadata, index) => {
+  const parameters = eventsFunction.getParameters();
+  for (let index = 0; index < parameters.getParametersCount(); index++) {
+    const parameterMetadata = parameters.getParameterAt(index);
     action.setParameter(
       runtimeSceneParameterCount + index,
       parameterMetadata.getName()
     );
-  });
+  }
 
   return action;
 };
@@ -159,26 +166,24 @@ export const createNewInstructionForEventsFunction = (
 /**
  * Validate that a function name is valid.
  */
-export const validateEventsFunctionName = (functionName: string) => {
-  return gd.Project.validateObjectName(functionName);
+export const validateEventsFunctionName = (functionName: string): boolean => {
+  return gd.Project.isNameSafe(functionName);
 };
 
 /**
  * Validate that an events functions extension name is valid.
  */
-export const validateExtensionName = (extensionName: string) => {
-  return gd.Project.validateObjectName(extensionName);
+export const validateExtensionName = (extensionName: string): boolean => {
+  return gd.Project.isNameSafe(extensionName);
 };
 
-/**
- * Validate that an events functions extension name is unique in a project.
- */
-export const validateExtensionNameUniqueness = (
+export const getSafeExtensionName = (
   project: gdProject,
-  extensionName: string
-) => {
-  return !project.hasEventsFunctionsExtensionNamed(extensionName);
-};
+  chosenExtensionName: string
+): string =>
+  newNameGenerator(gd.Project.getSafeName(chosenExtensionName), name =>
+    project.hasEventsFunctionsExtensionNamed(name)
+  );
 
 /**
  * Validate that an events function name is unique in a project extension.
@@ -187,18 +192,34 @@ export const validateEventsFunctionNameUniqueness = (
   project: gdProject,
   extensionName: string,
   eventsFunction: gdEventsFunction
-) => {
+): boolean => {
   if (project.hasEventsFunctionsExtensionNamed(extensionName)) {
     const eventsFunctionsExtension = project.getEventsFunctionsExtension(
       extensionName
     );
 
-    return !eventsFunctionsExtension.hasEventsFunctionNamed(
-      eventsFunction.getName()
-    );
+    return !eventsFunctionsExtension
+      .getEventsFunctions()
+      .hasEventsFunctionNamed(eventsFunction.getName());
   }
 
   return true;
+};
+
+export const getSafeEventsFunctionName = (
+  project: gdProject,
+  extensionName: string,
+  chosenFunctionName: string
+): string => {
+  if (!project.hasEventsFunctionsExtensionNamed(extensionName)) {
+    return gd.Project.getSafeName(chosenFunctionName);
+  }
+  const eventsFunctionsExtension = project.getEventsFunctionsExtension(
+    extensionName
+  );
+  return newNameGenerator(gd.Project.getSafeName(chosenFunctionName), name =>
+    eventsFunctionsExtension.getEventsFunctions().hasEventsFunctionNamed(name)
+  );
 };
 
 /**
@@ -209,19 +230,13 @@ export const canCreateEventsFunction = (
   project: gdProject,
   extensionName: string,
   eventsFunction: gdEventsFunction
-) => {
+): false | boolean => {
   return (
     extensionName !== '' &&
     validateExtensionName(extensionName) &&
     eventsFunction.getName() !== '' &&
     validateEventsFunctionName(eventsFunction.getName()) &&
-    validateEventsFunctionNameUniqueness(
-      project,
-      extensionName,
-      eventsFunction
-    ) &&
-    eventsFunction.getFullName() !== '' &&
-    eventsFunction.getSentence() !== ''
+    validateEventsFunctionNameUniqueness(project, extensionName, eventsFunction)
   );
 };
 
@@ -230,6 +245,6 @@ export const canCreateEventsFunction = (
  */
 export const functionHasLotsOfParameters = (
   eventsFunction: gdEventsFunction
-) => {
-  return eventsFunction.getParameters().size() > 7;
+): boolean => {
+  return eventsFunction.getParameters().getParametersCount() > 7;
 };

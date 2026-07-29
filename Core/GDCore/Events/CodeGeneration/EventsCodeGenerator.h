@@ -3,21 +3,25 @@
  * Copyright 2008-present Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef GDCORE_EVENTSCODEGENERATOR_H
-#define GDCORE_EVENTSCODEGENERATOR_H
+#pragma once
 
 #include <set>
 #include <utility>
 #include <vector>
+
+#include "GDCore/Events/CodeGeneration/DiagnosticReport.h"
 #include "GDCore/Events/Event.h"
 #include "GDCore/Events/Instruction.h"
+#include "GDCore/Project/ProjectScopedContainers.h"
 #include "GDCore/String.h"
+
 namespace gd {
 class EventsList;
 class Expression;
 class Project;
 class Layout;
 class ObjectsContainer;
+class ObjectsContainersList;
 class ExternalEvents;
 class ParameterMetadata;
 class ObjectMetadata;
@@ -35,10 +39,6 @@ namespace gd {
  * \brief Internal class used to generate code from events
  */
 class GD_CORE_API EventsCodeGenerator {
-  // Compatiblity with old ExpressionParser
-  friend class CallbacksForGeneratingExpressionCode;
-  friend class VariableCodeGenerationCallbacks;
-  // end of compatibility code
   friend class ExpressionCodeGenerator;
 
  public:
@@ -51,7 +51,7 @@ class GD_CORE_API EventsCodeGenerator {
    * \brief Construct a code generator for the specified
    * platform/project/layout.
    */
-  EventsCodeGenerator(gd::Project& project_,
+  EventsCodeGenerator(const gd::Project& project_,
                       const gd::Layout& layout,
                       const gd::Platform& platform_);
 
@@ -59,10 +59,10 @@ class GD_CORE_API EventsCodeGenerator {
    * \brief Construct a code generator for the specified
    * objects/groups and platform
    */
-  EventsCodeGenerator(const gd::Platform& platform,
-                      gd::ObjectsContainer& globalObjectsAndGroups_,
-                      const gd::ObjectsContainer& objectsAndGroups_);
-  virtual ~EventsCodeGenerator(){};
+  EventsCodeGenerator(
+      const gd::Platform& platform,
+      const gd::ProjectScopedContainers& projectScopedContainers_);
+  virtual ~EventsCodeGenerator() {};
 
   /**
    * \brief Preprocess an events list (replacing for example links with the
@@ -80,7 +80,7 @@ class GD_CORE_API EventsCodeGenerator {
    * \return Code
    */
   virtual gd::String GenerateEventsListCode(
-      gd::EventsList& events, const EventsCodeGenerationContext& context);
+      gd::EventsList& events, EventsCodeGenerationContext& context);
 
   /**
    * \brief Generate code for executing a condition list
@@ -127,8 +127,8 @@ class GD_CORE_API EventsCodeGenerator {
    *
    */
   std::vector<gd::String> GenerateParametersCodes(
-      const std::vector<gd::Expression> & parameters,
-      const std::vector<gd::ParameterMetadata>& parametersInfo,
+      const std::vector<gd::Expression>& parameters,
+      const ParameterMetadataContainer& parametersInfo,
       EventsCodeGenerationContext& context,
       std::vector<std::pair<gd::String, gd::String> >*
           supplementaryParametersTypes = 0);
@@ -157,8 +157,55 @@ class GD_CORE_API EventsCodeGenerator {
    * \param context Context used for generation
    * \return Code
    */
-  gd::String GenerateActionCode(gd::Instruction& action,
-                                EventsCodeGenerationContext& context);
+  gd::String GenerateActionCode(
+      gd::Instruction& action,
+      EventsCodeGenerationContext& context,
+      const gd::String& optionalAsyncCallbackName = "",
+      const gd::String& optionalAsyncCallbackId = "");
+
+  struct CallbackDescriptor {
+    CallbackDescriptor(const gd::String functionName_,
+                       const gd::String argumentsList_,
+                       const std::set<gd::String> requiredObjects_)
+        : functionName(functionName_),
+          argumentsList(argumentsList_),
+          requiredObjects(requiredObjects_) {};
+    /**
+     * The name by which the function can be invoked.
+     */
+    const gd::String functionName;
+    /**
+     * The comma separated list of arguments that the function takes.
+     */
+    const gd::String argumentsList;
+    /**
+     * A set of all objects that need to be backed up to be passed to the
+     * callback code.
+     */
+    const std::set<gd::String> requiredObjects;
+  };
+
+  /**
+   * \brief Generates actions and events as a callback.
+   *
+   * This is used by asynchronous functions to run the code out of the normal
+   * events flow.
+   *
+   * \returns A set with all objects required by the callback code.
+   * The caller must take care of backing them up in a LongLivedObjectsList,
+   * and to pass it to the callback function as the last argument.
+   */
+  virtual const CallbackDescriptor GenerateCallback(
+      const gd::String& callbackFunctionName,
+      gd::EventsCodeGenerationContext& parentContext,
+      gd::InstructionsList& actions,
+      gd::EventsList* subEvents = nullptr);
+
+  /**
+   * \brief Generates the parameters list of an event's generated function.
+   */
+  const gd::String GenerateEventsParameters(
+      const gd::EventsCodeGenerationContext& context);
 
   /**
    * \brief Generate code for declaring objects lists.
@@ -283,18 +330,22 @@ class GD_CORE_API EventsCodeGenerator {
    */
   bool ErrorOccurred() const { return errorOccurred; };
 
-  /**
-   * \brief Get the global objects/groups used for code generation.
-   */
-  gd::ObjectsContainer& GetGlobalObjectsAndGroups() const {
-    return globalObjectsAndGroups;
+  const gd::ObjectsContainersList& GetObjectsContainersList() const {
+    return projectScopedContainers.GetObjectsContainersList();
+  };
+
+  const gd::ProjectScopedContainers& GetProjectScopedContainers() const {
+    return projectScopedContainers;
   }
 
   /**
-   * \brief Get the objects/groups used for code generation.
+   * @brief Give access to the project scoped containers as code generation
+   * might push and pop variable containers (for local variables). This could be
+   * passed as a parameter recursively in code generation, but this requires
+   * heavy refactoring. Instead, we use this single instance.
    */
-  const gd::ObjectsContainer& GetObjectsAndGroups() const {
-    return objectsAndGroups;
+  gd::ProjectScopedContainers& GetProjectScopedContainers() {
+    return projectScopedContainers;
   }
 
   /**
@@ -307,7 +358,7 @@ class GD_CORE_API EventsCodeGenerator {
    * \brief Get the project the code is being generated for.
    * \warning This is only valid if HasProjectAndLayout() is true.
    */
-  gd::Project& GetProject() const { return *project; }
+  const gd::Project& GetProject() const { return *project; }
 
   /**
    * \brief Get the layout the code is being generated for.
@@ -319,22 +370,6 @@ class GD_CORE_API EventsCodeGenerator {
    * \brief Get the platform the code is being generated for.
    */
   const gd::Platform& GetPlatform() const { return platform; }
-
-  /**
-   * \brief Convert a group name to the full list of objects contained in the
-   * group.
-   *
-   * Get a list containing the "real" objects name when the events refers to \a
-   * objectName :<br> If \a objectName if really an object, the list will only
-   * contains \a objectName unchanged.<br> If \a objectName is a group, the list
-   * will contains all the objects of the group.<br> If \a objectName is the
-   * "current" object in the context ( i.e: The object being used for launching
-   * an action... ), none of the two rules below apply, and the list will only
-   * contains the context "current" object name.
-   */
-  std::vector<gd::String> ExpandObjectsName(
-      const gd::String& objectName,
-      const EventsCodeGenerationContext& context) const;
 
   /**
    * \brief Get the maximum depth of custom conditions reached during code
@@ -349,6 +384,12 @@ class GD_CORE_API EventsCodeGenerator {
    */
   size_t GetMaxConditionsListsSize() const { return maxConditionsListsSize; }
 
+  void SetDiagnosticReport(gd::DiagnosticReport* diagnosticReport_) {
+    diagnosticReport = diagnosticReport_;
+  }
+
+  gd::DiagnosticReport* GetDiagnosticReport() { return diagnosticReport; }
+
   /**
    * \brief Generate the full name for accessing to a boolean variable used for
    * conditions.
@@ -356,6 +397,18 @@ class GD_CORE_API EventsCodeGenerator {
    * Default implementation just returns the boolean name passed as argument.
    */
   virtual gd::String GenerateBooleanFullName(
+      const gd::String& boolName,
+      const gd::EventsCodeGenerationContext& context) {
+    return boolName;
+  }
+
+  /**
+   * \brief Generate the full name for accessing to a boolean variable used for
+   * conditions.
+   *
+   * Default implementation just returns the boolean name passed as argument.
+   */
+  virtual gd::String GenerateUpperScopeBooleanFullName(
       const gd::String& boolName,
       const gd::EventsCodeGenerationContext& context) {
     return boolName;
@@ -413,9 +466,65 @@ class GD_CORE_API EventsCodeGenerator {
    */
   virtual gd::String GetCodeNamespace() { return ""; };
 
-  enum VariableScope { LAYOUT_VARIABLE = 0, PROJECT_VARIABLE, OBJECT_VARIABLE };
+  enum VariableScope {
+    LAYOUT_VARIABLE = 0,
+    PROJECT_VARIABLE,
+    OBJECT_VARIABLE,
+    ANY_VARIABLE,
+    VARIABLE_OR_PROPERTY,
+    VARIABLE_OR_PROPERTY_OR_PARAMETER
+  };
+
+  /**
+   * Generate a single unique number for the specified instruction.
+   *
+   * This is useful for instructions that need to identify themselves in the
+   * generated code like the "Trigger Once" conditions. The id is stable across
+   * code generations if the instructions are the same objects in memory.
+   *
+   * Note that if this function is called multiple times with the same
+   * instruction, the unique number returned will be *different*. This is
+   * because a single instruction might appear at multiple places in events due
+   * to the usage of links.
+   */
+  size_t GenerateSingleUsageUniqueIdFor(const gd::Instruction* instruction);
+
+  /**
+   * Generate a single unique number for an events list.
+   *
+   * This is useful to create unique function names for events list, that are
+   * stable across code generation given the exact same list of events. They are
+   * *not* stable if events are moved/reorganized.
+   */
+  size_t GenerateSingleUsageUniqueIdForEventsList();
+
+  virtual gd::String GenerateRelationalOperation(
+      const gd::String& relationalOperator,
+      const gd::String& lhs,
+      const gd::String& rhs);
+
+  /**
+   * \brief Generate the code to access the local variables stack.
+   */
+  virtual gd::String GenerateLocalVariablesStackAccessor();
+
+  /**
+   * \brief Generate an any variable getter that fallbacks on scene variable for
+   * compatibility reason.
+   */
+  gd::String GenerateAnyOrSceneVariableGetter(
+      const gd::Expression& variableExpression,
+      EventsCodeGenerationContext& context);
+
+  virtual gd::String GeneratePropertySetterWithoutCasting(
+      const gd::PropertiesContainer& propertiesContainer,
+      const gd::NamedPropertyDescriptor& property,
+      const gd::String& operandCode);
 
  protected:
+  virtual const gd::String GenerateRelationalOperatorCodes(
+      const gd::String& operatorString);
+
   /**
    * \brief Generate the code for a single parameter.
    *
@@ -424,13 +533,13 @@ class GD_CORE_API EventsCodeGenerator {
    * - object : Object name -> string
    * - expression : Mathematical expression -> number (double)
    * - string : %Text expression -> string
-   * - layer, color, file, joyaxis : Same as string
+   * - layer, color, file, stringWithSelector : Same as string
    * - relationalOperator : Used to make a comparison between the function
-  resturn value and value of the parameter preceding the relationOperator
+  return value and value of the parameter preceding the relationOperator
   parameter -> string
    * - operator : Used to update a value using a setter and a getter -> string
    * - key, mouse, objectvar, scenevar, globalvar, password, musicfile,
-  soundfile, police -> string
+  soundfile -> string
    * - trueorfalse, yesorno -> boolean ( See GenerateTrue/GenerateFalse ).
    *
    * <br><br>
@@ -442,28 +551,18 @@ class GD_CORE_API EventsCodeGenerator {
    * Other standard parameters type that should be implemented by platforms:
    * - currentScene: Reference to the current runtime scene.
    * - objectList : a map containing lists of objects which are specified by the
-  object name in another parameter. (C++: std::map <gd::String,
-  std::vector<RuntimeObject*> *>). Example:
-   * \code
-      AddExpression("Count", _("Object count"), _("Count the number of picked
-  objects"), _("Objects"), "res/conditions/nbObjet.png")
-      .AddParameter("objectList", _("Object"))
-      .SetFunctionName("PickedObjectsCount").SetIncludeFile("GDCpp/Extensions/Builtin/ObjectTools.h");
-
-   * \endcode
-   * - objectListWithoutPicking : Same as objectList but do not pick object if
-  they are not already picked.
-   * - objectPtr : Return a pointer to object specified by the object name in
-  another parameter ( C++: RuntimeObject* ). Example:
+  object name in another parameter.
+   * - objectListOrEmptyIfJustDeclared : Same as `objectList` but do not pick
+  object if they are not already picked.
+   * - objectPtr: Return a reference to the object specified by the object name
+  in another parameter. Example:
    * \code
   .AddParameter("object", _("Object"))
   .AddParameter("objectPtr", _("Target object"))
-  //The called function will be called with this signature on the C++ platform:
-  Function(gd::String, RuntimeObject*)
    * \endcode
    */
   virtual gd::String GenerateParameterCodes(
-      const gd::String& parameter,
+      const gd::Expression& parameter,
       const gd::ParameterMetadata& metadata,
       gd::EventsCodeGenerationContext& context,
       const gd::String& lastObjectName,
@@ -477,12 +576,19 @@ class GD_CORE_API EventsCodeGenerator {
       const gd::String& variableName,
       const VariableScope& scope,
       gd::EventsCodeGenerationContext& context,
-      const gd::String& objectName) {
+      const gd::String& objectName,
+      bool hasChild) {
+    // This code is only used as a mock.
+    // See the real implementation in GDJS.
     if (scope == LAYOUT_VARIABLE) {
       return "getLayoutVariable(" + variableName + ")";
 
     } else if (scope == PROJECT_VARIABLE) {
       return "getProjectVariable(" + variableName + ")";
+    } else if (scope == ANY_VARIABLE || scope == VARIABLE_OR_PROPERTY ||
+               scope == VARIABLE_OR_PROPERTY_OR_PARAMETER) {
+      // TODO Split the 3 cases to make tests stronger.
+      return "getAnyVariable(" + variableName + ")";
     }
 
     return "getVariableForObject(" + objectName + ", " + variableName + ")";
@@ -494,6 +600,12 @@ class GD_CORE_API EventsCodeGenerator {
   virtual gd::String GenerateVariableAccessor(gd::String childName) {
     return ".getChild(" + ConvertToStringExplicit(childName) + ")";
   };
+
+  virtual gd::String GenerateVariableValueAs(const gd::String& type) {
+    return type == "number|string" ? ".getAsNumberOrString()"
+           : type == "string"      ? ".getAsString()"
+                                   : ".getAsNumber()";
+  }
 
   /**
    * \brief Generate the code to get the child of a variable,
@@ -522,6 +634,24 @@ class GD_CORE_API EventsCodeGenerator {
                                     gd::EventsCodeGenerationContext& context) {
     return "fakeObjectListOf_" + objectName;
   }
+
+  virtual gd::String GeneratePropertyGetter(
+      const gd::PropertiesContainer& propertiesContainer,
+      const gd::NamedPropertyDescriptor& property,
+      const gd::String& type,
+      gd::EventsCodeGenerationContext& context);
+
+  virtual gd::String GeneratePropertyGetterWithoutCasting(
+      const gd::PropertiesContainer& propertiesContainer,
+      const gd::NamedPropertyDescriptor& property);
+
+  virtual gd::String GenerateParameterGetter(
+      const gd::ParameterMetadata& parameter,
+      const gd::String& type,
+      gd::EventsCodeGenerationContext& context);
+
+  virtual gd::String GenerateParameterGetterWithoutCasting(
+      const gd::ParameterMetadata& parameter);
 
   /**
    * \brief Generate the code to reference an object which is
@@ -597,27 +727,15 @@ class GD_CORE_API EventsCodeGenerator {
   };
 
   /**
-   * \brief Must negate a predicat.
+   * \brief Must negate a predicate.
    *
-   * The default implementation generates C-style code : It wraps the predicat
+   * The default implementation generates C-style code : It wraps the predicate
    * inside parenthesis and add a !.
    */
-  virtual gd::String GenerateNegatedPredicat(const gd::String& predicat) const {
-    return "!(" + predicat + ")";
+  virtual gd::String GenerateNegatedPredicate(
+      const gd::String& predicate) const {
+    return "!(" + predicate + ")";
   };
-
-  /**
-   * \brief Must create a boolean which is a reference to a boolean declared in
-   * the parent scope.
-   *
-   * The default implementation generates C-style code.
-   */
-  virtual gd::String GenerateReferenceToUpperScopeBoolean(
-      const gd::String& referenceName,
-      const gd::String& referencedBoolean,
-      gd::EventsCodeGenerationContext& context) {
-    return "bool & " + referenceName + " = " + referencedBoolean + ";\n";
-  }
 
   virtual gd::String GenerateFreeCondition(
       const std::vector<gd::String>& arguments,
@@ -646,30 +764,40 @@ class GD_CORE_API EventsCodeGenerator {
       gd::EventsCodeGenerationContext& context);
 
   virtual gd::String GenerateFreeAction(
+      const gd::String& functionCallName,
       const std::vector<gd::String>& arguments,
       const gd::InstructionMetadata& instrInfos,
-      gd::EventsCodeGenerationContext& context);
+      gd::EventsCodeGenerationContext& context,
+      const gd::String& optionalAsyncCallbackName = "",
+      const gd::String& optionalAsyncCallbackId = "");
 
   virtual gd::String GenerateObjectAction(
       const gd::String& objectName,
       const gd::ObjectMetadata& objInfo,
+      const gd::String& functionCallName,
       const std::vector<gd::String>& arguments,
       const gd::InstructionMetadata& instrInfos,
-      gd::EventsCodeGenerationContext& context);
+      gd::EventsCodeGenerationContext& context,
+      const gd::String& optionalAsyncCallbackName = "",
+      const gd::String& optionalAsyncCallbackId = "");
 
   virtual gd::String GenerateBehaviorAction(
       const gd::String& objectName,
       const gd::String& behaviorName,
       const gd::BehaviorMetadata& autoInfo,
+      const gd::String& functionCallName,
       const std::vector<gd::String>& arguments,
       const gd::InstructionMetadata& instrInfos,
-      gd::EventsCodeGenerationContext& context);
+      gd::EventsCodeGenerationContext& context,
+      const gd::String& optionalAsyncCallbackName = "",
+      const gd::String& optionalAsyncCallbackId = "");
 
   gd::String GenerateRelationalOperatorCall(
       const gd::InstructionMetadata& instrInfos,
       const std::vector<gd::String>& arguments,
       const gd::String& callStartString,
       std::size_t startFromArgument = 0);
+
   gd::String GenerateOperatorCall(const gd::InstructionMetadata& instrInfos,
                                   const std::vector<gd::String>& arguments,
                                   const gd::String& callStartString,
@@ -708,19 +836,27 @@ class GD_CORE_API EventsCodeGenerator {
   /**
    * Generate the getter to get the name of the specified behavior.
    */
-  virtual gd::String GenerateGetBehaviorNameCode(const gd::String& behaviorName);
+  virtual gd::String GenerateGetBehaviorNameCode(
+      const gd::String& behaviorName);
+
+  bool AreBehaviorParametersOfAllObjectsValid(
+      const gd::Instruction &instruction,
+      const gd::InstructionMetadata &instrInfos);
+
+  bool AreBehaviorParametersOfFirstObjectValid(
+      const gd::String &objectName, const gd::Instruction &instruction,
+      const gd::InstructionMetadata &instrInfos, bool isObjectInGroup);
 
   const gd::Platform& platform;  ///< The platform being used.
 
-  gd::ObjectsContainer& globalObjectsAndGroups;
-  const gd::ObjectsContainer& objectsAndGroups;
+  gd::ProjectScopedContainers projectScopedContainers;
 
   bool hasProjectAndLayout;  ///< true only if project and layout are valid
                              ///< references. If false, they should not be used.
-  gd::Project* project;      ///< The project being used.
-  const gd::Layout* scene;   ///< The scene being generated.
+  const gd::Project* project;  ///< The project being used.
+  const gd::Layout* scene;     ///< The scene being generated.
 
-  bool errorOccurred;          ///< Must be set to true if an error occured.
+  bool errorOccurred;          ///< Must be set to true if an error occurred.
   bool compilationForRuntime;  ///< Is set to true if the code generation is
                                ///< made for runtime only.
 
@@ -736,8 +872,13 @@ class GD_CORE_API EventsCodeGenerator {
   size_t maxCustomConditionsDepth;  ///< The maximum depth value for all the
                                     ///< custom conditions created.
   size_t maxConditionsListsSize;  ///< The maximum size of a list of conditions.
+
+  std::set<size_t>
+      instructionUniqueIds;  ///< The unique ids generated for instructions.
+  size_t eventsListNextUniqueId;  ///< The next identifier to use for an events
+                                  ///< list function name.
+
+  gd::DiagnosticReport* diagnosticReport;
 };
 
 }  // namespace gd
-
-#endif  // GDCORE_EVENTSCODEGENERATOR_H

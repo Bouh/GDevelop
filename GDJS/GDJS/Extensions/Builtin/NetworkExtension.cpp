@@ -4,6 +4,7 @@
  * reserved. This project is released under the MIT License.
  */
 #include "NetworkExtension.h"
+
 #include "GDCore/CommonTools.h"
 #include "GDCore/Events/CodeGeneration/EventsCodeGenerator.h"
 #include "GDCore/Extensions/Builtin/AllBuiltinExtensions.h"
@@ -16,20 +17,18 @@ NetworkExtension::NetworkExtension() {
   gd::BuiltinExtensionsImplementer::ImplementsNetworkExtension(*this);
 
   GetAllActions()["SendRequest"].SetFunctionName(
-      "gdjs.evtTools.network.sendHttpRequest");
-  GetAllActions()["JSONToVariableStructure"].SetFunctionName(
-      "gdjs.evtTools.network.jsonToVariableStructure");
-  GetAllActions()["JSONToGlobalVariableStructure"].SetFunctionName(
-      "gdjs.evtTools.network.jsonToVariableStructure");
-  GetAllActions()["JSONToObjectVariableStructure"].SetFunctionName(
-      "gdjs.evtTools.network.jsonToObjectVariableStructure");
+      "gdjs.evtTools.network.sendDeprecatedSynchronousRequest");
+  GetAllActions()["SendAsyncRequest"]
+      .SetFunctionName("gdjs.evtTools.network.sendAsyncRequest")
+      .SetAsyncFunctionName("gdjs.evtTools.network.sendAwaitableAsyncRequest");
+  GetAllActions()["EnableMetrics"].SetFunctionName(
+      "gdjs.evtTools.network.enableMetrics");
+  GetAllActions()["LaunchFile"].SetFunctionName("gdjs.evtTools.window.openURL");
 
-  GetAllStrExpressions()["ToJSON"].SetFunctionName(
-      "gdjs.evtTools.network.variableStructureToJSON");
-  GetAllStrExpressions()["GlobalVarToJSON"].SetFunctionName(
-      "gdjs.evtTools.network.variableStructureToJSON");
-  GetAllStrExpressions()["ObjectVarToJSON"].SetFunctionName(
-      "gdjs.evtTools.network.objectVariableStructureToJSON");
+  AddDependency()
+      .SetName("InAppBrowser Cordova plugin")
+      .SetDependencyType("cordova")
+      .SetExportName("cordova-plugin-inappbrowser");
 
   StripUnimplementedInstructionsAndExpressions();
 }

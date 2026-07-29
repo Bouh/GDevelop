@@ -5,6 +5,7 @@
  */
 
 #include "EventsList.h"
+
 #include "GDCore/Events/Event.h"
 #include "GDCore/Project/Project.h"
 #include "GDCore/Tools/Log.h"
@@ -94,6 +95,22 @@ bool EventsList::Contains(const gd::BaseEvent& eventToSearch,
     if (recursive && GetEvent(i).CanHaveSubEvents() &&
         GetEvent(i).GetSubEvents().Contains(eventToSearch))
       return true;
+  }
+
+  return false;
+}
+
+bool EventsList::MoveEventToAnotherEventsList(const gd::BaseEvent& eventToMove,
+                                              gd::EventsList& newEventsList,
+                                              std::size_t newPosition) {
+  for (std::size_t i = 0; i < GetEventsCount(); ++i) {
+    if (events[i].get() == &eventToMove) {
+      std::shared_ptr<BaseEvent> event = events[i];
+      events.erase(events.begin() + i);
+
+      newEventsList.InsertEvent(event, newPosition);
+      return true;
+    }
   }
 
   return false;

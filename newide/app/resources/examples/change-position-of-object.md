@@ -1,4 +1,0 @@
-# README
-
-Show how to move an object by changing its X and Y position.
-

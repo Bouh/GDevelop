@@ -1,6 +1,7 @@
 // @flow
 import axios from 'axios';
 import { GDevelopReleaseApi } from './ApiConfigs';
+import { ensureIsArray } from '../DataValidator';
 
 export type Release = {
   name: ?string,
@@ -8,14 +9,17 @@ export type Release = {
   description: ?string,
 };
 
-export const getReleases = (): Promise<Array<Release>> => {
-  return axios
-    .get(`${GDevelopReleaseApi.baseUrl}/release`, {
-      params: {
-        last: 4,
-      },
-    })
-    .then(response => response.data);
+export const getReleases = async (): Promise<Array<Release>> => {
+  // $FlowFixMe[underconstrained-implicit-instantiation]
+  const response = await axios.get(`${GDevelopReleaseApi.baseUrl}/release`, {
+    params: {
+      last: 4,
+    },
+  });
+  return ensureIsArray({
+    data: response.data,
+    endpointName: '/release of Release API',
+  });
 };
 
 export const hasBreakingChange = (release: Release): boolean => {

@@ -1,4 +1,0 @@
-# README
-
-Simulate a bouncing ball with ropes that can be created to move the ball around anchors.
-

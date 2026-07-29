@@ -15,6 +15,9 @@ class ExpressionMetadata;
 class ExpressionMetadata;
 class Platform;
 class PlatformExtension;
+class ObjectsContainersList;
+struct FunctionCallNode;
+struct ExpressionNode;
 }  // namespace gd
 
 namespace gd {
@@ -96,7 +99,7 @@ class GD_CORE_API MetadataProvider {
 
   /**
    * Get information about an expression, and its associated extension.
-   * Works for static expressions.
+   * Works for free expressions.
    */
   static ExtensionAndMetadata<ExpressionMetadata>
   GetExtensionAndExpressionMetadata(const gd::Platform& platform,
@@ -122,7 +125,7 @@ class GD_CORE_API MetadataProvider {
 
   /**
    * Get information about a string expression, and its associated extension.
-   * Works for static expressions.
+   * Works for free expressions.
    */
   static ExtensionAndMetadata<ExpressionMetadata>
   GetExtensionAndStrExpressionMetadata(const gd::Platform& platform,
@@ -180,7 +183,7 @@ class GD_CORE_API MetadataProvider {
 
   /**
    * Get information about an expression from its type
-   * Works for static expressions.
+   * Works for free expressions.
    */
   static const gd::ExpressionMetadata& GetExpressionMetadata(
       const gd::Platform& platform, gd::String exprType);
@@ -201,7 +204,7 @@ class GD_CORE_API MetadataProvider {
 
   /**
    * Get information about a string expression from its type
-   * Works for static expressions.
+   * Works for free expressions.
    */
   static const gd::ExpressionMetadata& GetStrExpressionMetadata(
       const gd::Platform& platform, gd::String exprType);
@@ -221,96 +224,61 @@ class GD_CORE_API MetadataProvider {
       const gd::Platform& platform, gd::String autoType, gd::String exprType);
 
   /**
-   * \brief Check if a (static) condition exists
-   * @return true if the (static) condition exists
+   * Get information about an expression from its type.
+   * Works for free expressions.
    */
-  static bool HasCondition(const gd::Platform& platform, gd::String name);
+  static const gd::ExpressionMetadata& GetAnyExpressionMetadata(
+      const gd::Platform& platform, gd::String exprType);
 
   /**
-   * \brief Check if a (static) action exists
-   * @return true if the (static) action exists
+   * Get information about an expression from its type.
+   * Works for object expressions.
    */
-  static bool HasAction(const gd::Platform& platform, gd::String name);
+  static const gd::ExpressionMetadata& GetObjectAnyExpressionMetadata(
+      const gd::Platform& platform, gd::String objectType, gd::String exprType);
+
+  static const gd::ExpressionMetadata& GetFunctionCallMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& node);
+
+  static const gd::ParameterMetadata* GetFunctionCallParameterMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& functionCall,
+    ExpressionNode& parameter);
+
+  static const gd::ParameterMetadata* GetFunctionCallParameterMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& functionCall,
+    int parameterIndex);
 
   /**
-   * \brief Check if a (object) action exists
-   * @return true if the (object) action exists
+   * Get information about an expression from its type.
+   * Works for behavior expressions.
    */
-  static bool HasObjectAction(const gd::Platform& platform,
-                              gd::String objectType,
-                              gd::String name);
-
-  /**
-   * \brief Check if a (object) condition exists
-   * @return true if the (object) condition exists
-   */
-  static bool HasObjectCondition(const gd::Platform& platform,
-                                 gd::String objectType,
-                                 gd::String name);
-
-  /**
-   * \brief Check if a (behavior) action exists
-   * @return true if the (behavior) action exists
-   */
-  static bool HasBehaviorAction(const gd::Platform& platform,
-                                gd::String behaviorType,
-                                gd::String name);
-
-  /**
-   * \brief Check if a (behavior) condition exists
-   * @return true if the (behavior) condition exists
-   */
-  static bool HasBehaviorCondition(const gd::Platform& platform,
-                                   gd::String behaviorType,
-                                   gd::String name);
-
-  /**
-   * \brief Check if a (static) expression exists
-   * @return true if the (static) expression exists
-   */
-  static bool HasExpression(const gd::Platform& platform, gd::String name);
-
-  /**
-   * \brief Check if a (object) expression exists
-   * @return true if the (object) expression exists
-   */
-  static bool HasObjectExpression(const gd::Platform& platform,
-                                  gd::String objectType,
-                                  gd::String name);
-
-  /**
-   * \brief Check if a (behavior) expression exists
-   * @return true if the (behavior) expression exists
-   */
-  static bool HasBehaviorExpression(const gd::Platform& platform,
-                                    gd::String behaviorType,
-                                    gd::String name);
-
-  /**
-   * \brief Check if a (static) string expression exists
-   * @return true if the (static) string expression exists
-   */
-  static bool HasStrExpression(const gd::Platform& platform, gd::String name);
-
-  /**
-   * \brief Check if a (object) string expression exists
-   * @return true if the (object) string expression exists
-   */
-  static bool HasObjectStrExpression(const gd::Platform& platform,
-                                     gd::String objectType,
-                                     gd::String name);
-
-  /**
-   * \brief Check if a (behavior) string expression exists
-   * @return true if the (behavior) string expression exists
-   */
-  static bool HasBehaviorStrExpression(const gd::Platform& platform,
-                                       gd::String behaviorType,
-                                       gd::String name);
+  static const gd::ExpressionMetadata& GetBehaviorAnyExpressionMetadata(
+      const gd::Platform& platform, gd::String autoType, gd::String exprType);
 
   static bool IsBadExpressionMetadata(const gd::ExpressionMetadata& metadata) {
-    return &metadata == &badExpressionMetadata ||
-           &metadata == &badStrExpressionMetadata;
+    return &metadata == &badExpressionMetadata;
+  }
+
+  static bool IsBadInstructionMetadata(const gd::InstructionMetadata& metadata) {
+    return &metadata == &badInstructionMetadata;
+  }
+
+  static bool IsBadBehaviorMetadata(const gd::BehaviorMetadata& metadata) {
+    return &metadata == &badBehaviorMetadata;
+  }
+
+  static bool IsBadObjectMetadata(const gd::ObjectMetadata& metadata) {
+    return &metadata == &badObjectInfo;
+  }
+
+  static bool IsBadEffectMetadata(const gd::EffectMetadata& metadata) {
+    return &metadata == &badEffectMetadata;
   }
 
   virtual ~MetadataProvider();
@@ -319,14 +287,13 @@ class GD_CORE_API MetadataProvider {
   MetadataProvider();
 
   static PlatformExtension badExtension;
-  static BehaviorMetadata badBehaviorInfo;
+  static BehaviorMetadata badBehaviorMetadata;
   static ObjectMetadata badObjectInfo;
   static EffectMetadata badEffectMetadata;
   static gd::InstructionMetadata badInstructionMetadata;
   static gd::ExpressionMetadata badExpressionMetadata;
-  static gd::ExpressionMetadata badStrExpressionMetadata;
-  int useless;  // Useless member to avoid emscripten "must have a positive
-                // integer typeid pointer" runtime error.
+  int useless = 0;  // Useless member to avoid emscripten "must have a positive
+                    // integer typeid pointer" runtime error.
 };
 
 }  // namespace gd

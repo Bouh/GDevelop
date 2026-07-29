@@ -1,18 +1,26 @@
+// @flow
 import React from 'react';
-import DragHandleIcon from '@material-ui/icons/DragHandle';
-import { SortableHandle } from 'react-sortable-hoc';
+import MUIDragHandleIcon from '@material-ui/icons/DragHandle';
 
 const styles = {
   handle: {
+    display: 'flex',
     cursor: 'move',
-    marginRight: 4,
+  },
+  disabledHandle: {
+    display: 'flex',
+    opacity: 0.4,
   },
   handleColor: '#DDD',
 };
 
-const DragHandle = SortableHandle(() => (
-  <span style={styles.handle}>
-    <DragHandleIcon htmlColor={styles.handleColor} />
+type Props = {|
+  disabled?: boolean,
+  color?: string,
+|};
+
+export const DragHandleIcon = (props: Props): React.MixedElement => (
+  <span style={props.disabled ? styles.disabledHandle : styles.handle}>
+    <MUIDragHandleIcon htmlColor={props.color || styles.handleColor} />
   </span>
-));
-export default DragHandle;
+);

@@ -1,79 +1,169 @@
+// @flow
 import React from 'react';
+import { I18n } from '@lingui/react';
+import { type I18n as I18nType } from '@lingui/core';
+import { type MenuItemTemplate } from './Menu.flow';
 import Menu from '@material-ui/core/Menu';
 import Fade from '@material-ui/core/Fade';
 import ElectronMenuImplementation from './ElectronMenuImplementation';
 import MaterialUIMenuImplementation from './MaterialUIMenuImplementation';
-import optionalRequire from '../../Utils/OptionalRequire.js';
+import optionalRequire from '../../Utils/OptionalRequire';
+import useForceUpdate from '../../Utils/UseForceUpdate';
+import { Drawer } from '@material-ui/core';
+import { isMobile } from '../../Utils/Platform';
+import { itemAboveBlockingLayerZIndex } from '../../InAppTutorial/BlockingLayerWithHoles';
+import PortalContainerContext from '../PortalContainerContext';
 const electron = optionalRequire('electron');
 
-class MaterialUIContextMenu extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      open: false,
-    };
-    this.menuImplementation = new MaterialUIMenuImplementation({
-      onClose: this._onClose,
-    });
+const getValidPortalContainer = (
+  portalContainer: ?HTMLElement
+): ?HTMLElement => {
+  if (!portalContainer) return undefined;
+
+  const ownerWindow = portalContainer.ownerDocument
+    ? portalContainer.ownerDocument.defaultView
+    : null;
+  if (ownerWindow && ownerWindow.closed) return undefined;
+
+  return portalContainer;
+};
+
+export type ContextMenuInterface = {|
+  open: (x: number, y: number, options: any) => void,
+|};
+
+type ContextMenuWrapperProps = {|
+  buildMenuTemplate: (i18n: I18nType, options: any) => Array<MenuItemTemplate>,
+|};
+
+type ContextMenuProps = {|
+  ...ContextMenuWrapperProps,
+  i18n: I18nType,
+|};
+
+const MaterialUIContextMenu = React.forwardRef<
+  ContextMenuProps,
+  ContextMenuInterface
+>((props, ref) => {
+  const [anchorPosition, setAnchorPosition] = React.useState<Array<number>>([
+    0,
+    0,
+  ]);
+  const [openMenu, setOpenMenu] = React.useState<boolean>(false);
+  const [buildOptions, setBuildOptions] = React.useState<any>({});
+  const forceUpdate = useForceUpdate();
+  const portalContainer = getValidPortalContainer(
+    React.useContext(PortalContainerContext)
+  );
+
+  const menuImplementation = new MaterialUIMenuImplementation({
+    onClose: () => setOpenMenu(false),
+    portalContainer,
+  });
+
+  // $FlowFixMe[missing-local-annot]
+  const open = (x, y, options) => {
+    setAnchorPosition([x, y]);
+    setBuildOptions(options);
+    setOpenMenu(true);
+  };
+
+  React.useImperativeHandle(ref, () => ({
+    open,
+  }));
+
+  if (!openMenu) {
+    // Don't render the menu when it's not opened, as `buildMenuTemplate` could
+    // be running logic to compute some labels or `enabled` flag values - and might
+    // not be prepared to do that when the menu is not opened.
+    return null;
   }
 
-  open = (x, y) => {
-    this.setState(
-      {
-        anchorX: x,
-        anchorY: y,
-      },
-      () => {
-        this.setState({
-          open: true,
-        });
-      }
-    );
-  };
+  if (isMobile()) {
+    const menuTemplate = props.buildMenuTemplate(props.i18n, buildOptions);
+    if (!menuTemplate.length) {
+      setOpenMenu(false);
+      return null;
+    }
 
-  _onClose = () => {
-    this.setState({
-      open: false,
-    });
-  };
-
-  render() {
     return (
-      <div>
-        <div
-          ref={element => (this.anchorEl = element)}
-          style={{
-            position: 'fixed',
-            pointerEvents: 'none',
-            left: this.state.anchorX,
-            top: this.state.anchorY,
-          }}
-        />
-        <Menu
-          open={this.state.open}
-          anchorEl={this.anchorEl}
-          onClose={this._onClose}
-          TransitionComponent={Fade}
-          {...this.menuImplementation.getMenuProps()}
-        >
-          {this.menuImplementation.buildFromTemplate(
-            this.props.buildMenuTemplate()
-          )}
-        </Menu>
-      </div>
+      <Drawer
+        anchor={'bottom'}
+        open={true}
+        onClose={() => setOpenMenu(false)}
+        transitionDuration={200}
+        PaperProps={{
+          style: {
+            animation: 'swipe-up-ending 0.2s ease-out',
+            paddingTop: 4,
+            paddingBottom: 18,
+            maxWidth: 600,
+            margin: 'auto',
+            maxHeight: '80vh',
+          },
+        }}
+        style={{
+          zIndex: itemAboveBlockingLayerZIndex,
+        }}
+        container={portalContainer}
+      >
+        {menuImplementation.buildFromTemplate(menuTemplate, forceUpdate)}
+      </Drawer>
     );
   }
-}
 
-class ElectronContextMenu extends React.Component {
-  constructor(props) {
-    super(props);
-    this.menuImplementation = new ElectronMenuImplementation();
-  }
+  return (
+    <Menu
+      open
+      anchorPosition={{
+        left: anchorPosition[0],
+        top: anchorPosition[1],
+      }}
+      // When rendered in a separate window (via WindowPortal), pass the
+      // portalContainer as anchorEl so that MUI's Popover derives the
+      // correct window for viewport-bounds calculations (innerWidth/
+      // innerHeight). Without this, it falls back to the main window.
+      // Positioning is still driven by anchorPosition, not anchorEl.
+      anchorEl={portalContainer || undefined}
+      style={{
+        zIndex: itemAboveBlockingLayerZIndex,
+      }}
+      anchorReference={'anchorPosition'}
+      container={portalContainer}
+      onClose={(event, reason) => {
+        if (reason === 'backdropClick') {
+          // Prevent any side effect of a backdrop click that should only
+          // close the context menu.
+          // When used in the ElementWithMenu component, there are cases where
+          // the event propagates to the element on which the menu is set up and
+          // then the event bubbles up, triggering click events on its way up.
+          event.stopPropagation();
+        }
+        setOpenMenu(false);
+      }}
+      TransitionComponent={Fade}
+      {...menuImplementation.getMenuProps()}
+    >
+      {menuImplementation.buildFromTemplate(
+        props.buildMenuTemplate(props.i18n, buildOptions),
+        forceUpdate
+      )}
+    </Menu>
+  );
+});
 
-  open = (x, y) => {
-    this.menuImplementation.buildFromTemplate(this.props.buildMenuTemplate());
-    this.menuImplementation.showMenu({
+const ElectronContextMenu = React.forwardRef<
+  ContextMenuProps,
+  ContextMenuInterface
+>((props, ref) => {
+  const menuImplementation = new ElectronMenuImplementation();
+
+  // $FlowFixMe[missing-local-annot]
+  const open = (x, y, options) => {
+    menuImplementation.buildFromTemplate(
+      props.buildMenuTemplate(props.i18n, options)
+    );
+    menuImplementation.showMenu({
       left: x || 0,
       top: y || 0,
       width: 0,
@@ -81,9 +171,33 @@ class ElectronContextMenu extends React.Component {
     });
   };
 
-  render() {
-    return null;
-  }
-}
+  React.useImperativeHandle(ref, () => ({
+    open,
+  }));
 
-export default (electron ? ElectronContextMenu : MaterialUIContextMenu);
+  return null;
+});
+
+const ContextMenu = electron ? ElectronContextMenu : MaterialUIContextMenu;
+
+export default (React.forwardRef<ContextMenuWrapperProps, ContextMenuInterface>(
+  (props, ref) => {
+    const contextMenuRef = React.useRef<?ContextMenuInterface>(null);
+    React.useImperativeHandle(ref, () => ({
+      open: (x, y, options) => {
+        if (contextMenuRef.current) contextMenuRef.current.open(x, y, options);
+      },
+    }));
+
+    return (
+      <I18n>
+        {({ i18n }) => (
+          <ContextMenu {...props} i18n={i18n} ref={contextMenuRef} />
+        )}
+      </I18n>
+    );
+  }
+): React.ComponentType<{
+  ...ContextMenuWrapperProps,
+  +ref?: React.RefSetter<ContextMenuInterface>,
+}>);

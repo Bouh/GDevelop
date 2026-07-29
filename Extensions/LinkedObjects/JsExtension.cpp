@@ -6,6 +6,7 @@ This project is released under the MIT License.
 */
 #if defined(GD_IDE_ONLY)
 #include "GDCore/Extensions/PlatformExtension.h"
+#include "GDCore/Tools/Localization.h"
 
 #include <iostream>
 #include "GDCore/Tools/Localization.h"
@@ -25,23 +26,18 @@ class LinkedObjectsJsExtension : public gd::PlatformExtension {
     DeclareLinkedObjectsExtension(*this);
 
     GetAllActions()["LinkedObjects::LinkObjects"]
-        .codeExtraInformation
         .SetIncludeFile("Extensions/LinkedObjects/linkedobjects.js")
         .SetFunctionName("gdjs.evtTools.linkedObjects.linkObjects");
     GetAllActions()["LinkedObjects::RemoveLinkBetween"]
-        .codeExtraInformation
         .SetIncludeFile("Extensions/LinkedObjects/linkedobjects.js")
         .SetFunctionName("gdjs.evtTools.linkedObjects.removeLinkBetween");
     GetAllActions()["LinkedObjects::RemoveAllLinksOf"]
-        .codeExtraInformation
         .SetIncludeFile("Extensions/LinkedObjects/linkedobjects.js")
         .SetFunctionName("gdjs.evtTools.linkedObjects.removeAllLinksOf");
     GetAllActions()["LinkedObjects::PickObjectsLinkedTo"]
-        .codeExtraInformation
         .SetIncludeFile("Extensions/LinkedObjects/linkedobjects.js")
         .SetFunctionName("gdjs.evtTools.linkedObjects.pickObjectsLinkedTo");
     GetAllConditions()["LinkedObjects::PickObjectsLinkedTo"]
-        .codeExtraInformation
         .SetIncludeFile("Extensions/LinkedObjects/linkedobjects.js")
         .SetFunctionName("gdjs.evtTools.linkedObjects.pickObjectsLinkedTo");
 

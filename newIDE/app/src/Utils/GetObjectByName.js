@@ -1,14 +1,17 @@
 // @flow
 
 export default function getObjectByName(
-  project: gdProject,
-  layout?: ?gdLayout,
-  associatedObjectName: string
+  globalObjectsContainer: gdObjectsContainer | null,
+  objectsContainer?: ?gdObjectsContainer,
+  objectName: string
 ): ?gdObject {
-  let associatedObject = null;
-  if (layout && layout.hasObjectNamed(associatedObjectName))
-    associatedObject = layout.getObject(associatedObjectName);
-  else if (project.hasObjectNamed(associatedObjectName))
-    associatedObject = project.getObject(associatedObjectName);
-  return associatedObject;
+  if (objectsContainer && objectsContainer.hasObjectNamed(objectName))
+    return objectsContainer.getObject(objectName);
+  else if (
+    globalObjectsContainer &&
+    globalObjectsContainer.hasObjectNamed(objectName)
+  )
+    return globalObjectsContainer.getObject(objectName);
+
+  return null;
 }

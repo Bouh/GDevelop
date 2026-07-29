@@ -13,6 +13,7 @@
 
 // Built-in extensions
 #include "GDJS/Extensions/Builtin/AdvancedExtension.h"
+#include "GDJS/Extensions/Builtin/AsyncExtension.h"
 #include "GDJS/Extensions/Builtin/AudioExtension.h"
 #include "GDJS/Extensions/Builtin/BaseObjectExtension.h"
 #include "GDJS/Extensions/Builtin/CameraExtension.h"
@@ -20,7 +21,6 @@
 #include "GDJS/Extensions/Builtin/CommonInstructionsExtension.h"
 #include "GDJS/Extensions/Builtin/ExternalLayoutsExtension.h"
 #include "GDJS/Extensions/Builtin/FileExtension.h"
-#include "GDJS/Extensions/Builtin/JoystickExtension.h"
 #include "GDJS/Extensions/Builtin/KeyboardExtension.h"
 #include "GDJS/Extensions/Builtin/MathematicalToolsExtension.h"
 #include "GDJS/Extensions/Builtin/MouseExtension.h"
@@ -31,6 +31,13 @@
 #include "GDJS/Extensions/Builtin/TimeExtension.h"
 #include "GDJS/Extensions/Builtin/VariablesExtension.h"
 #include "GDJS/Extensions/Builtin/WindowExtension.h"
+#include "GDJS/Extensions/Builtin/Capacities/AnimatableExtension.h"
+#include "GDJS/Extensions/Builtin/Capacities/EffectExtension.h"
+#include "GDJS/Extensions/Builtin/Capacities/FlippableExtension.h"
+#include "GDJS/Extensions/Builtin/Capacities/ResizableExtension.h"
+#include "GDJS/Extensions/Builtin/Capacities/ScalableExtension.h"
+#include "GDJS/Extensions/Builtin/Capacities/OpacityExtension.h"
+#include "GDJS/Extensions/Builtin/Capacities/TextContainerExtension.h"
 
 namespace gdjs {
 
@@ -71,6 +78,8 @@ void JsPlatform::ReloadBuiltinExtensions() {
   AddExtension(
       std::shared_ptr<gd::PlatformExtension>(new CommonInstructionsExtension));
   std::cout.flush();
+  AddExtension(std::shared_ptr<gd::PlatformExtension>(new AsyncExtension));
+  std::cout.flush();
   AddExtension(
       std::shared_ptr<gd::PlatformExtension>(new CommonConversionsExtension));
   std::cout.flush();
@@ -79,8 +88,6 @@ void JsPlatform::ReloadBuiltinExtensions() {
   AddExtension(std::shared_ptr<gd::PlatformExtension>(new MouseExtension));
   std::cout.flush();
   AddExtension(std::shared_ptr<gd::PlatformExtension>(new KeyboardExtension));
-  std::cout.flush();
-  AddExtension(std::shared_ptr<gd::PlatformExtension>(new JoystickExtension));
   std::cout.flush();
   AddExtension(std::shared_ptr<gd::PlatformExtension>(new SceneExtension));
   std::cout.flush();
@@ -107,10 +114,31 @@ void JsPlatform::ReloadBuiltinExtensions() {
   AddExtension(
       std::shared_ptr<gd::PlatformExtension>(new ExternalLayoutsExtension));
   std::cout.flush();
+  AddExtension(
+      std::shared_ptr<gd::PlatformExtension>(new AnimatableExtension));
+  std::cout.flush();
+  AddExtension(
+      std::shared_ptr<gd::PlatformExtension>(new EffectExtension));
+  std::cout.flush();
+  AddExtension(
+      std::shared_ptr<gd::PlatformExtension>(new FlippableExtension));
+  std::cout.flush();
+  AddExtension(
+      std::shared_ptr<gd::PlatformExtension>(new ResizableExtension));
+  std::cout.flush();
+  AddExtension(
+      std::shared_ptr<gd::PlatformExtension>(new ScalableExtension));
+  std::cout.flush();
+  AddExtension(
+      std::shared_ptr<gd::PlatformExtension>(new OpacityExtension));
+  std::cout.flush();
+  AddExtension(
+      std::shared_ptr<gd::PlatformExtension>(new TextContainerExtension));
+  std::cout.flush();
   std::cout << "done." << std::endl;
 
-#if defined(EMSCRIPTEN)  // When compiling with emscripten, hardcode extensions
-                         // to load.
+#if defined(EMSCRIPTEN) // When compiling with emscripten, hardcode extensions
+                        // to load.
   std::cout << "* Loading other extensions... ";
   std::cout.flush();
   AddExtension(std::shared_ptr<gd::PlatformExtension>(
@@ -176,7 +204,8 @@ void JsPlatform::AddNewExtension(const gd::PlatformExtension &extension) {
 JsPlatform::JsPlatform() : gd::Platform() { ReloadBuiltinExtensions(); }
 
 JsPlatform &JsPlatform::Get() {
-  if (!singleton) singleton = new JsPlatform;
+  if (!singleton)
+    singleton = new JsPlatform;
 
   return *singleton;
 }
@@ -202,4 +231,4 @@ extern "C" gd::Platform *GD_API CreateGDPlatform() {
 extern "C" void GD_API DestroyGDPlatform() { JsPlatform::DestroySingleton(); }
 #endif
 
-}  // namespace gdjs
+} // namespace gdjs

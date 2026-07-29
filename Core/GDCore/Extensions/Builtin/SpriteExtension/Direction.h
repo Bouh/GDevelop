@@ -3,12 +3,12 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef GDCORE_DIRECTION_H
-#define GDCORE_DIRECTION_H
+#pragma once
+
 #include <vector>
 #include "GDCore/String.h"
+#include "GDCore/Extensions/Builtin/SpriteExtension/Sprite.h"
 namespace gd {
-class Sprite;
 class SerializerElement;
 }
 
@@ -43,14 +43,14 @@ class GD_CORE_API Direction {
   /**
    * \brief Get the time between each sprite
    */
-  inline float GetTimeBetweenFrames() const { return timeBetweenFrame; }
+  inline double GetTimeBetweenFrames() const { return timeBetweenFrame; }
 
   /**
    * \brief Set the time between each sprite
    *
    * \param time Time between each sprite, in seconds.
    */
-  void SetTimeBetweenFrames(float time);
+  void SetTimeBetweenFrames(double time);
 
   /**
    * \brief Return a reference to a sprite of the direction.
@@ -71,6 +71,13 @@ class GD_CORE_API Direction {
    * \return A reference to the sprite.
    */
   Sprite& GetSprite(std::size_t nb);
+
+  /**
+   * \brief Return a vector of references to sprite names.
+   *
+   * \return A vector of all sprite names references.
+   */
+  const std::vector<gd::String>& GetSpriteNames() const;
 
   /**
    * \brief Check if the direction contains sprites.
@@ -113,7 +120,6 @@ class GD_CORE_API Direction {
    */
   void MoveSprite(std::size_t oldIndex, std::size_t newIndex);
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Set the metadata (any string) associated to the Direction.
    * \note Can be used by external editors to store extra information.
@@ -124,21 +130,15 @@ class GD_CORE_API Direction {
    * \brief Return the (optional) metadata associated to the Direction.
    */
   virtual const gd::String& GetMetadata() const { return metadata; }
-#endif
 
   void UnserializeFrom(const gd::SerializerElement& element);
-#if defined(GD_IDE_ONLY)
   void SerializeTo(gd::SerializerElement& element) const;
-#endif
 
  private:
   bool loop;               ///< true if the animation must loop.
-  float timeBetweenFrame;  ///< The time between each sprite of the animation.
+  double timeBetweenFrame;  ///< The time between each sprite of the animation.
   std::vector<Sprite> sprites;  ///< The sprites of the direction.
-#if defined(GD_IDE_ONLY)
   gd::String metadata;
-#endif
 };
 
 }  // namespace gd
-#endif  // GDCORE_DIRECTION_H

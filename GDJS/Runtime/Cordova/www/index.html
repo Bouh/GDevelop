@@ -3,12 +3,12 @@
 <head>
 	<title></title>
 	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0, viewport-fit=cover" />
 	<style type="text/css">
 		/* Prevent copy paste for all elements except text fields */
 		*  { -webkit-user-select:none; -webkit-tap-highlight-color:rgba(255, 255, 255, 0); }
 		input, textarea  { -webkit-user-select:text; }
-		body { background-color:black; color:white }
+		body { background-color:black; }
         /* GDJS_CUSTOM_STYLE */
 	</style>
 	<script src='cordova.js'></script>
@@ -20,10 +20,6 @@
 				navigator.splashscreen.hide();
 
 				//Initialization
-				gdjs.registerObjects();
-				gdjs.registerBehaviors();
-				gdjs.registerGlobalCallbacks();
-
 				var game = new gdjs.RuntimeGame(gdjs.projectData, {}/*GDJS_ADDITIONAL_SPEC*/);
 
 				//Create a renderer

@@ -1,4 +1,0 @@
-# README
-
-This shows how to use the forces built in GDevelop to move an object.
-

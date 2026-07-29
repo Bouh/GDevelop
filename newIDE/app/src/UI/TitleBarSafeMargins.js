@@ -1,0 +1,130 @@
+// @flow
+import * as React from 'react';
+import { isMacLike } from '../Utils/Platform';
+import useForceUpdate from '../Utils/UseForceUpdate';
+import Window, { useWindowControlsOverlayWatcher } from '../Utils/Window';
+import optionalRequire from '../Utils/OptionalRequire';
+import PortalContainerContext from './PortalContainerContext';
+
+const electron = optionalRequire('electron');
+
+const titleBarStyles = {
+  leftSideArea: {
+    alignSelf: 'stretch',
+    flexShrink: 0,
+  },
+  rightSideArea: { alignSelf: 'stretch', flexShrink: 0 },
+};
+
+/**
+ * Return the Window object for the current context. When rendered inside
+ * a popped-out window (WindowPortal), PortalContainerContext points to a
+ * DOM element in the external window — so ownerDocument.defaultView gives
+ * us the correct window. Falls back to the global window otherwise.
+ */
+const useCurrentWindow = (): typeof window => {
+  const portalContainer = React.useContext(PortalContainerContext);
+  if (portalContainer) {
+    const ownerWindow = portalContainer.ownerDocument.defaultView;
+    if (ownerWindow) return ownerWindow;
+  }
+  return window;
+};
+
+export const TitleBarLeftSafeMargins = ({
+  backgroundColor,
+}: {|
+  backgroundColor?: string,
+|}): null | React.MixedElement => {
+  // An installed PWA can have window controls displayed as overlay. If supported,
+  // we set up a listener to detect any change and force a refresh that will read
+  // the latest size of the controls.
+  const forceUpdate = useForceUpdate();
+  const currentWindow = useCurrentWindow();
+  useWindowControlsOverlayWatcher({
+    onChanged: forceUpdate,
+    targetWindow: currentWindow,
+  });
+
+  let leftSideOffset = 0;
+  // macOS displays the "traffic lights" on the left.
+  const isDesktopMacosFullScreen =
+    !!electron && isMacLike() && Window.isFullScreen();
+
+  if (isDesktopMacosFullScreen) {
+    // When in full screen on macOS, the "traffic lights" are not in the overlay.
+    leftSideOffset = 0;
+  } else {
+    // Otherwise, the windowControlsOverlay tells us how much space is needed.
+    // This can happen for mac apps, or installed PWA.
+    // $FlowFixMe[incompatible-type] - this API is not handled by Flow.
+    // $FlowFixMe[prop-missing]
+    const { windowControlsOverlay } = currentWindow.navigator;
+    if (windowControlsOverlay) {
+      if (windowControlsOverlay.visible) {
+        const { x } = windowControlsOverlay.getTitlebarAreaRect();
+        leftSideOffset = x;
+      }
+    }
+  }
+
+  if (leftSideOffset) {
+    return (
+      <div
+        style={{
+          ...titleBarStyles.leftSideArea,
+          width: leftSideOffset,
+          backgroundColor: backgroundColor || 'transparent',
+        }}
+      />
+    );
+  }
+
+  // Not on the desktop app, and not in an installed PWA with window controls displayed
+  // as overlay: no need to display a spacing.
+  return null;
+};
+
+export const TitleBarRightSafeMargins = ({
+  backgroundColor,
+}: {|
+  backgroundColor?: string,
+|}): React.MixedElement => {
+  // An installed PWA can have window controls displayed as overlay. If supported,
+  // we set up a listener to detect any change and force a refresh that will read
+  // the latest size of the controls.
+  const forceUpdate = useForceUpdate();
+  const currentWindow = useCurrentWindow();
+  useWindowControlsOverlayWatcher({
+    onChanged: forceUpdate,
+    targetWindow: currentWindow,
+  });
+
+  const isDesktopWindowsOrLinux = !!electron && !isMacLike();
+  // Windows and Linux have their "window controls" on the right
+  let rightSideOffset = isDesktopWindowsOrLinux ? 150 : 0;
+
+  // An installed PWA can have window controls displayed as overlay,
+  // which we measure here to set the offsets.
+  // $FlowFixMe[incompatible-type] - this API is not handled by Flow.
+  // $FlowFixMe[prop-missing]
+  const { windowControlsOverlay } = currentWindow.navigator;
+  if (windowControlsOverlay) {
+    if (windowControlsOverlay.visible) {
+      const { x, width } = windowControlsOverlay.getTitlebarAreaRect();
+      rightSideOffset = currentWindow.innerWidth - x - width;
+    }
+  }
+
+  // Always display this draggable area, as it will take the whole available space
+  // in the title bar.
+  return (
+    <div
+      style={{
+        ...titleBarStyles.rightSideArea,
+        minWidth: rightSideOffset,
+        backgroundColor: backgroundColor || 'transparent',
+      }}
+    />
+  );
+};

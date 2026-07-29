@@ -1,35 +1,45 @@
 // @flow
 import * as React from 'react';
 import DragAndDropContextProvider from '../UI/DragAndDrop/DragAndDropContextProvider';
-import EditorMosaic from '../UI/EditorMosaic';
+import { type EditorMosaicInterface } from '../UI/EditorMosaic';
 import FixedHeightFlexContainer from './FixedHeightFlexContainer';
 import { Line, Column } from '../UI/Grid';
-import EditorNavigator from '../UI/EditorMosaic/EditorNavigator';
+import { type EditorNavigatorInterface } from '../UI/EditorMosaic/EditorNavigator';
 
 type OpenEditorFunction = (
   editorName: string,
-  position: 'start' | 'end',
-  slipPercentage: number
+  position: 'left' | 'right' | 'bottom'
 ) => void;
 
 type Props = {|
   renderButtons: ({| openEditor: OpenEditorFunction |}) => React.Node,
   renderEditorMosaic: ({
-    // $FlowFixMe
-    editorRef: { current: EditorMosaic | EditorNavigator | null },
+    editorRef: {
+      current: EditorMosaicInterface | EditorNavigatorInterface | null,
+    },
   }) => React.Node,
 |};
 
-export default ({ renderButtons, renderEditorMosaic }: Props) => {
-  // $FlowFixMe
-  const editorRef = React.useRef((null: ?EditorMosaic | ?EditorNavigator));
+const EditorMosaicPlayground = ({
+  renderButtons,
+  renderEditorMosaic,
+}: Props): React.Node => {
+  const editorRef = React.useRef<
+    EditorMosaicInterface | EditorNavigatorInterface | null
+  >(null);
   const openEditor = (
     editorName: string,
-    position: 'start' | 'end',
-    slipPercentage: number
+    position: 'left' | 'right' | 'bottom'
   ) => {
-    if (editorRef.current)
-      editorRef.current.openEditor(editorName, position, slipPercentage);
+    if (editorRef.current && editorRef.current.toggleEditor)
+      editorRef.current.toggleEditor(editorName, position);
+    else if (editorRef.current && editorRef.current.openEditor)
+      editorRef.current.openEditor(editorName);
+    else {
+      console.error(
+        'EditorMosaicPlayground: editorRef.current is not a valid editor mosaic or editor navigator'
+      );
+    }
   };
 
   return (
@@ -43,3 +53,4 @@ export default ({ renderButtons, renderEditorMosaic }: Props) => {
     </DragAndDropContextProvider>
   );
 };
+export default EditorMosaicPlayground;

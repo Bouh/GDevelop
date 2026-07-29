@@ -1,4 +1,0 @@
-# README
-
-Show how to rotate an object so that it looks toward a specified position on the scene.
-

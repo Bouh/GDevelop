@@ -1,4 +1,0 @@
-# README
-
-This shows how to create a grid with random color, and let the player choose one.
-

@@ -3,7 +3,6 @@
 #include "GDCore/Project/InitialInstancesContainer.h"
 #include "GDCore/Project/Layout.h"
 #include "GDCore/Project/Project.h"
-#include "GDCore/TinyXml/tinyxml.h"
 #include "GDCore/Tools/VersionWrapper.h"
 #include "GDJS/Extensions/JsPlatform.h"
 
@@ -54,15 +53,14 @@ class ProjectHelper {
     gd::Project project;
     project.AddPlatform(JsPlatform::Get());
 
-    gd::SerializerElement behaviorContent;
-    behavior->InitializeContent(behaviorContent);
+    behavior->InitializeContent();
 
     // Call GetProperties as a sanity check
-    behavior->GetProperties(behaviorContent, project)[propertyName].GetValue();
+    behavior->GetProperties()[propertyName].GetValue();
 
-    behavior->UpdateProperty(behaviorContent, propertyName, newValue, project);
+    behavior->UpdateProperty(propertyName, newValue);
     gd::String updatedValue =
-        behavior->GetProperties(behaviorContent, project)[propertyName].GetValue();
+        behavior->GetProperties()[propertyName].GetValue();
     if (updatedValue != newValue) {
       return "FAIL: expected the newValue to be set for the property, but "
              "received:" +
@@ -83,15 +81,14 @@ class ProjectHelper {
     gd::Project project;
     project.AddPlatform(JsPlatform::Get());
 
-    gd::SerializerElement sharedDataContent;
-    sharedData->InitializeContent(sharedDataContent);
+    sharedData->InitializeContent();
 
     // Call GetProperties as a sanity check
-    sharedData->GetProperties(sharedDataContent, project)[propertyName].GetValue();
+    sharedData->GetProperties()[propertyName].GetValue();
 
-    sharedData->UpdateProperty(sharedDataContent, propertyName, newValue, project);
+    sharedData->UpdateProperty(propertyName, newValue);
     gd::String updatedValue =
-        sharedData->GetProperties(sharedDataContent, project)[propertyName].GetValue();
+        sharedData->GetProperties()[propertyName].GetValue();
     if (updatedValue != newValue) {
       return "FAIL: expected the newValue to be set for the property, but "
              "received:" +
@@ -105,25 +102,28 @@ class ProjectHelper {
    * \brief This check that the given gd::Object can be properly cloned
    * and have the given property updated.
    */
-  static gd::String SanityCheckObjectProperty(gd::Object* object,
-                                              const gd::String& propertyName,
-                                              const gd::String& newValue) {
-    if (!object) return "FAIL: object passed is null";
+  static gd::String SanityCheckObjectProperty(
+      gd::ObjectConfiguration* objectConfiguration,
+      const gd::String& propertyName,
+      const gd::String& newValue) {
+    if (!objectConfiguration) return "FAIL: object passed is null";
     gd::Project project;
     project.AddPlatform(JsPlatform::Get());
 
-    gd::String originalValue =
-        object->GetProperties(project)[propertyName].GetValue();
+    gd::Object object("MyObject", "", objectConfiguration->Clone());
 
-    std::unique_ptr<gd::Object> copiedObject = object->Clone();
-    if (copiedObject->GetProperties(project)[propertyName].GetValue() !=
+    gd::String originalValue =
+        object.GetConfiguration().GetProperties()[propertyName].GetValue();
+
+    std::unique_ptr<gd::Object> copiedObject = object.Clone();
+    if (copiedObject->GetConfiguration().GetProperties()[propertyName].GetValue() !=
         originalValue) {
       return "FAIL: Cloning the object does not copy properly the property";
     }
 
-    object->UpdateProperty(propertyName, newValue, project);
+    object.GetConfiguration().UpdateProperty(propertyName, newValue);
     gd::String updatedValue =
-        object->GetProperties(project)[propertyName].GetValue();
+        object.GetConfiguration().GetProperties()[propertyName].GetValue();
     if (updatedValue != newValue) {
       return "FAIL: expected the newValue to be set for the property, but "
              "received:" +
@@ -131,7 +131,7 @@ class ProjectHelper {
     }
 
     gd::String copiedObjectValue =
-        copiedObject->GetProperties(project)[propertyName].GetValue();
+        copiedObject->GetConfiguration().GetProperties()[propertyName].GetValue();
     if (copiedObjectValue != originalValue) {
       return "FAIL: Updating the property of the object will change the "
              "property of the cloned object. Clone object property is "
@@ -147,35 +147,40 @@ class ProjectHelper {
    * and return/set the properties of a gd::InitialInstance.
    */
   static gd::String SanityCheckObjectInitialInstanceProperty(
-      gd::Object* object,
+      gd::ObjectConfiguration* objectConfiguration,
       const gd::String& propertyName,
       const gd::String& newValue) {
-    if (!object) return "FAIL: object passed is null";
+    if (!objectConfiguration) return "FAIL: object passed is null";
 
     gd::Project project;
     project.AddPlatform(JsPlatform::Get());
     gd::Layout layout;
     gd::InitialInstance instance;
 
+    gd::Object object("MyObject", "", objectConfiguration->Clone());
+
     gd::String originalValue = object
-                                   ->GetInitialInstanceProperties(
-                                       instance, project, layout)[propertyName]
+                                   .GetConfiguration()
+                                   .GetInitialInstanceProperties(
+                                       instance)[propertyName]
                                    .GetValue();
 
-    std::unique_ptr<gd::Object> copiedObject = object->Clone();
+    std::unique_ptr<gd::Object> copiedObject = object.Clone();
     if (copiedObject
-            ->GetInitialInstanceProperties(
-                instance, project, layout)[propertyName]
+            ->GetConfiguration()
+            .GetInitialInstanceProperties(
+                instance)[propertyName]
             .GetValue() != originalValue) {
       return "FAIL: Cloned object does not return the same initial value for "
              "the instance property";
     }
 
-    copiedObject->UpdateInitialInstanceProperty(
-        instance, propertyName, newValue, project, layout);
+    copiedObject->GetConfiguration().UpdateInitialInstanceProperty(
+        instance, propertyName, newValue);
     gd::String updatedValue = copiedObject
-                                  ->GetInitialInstanceProperties(
-                                      instance, project, layout)[propertyName]
+                                  ->GetConfiguration()
+                                  .GetInitialInstanceProperties(
+                                      instance)[propertyName]
                                   .GetValue();
     if (updatedValue != newValue) {
       return "FAIL: expected the newValue to be set for the instance property "

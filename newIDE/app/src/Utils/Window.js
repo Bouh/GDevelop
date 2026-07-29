@@ -1,13 +1,18 @@
 // @flow
-
-import optionalRequire from './OptionalRequire.js';
+import * as React from 'react';
+import optionalRequire from './OptionalRequire';
 import URLSearchParams from 'url-search-params';
 import { isWindows } from './Platform';
+import debounce from 'lodash/debounce';
+import { hexToRGBColor, isLightRgbColor } from './ColorTransformer';
 const electron = optionalRequire('electron');
+const remote = optionalRequire('@electron/remote');
 const shell = electron ? electron.shell : null;
-const dialog = electron ? electron.remote.dialog : null;
+const dialog = remote ? remote.dialog : null;
+const ipcRenderer = electron ? electron.ipcRenderer : null;
 
 export type AppArguments = { [string]: any };
+type YesNoCancelDialogChoice = 'yes' | 'no' | 'cancel';
 
 /**
  * The name of the key, in AppArguments, containing the array of
@@ -15,16 +20,94 @@ export type AppArguments = { [string]: any };
  */
 export const POSITIONAL_ARGUMENTS_KEY = '_';
 
-let currentTitleBarColor: ?string = null;
+const documentBackgroundColors: WeakMap<Document, string> = new WeakMap();
+const documentToTargetId: WeakMap<Document, string> = new WeakMap();
+
+/**
+ * Register a mapping from a window Document to the target
+ * used in window.open().
+ */
+export const registerDocumentTargetId = (doc: Document, frameName: string) => {
+  documentToTargetId.set(doc, frameName);
+};
+
+export const unregisterDocumentTargetId = (doc: Document) => {
+  documentToTargetId.delete(doc);
+};
+
+// Per-navigator watcher state: each window's windowControlsOverlay gets its
+// own debounced listener and set of callbacks.
+type OverlayWatcherState = {|
+  callbacks: Set<() => void>,
+  debouncedHandler: () => void,
+|};
+const overlayWatchers: WeakMap<Object, OverlayWatcherState> = new WeakMap();
+
+const getOrCreateOverlayWatcher = (
+  windowControlsOverlay: Object
+): OverlayWatcherState => {
+  const existing = overlayWatchers.get(windowControlsOverlay);
+  if (existing) return existing;
+
+  const state: OverlayWatcherState = {
+    callbacks: new Set<() => void>(),
+    debouncedHandler: debounce(() => {
+      for (const callback of state.callbacks) {
+        callback();
+      }
+    }, 20),
+  };
+  windowControlsOverlay.addEventListener(
+    'geometrychange',
+    state.debouncedHandler
+  );
+  overlayWatchers.set(windowControlsOverlay, state);
+  return state;
+};
+
+/**
+ * Listen to the changes to the window controls provided by the operating system:
+ *
+ * - An installed PWA can have window controls displayed as overlay. If supported,
+ * we set up a listener to detect any change and notify the caller.
+ * - On Electron, the window controls are always integrated in the app - so this does nothing.
+ *
+ * Accepts an optional `targetWindow` parameter so that popped-out windows
+ * (which have their own navigator) can watch their own overlay.
+ */
+export const useWindowControlsOverlayWatcher = ({
+  onChanged,
+  targetWindow,
+}: {|
+  onChanged: () => void,
+  targetWindow?: typeof window,
+|}) => {
+  React.useEffect(
+    () => {
+      const win = targetWindow || window;
+      // $FlowFixMe[incompatible-type] - this API is not handled by Flow.
+      // $FlowFixMe[prop-missing]
+      const { windowControlsOverlay } = win.navigator;
+      if (!windowControlsOverlay) return;
+
+      const state = getOrCreateOverlayWatcher(windowControlsOverlay);
+      state.callbacks.add(onChanged);
+      return () => {
+        state.callbacks.delete(onChanged);
+      };
+    },
+    [onChanged, targetWindow]
+  );
+};
 
 /**
  * Various utilities related to the app window management.
  */
 export default class Window {
   static setTitle(title: string) {
-    if (electron) {
+    if (remote) {
       try {
-        const browserWindow = electron.remote.getCurrentWindow();
+        const browserWindow = remote.getCurrentWindow();
         browserWindow.setTitle(title);
       } catch (err) {
         // This rarely, but sometimes happen that setTitle throw.
@@ -39,37 +122,73 @@ export default class Window {
     }
   }
 
-  static setTitleBarColor(newColor: string) {
-    if (electron) {
-      // Nothing to do, the title bar is using the system window management.
+  static setWindowBackgroundColor(newColor: string, targetDocument?: Document) {
+    const doc = targetDocument || document;
+
+    if (!newColor) {
+      // Be defensive against themes missing a color (for instance, a
+      // newly added variable that an older or custom theme doesn't define):
+      // skip the update rather than crashing.
       return;
     }
 
-    if (currentTitleBarColor === newColor) {
+    if (documentBackgroundColors.get(doc) === newColor) {
       // Avoid potentially expensive DOM query/modification if no changes needed.
       return;
     }
 
-    const metaElement = document.querySelector('meta[name="theme-color"]');
+    if (ipcRenderer) {
+      // Update the window controls and background colors on Windows/Linux.
+      // For the main window, the main process resolves via event.sender.
+      // For popped-out editor windows (opened via window.open and rendered
+      // into via React portals), event.sender is always the main window's
+      // webContents, so we pass the frameName and let the main process
+      // resolve it to the correct BrowserWindow.
+      ipcRenderer.invoke(
+        'titlebar-set-overlay-options',
+        {
+          color: newColor,
+          // $FlowFixMe[incompatible-type]
+          symbolColor: isLightRgbColor(hexToRGBColor(newColor))
+            ? '#000000'
+            : '#ffffff',
+        },
+        documentToTargetId.get(doc)
+      );
+    }
+
+    // Update the PWA titlebar/controls color (if it's an installed PWA).
+    const metaElement = doc.querySelector('meta[name="theme-color"]');
     if (metaElement) {
       metaElement.setAttribute('content', newColor);
-      currentTitleBarColor = newColor;
     }
+
+    // Update the window background color. Update both `body` and `html` elements
+    // to ensure the background color is visible when resized.
+    const body = doc.body;
+    if (body) {
+      body.style.backgroundColor = newColor;
+    }
+    if (doc.documentElement) {
+      doc.documentElement.style.backgroundColor = newColor;
+    }
+
+    documentBackgroundColors.set(doc, newColor);
   }
 
   static setBounds(x: number, y: number, width: number, height: number) {
-    if (!electron) return;
+    if (!remote) return;
 
     let scaleFactor = 1;
     if (isWindows()) {
       // setBounds need to be called with the scale factor of the screen
       // on Windows.
       const rect = { x, y, width, height };
-      const display = electron.remote.screen.getDisplayMatching(rect);
+      const display = remote.screen.getDisplayMatching(rect);
       scaleFactor = display.scaleFactor;
     }
 
-    const browserWindow = electron.remote.getCurrentWindow();
+    const browserWindow = remote.getCurrentWindow();
     try {
       browserWindow.setBounds({
         x: Math.round(x / scaleFactor),
@@ -83,40 +202,53 @@ export default class Window {
     this.show();
   }
 
-  static show() {
-    if (!electron) return;
+  static quit() {
+    if (!remote) return;
 
-    const browserWindow = electron.remote.getCurrentWindow();
+    const electronApp = remote.app;
+    electronApp.quit();
+  }
+
+  static show() {
+    if (!remote) return;
+
+    const browserWindow = remote.getCurrentWindow();
     browserWindow.showInactive();
     browserWindow.setAlwaysOnTop(true);
   }
 
   static hide(forceHide: boolean = false) {
-    if (!electron) return;
+    if (!remote) return;
 
-    const browserWindow = electron.remote.getCurrentWindow();
+    const browserWindow = remote.getCurrentWindow();
     if (!browserWindow.isFocused() || forceHide) {
       browserWindow.setAlwaysOnTop(false);
       browserWindow.hide();
     }
   }
 
-  static onFocus(cb: () => void) {
-    if (!electron) return;
+  static onFocus(cb: () => void): any {
+    if (!remote) return;
 
-    return electron.remote.getCurrentWindow().on('focus', cb);
+    return remote.getCurrentWindow().on('focus', cb);
   }
 
-  static onBlur(cb: () => void) {
-    if (!electron) return;
+  static onBlur(cb: () => void): any {
+    if (!remote) return;
 
-    return electron.remote.getCurrentWindow().on('blur', cb);
+    return remote.getCurrentWindow().on('blur', cb);
   }
 
-  static onClose(cb: () => void) {
-    if (!electron) return;
+  static onClose(cb: () => void): any {
+    if (!remote) return;
 
-    return electron.remote.getCurrentWindow().on('close', cb);
+    return remote.getCurrentWindow().on('close', cb);
+  }
+
+  /** True when the app was launched with `--run-command` (CLI / CI mode). */
+  static isRunningCommandFromCli(): boolean {
+    const args = Window.getArguments();
+    return !!args['run-command'];
   }
 
   /**
@@ -127,8 +259,8 @@ export default class Window {
    * (On the web-app, this is emulated using the "project" argument).
    */
   static getArguments(): AppArguments {
-    if (electron) {
-      return electron.remote.getGlobal('args');
+    if (remote) {
+      return remote.getGlobal('args');
     }
 
     const argumentsObject = {};
@@ -137,11 +269,37 @@ export default class Window {
 
     // Emulate the minimist behavior of putting the positional arguments
     // in "_".
+    // $FlowFixMe[prop-missing]
     argumentsObject[POSITIONAL_ARGUMENTS_KEY] = argumentsObject.project
       ? [argumentsObject.project]
       : [];
 
     return argumentsObject;
+  }
+
+  /**
+   * On web, removes a list of query params from the URL.
+   */
+  static removeArguments(argumentNames: string[]) {
+    // On Electron, we don't have a way to modify global args.
+    if (remote) return;
+
+    const url = new URL(window.location.href);
+    for (const argumentName of argumentNames) {
+      url.searchParams.delete(argumentName);
+    }
+    window.history.replaceState({}, document.title, url.toString());
+  }
+
+  static addArguments(argumentNamesAndValues: { [key: string]: string }) {
+    // On Electron, we don't have a way to modify global args.
+    if (remote) return;
+
+    const url = new URL(window.location.href);
+    for (const argumentName in argumentNamesAndValues) {
+      url.searchParams.set(argumentName, argumentNamesAndValues[argumentName]);
+    }
+    window.history.replaceState({}, document.title, url.toString());
   }
 
   static showMessageBox(
@@ -153,24 +311,77 @@ export default class Window {
       return;
     }
 
-    const browserWindow = electron.remote.getCurrentWindow();
-    dialog.showMessageBox(browserWindow, {
+    const browserWindow = remote.getCurrentWindow();
+    dialog.showMessageBoxSync(browserWindow, {
       message,
       type,
       buttons: ['OK'],
     });
   }
 
-  static setUpContextMenu() {
+  static showYesNoCancelDialog(
+    message: string,
+    type?: 'none' | 'info' | 'error' | 'question' | 'warning'
+  ): YesNoCancelDialogChoice {
+    if (!dialog || !electron) {
+      // TODO: Find a way to display an alert with 3 buttons (not possible with the 3 native js method confirm, alert and prompt)
+      // eslint-disable-next-line
+      const answer = confirm(message);
+      if (answer) return 'yes';
+      return 'no';
+    }
+
+    const browserWindow = remote.getCurrentWindow();
+    const answer = dialog.showMessageBoxSync(browserWindow, {
+      message,
+      type,
+      cancelId: 1,
+      buttons: ['Yes', 'Cancel', 'No'], // TODO: Check on Windows and Linux how these buttons are displayed.
+      // On Mac, they are displayed vertically in the order Yes, No and Cancel from top to bottom.
+    });
+    switch (answer) {
+      case 0:
+        return 'yes';
+      case 1:
+        return 'cancel';
+      case 2:
+        return 'no';
+      default:
+        return 'cancel';
+    }
+  }
+
+  static showConfirmDialog(
+    message: string,
+    type?: 'none' | 'info' | 'error' | 'question' | 'warning'
+  ): any {
+    if (!dialog || !electron) {
+      // eslint-disable-next-line
+      return confirm(message);
+    }
+
+    const browserWindow = remote.getCurrentWindow();
+    const answer = dialog.showMessageBoxSync(browserWindow, {
+      message,
+      type,
+      cancelId: 1,
+      buttons: ['OK', 'Cancel'],
+    });
+    return answer === 0;
+  }
+
+  static setUpContextMenu(targetWindow?: any) {
+    const win = targetWindow || window;
+    const doc = win.document;
     const textEditorSelectors = 'textarea, input, [contenteditable="true"]';
 
     if (electron) {
       // `remote.require` since `Menu` is a main-process module.
-      var buildEditorContextMenu = electron.remote.require(
+      var buildEditorContextMenu = remote.require(
         'electron-editor-context-menu'
       );
 
-      window.addEventListener('contextmenu', function(e) {
+      win.addEventListener('contextmenu', function(e) {
         // Only show the context menu in text editors.
         if (!e.target.closest(textEditorSelectors)) return;
 
@@ -180,11 +391,15 @@ export default class Window {
         // visible selection has changed. Try to wait to show the menu until after that, otherwise the
         // visible selection will update after the menu dismisses and look weird.
         setTimeout(function() {
-          menu.popup({ window: electron.remote.getCurrentWindow() });
+          const { BrowserWindow } = remote;
+          menu.popup({
+            window:
+              BrowserWindow.getFocusedWindow() || remote.getCurrentWindow(),
+          });
         }, 30);
       });
-    } else if (document) {
-      document.addEventListener('contextmenu', function(e: any) {
+    } else if (doc) {
+      doc.addEventListener('contextmenu', function(e: any) {
         // Only show the context menu in text editors.
         if (!e.target.closest(textEditorSelectors)) {
           e.preventDefault();
@@ -196,63 +411,73 @@ export default class Window {
     }
   }
 
-  static openExternalURL(url: string) {
+  static openExternalURL(
+    url: string,
+    {
+      shouldOpenInSameTabIfPossible,
+    }: {|
+      shouldOpenInSameTabIfPossible?: boolean,
+    |} = {}
+  ) {
+    if (!url) return;
+
     if (electron) {
       if (shell) shell.openExternal(url);
       return;
     }
 
-    window.open(url, '_blank');
+    window.open(url, shouldOpenInSameTabIfPossible ? '_self' : '_blank');
   }
 
-  static isFullscreen() {
-    // $FlowFixMe
-    return !!document.fullscreenElement;
-  }
-
-  static requestFullscreen() {
-    const { documentElement } = document;
-    if (!documentElement) return;
-
-    if (documentElement.requestFullscreen) {
-      documentElement.requestFullscreen();
-      // $FlowFixMe
-    } else if (documentElement.mozRequestFullScreen) {
-      /* Firefox */
-      // $FlowFixMe
-      documentElement.mozRequestFullScreen();
-      // $FlowFixMe
-    } else if (documentElement.webkitRequestFullscreen) {
-      /* Chrome, Safari and Opera */
-      // $FlowFixMe
-      documentElement.webkitRequestFullscreen();
-      // $FlowFixMe
-    } else if (documentElement.msRequestFullscreen) {
-      /* IE/Edge */
-      // $FlowFixMe
-      documentElement.msRequestFullscreen();
+  static getOrientation(): 'portrait' | 'landscape' {
+    try {
+      return window.screen.orientation.type.split('-')[0];
+    } catch (error) {
+      console.warn('An error occurred when reading screen orientation', error);
+      return 'landscape';
     }
   }
 
-  static hasMainMenu() {
+  static hasMainMenu(): any {
     return !!electron;
   }
 
-  static isDev() {
-    if (!electron)
-      return !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+  static isDev(): boolean {
+    if (!electron || !remote) {
+      return (
+        // $FlowFixMe[cannot-resolve-name]
+        !process.env.NODE_ENV ||
+        // $FlowFixMe[cannot-resolve-name]
+        process.env.NODE_ENV === 'development' ||
+        // $FlowFixMe[cannot-resolve-name]
+        process.env.REACT_APP_ENV === 'development' // Added manually in the .env as we cannot override NODE_ENV with react-scripts.
+      );
+    }
 
     try {
-      const isDev = electron.remote.require('electron-is').dev();
+      const isDev = remote.require('electron-is-dev');
       return isDev;
     } catch (err) {
       // This rarely, but sometimes happen that require throw ("missing remote object").
       // Catch the error in the hope that things will continue to work.
       console.error(
-        "Caught an error while calling electron.remote.require('electron-is').dev",
+        "Caught an error while calling remote.require('electron-is-dev')",
         err
       );
       return false; // Assume we're not in development mode. Might be incorrect but better not consider production as development.
     }
+  }
+
+  static isFullScreen(): boolean {
+    if (!remote) return false;
+
+    const browserWindow = remote.getCurrentWindow();
+    return browserWindow.isFullScreen();
+  }
+
+  static toggleMaximize() {
+    if (!ipcRenderer) return;
+
+    ipcRenderer.invoke('window-maximize-toggle');
   }
 }

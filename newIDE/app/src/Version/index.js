@@ -1,12 +1,28 @@
 // @flow
 import VersionMetadata from './VersionMetadata';
-const gd = global.gd;
-
-const gdCoreVersionString: string = gd
-  ? gd.VersionWrapper.fullString()
-  : 'Unknown';
+import semverGreaterThan from 'semver/functions/gt';
 
 export const getIDEVersion = (): string => VersionMetadata.version;
 export const getIDEVersionWithHash = (): string =>
   VersionMetadata.versionWithHash;
-export const getGDCoreVersion = (): string => gdCoreVersionString;
+
+let gdCoreVersionString = '';
+export const getGDCoreVersion = (): string => {
+  if (gdCoreVersionString) return gdCoreVersionString;
+
+  const gd: libGDevelop = global.gd;
+  gdCoreVersionString = gd ? gd.VersionWrapper.fullString() : 'Unknown';
+  return gdCoreVersionString;
+};
+
+export const shouldHideExtension = (
+  project: gdProject,
+  extension: gdPlatformExtension
+): boolean => {
+  const initialGDVersion = project.getInitialGDVersion();
+  return (
+    !!initialGDVersion &&
+    extension.isDeprecated() &&
+    !semverGreaterThan(extension.getDeprecationGDVersion(), initialGDVersion)
+  );
+};

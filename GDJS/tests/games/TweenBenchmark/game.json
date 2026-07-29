@@ -32,6 +32,8 @@
     "loadingScreen": {
       "showGDevelopSplash": true
     },
+    "authorIds": [],
+    "authorUsernames": [],
     "extensions": [
       {
         "name": "BuiltinObject"
@@ -4250,6 +4252,7 @@
           "type": "TextObject::Text",
           "underlined": false,
           "variables": [],
+          "effects": [],
           "behaviors": [
             {
               "name": "TweenBehavior",
@@ -4275,6 +4278,7 @@
           "underlined": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "string": "Load Sprite scene",
           "font": "",
           "characterSize": 40,
@@ -7351,6 +7355,7 @@
           "type": "Sprite",
           "updateIfNotVisible": false,
           "variables": [],
+          "effects": [],
           "behaviors": [
             {
               "name": "TweenBehavior",
@@ -7399,6 +7404,7 @@
           "underlined": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "string": "Load Text scene",
           "font": "",
           "characterSize": 40,

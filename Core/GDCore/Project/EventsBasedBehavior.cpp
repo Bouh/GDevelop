@@ -3,8 +3,8 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#if defined(GD_IDE_ONLY)
 #include "EventsBasedBehavior.h"
+
 #include "EventsFunctionsContainer.h"
 #include "GDCore/Serialization/SerializerElement.h"
 #include "GDCore/Tools/MakeUnique.h"
@@ -12,36 +12,51 @@
 namespace gd {
 
 EventsBasedBehavior::EventsBasedBehavior()
-    : name("MyBehavior"), fullName("") {}
+    : AbstractEventsBasedEntity(
+          "MyBehavior", gd::EventsFunctionsContainer::FunctionOwner::Behavior),
+      sharedPropertyDescriptors(
+          gd::EventsFunctionsContainer::FunctionOwner::Behavior),
+      quickCustomizationVisibility(QuickCustomization::Visibility::Default) {}
 
 void EventsBasedBehavior::SerializeTo(SerializerElement& element) const {
-  element.SetAttribute("description", description);
-  element.SetAttribute("name", name);
-  element.SetAttribute("fullName", fullName);
+  AbstractEventsBasedEntity::SerializeTo(element);
   element.SetAttribute("objectType", objectType);
-
-  gd::SerializerElement& eventsFunctionsElement =
-      element.AddChild("eventsFunctions");
-  eventsFunctionsContainer.SerializeEventsFunctionsTo(eventsFunctionsElement);
-  propertyDescriptors.SerializeElementsTo(
-      "propertyDescriptor", element.AddChild("propertyDescriptors"));
+  if (!sharedPropertyDescriptors.empty()) {
+    sharedPropertyDescriptors.SerializeElementsTo(
+        "propertyDescriptor", element.AddChild("sharedPropertyDescriptors"));
+    sharedPropertyDescriptors.SerializeFoldersTo(
+        element.AddChild("sharedPropertiesFolderStructure"));
+  }
+  if (quickCustomizationVisibility != QuickCustomization::Visibility::Default) {
+    element.SetStringAttribute(
+        "quickCustomizationVisibility",
+        quickCustomizationVisibility == QuickCustomization::Visibility::Visible
+            ? "visible"
+            : "hidden");
+  }
 }
 
 void EventsBasedBehavior::UnserializeFrom(gd::Project& project,
                                           const SerializerElement& element) {
-  description = element.GetStringAttribute("description");
-  name = element.GetStringAttribute("name");
-  fullName = element.GetStringAttribute("fullName");
+  AbstractEventsBasedEntity::UnserializeFrom(project, element);
   objectType = element.GetStringAttribute("objectType");
-
-  const gd::SerializerElement& eventsFunctionsElement =
-      element.GetChild("eventsFunctions");
-  eventsFunctionsContainer.UnserializeEventsFunctionsFrom(
-      project, eventsFunctionsElement);
-  propertyDescriptors.UnserializeElementsFrom(
-      "propertyDescriptor", element.GetChild("propertyDescriptors"));
+  sharedPropertyDescriptors.UnserializeElementsFrom(
+      "propertyDescriptor", element.GetChild("sharedPropertyDescriptors"));
+  if (element.HasChild("sharedPropertiesFolderStructure")) {
+    sharedPropertyDescriptors.UnserializeFoldersFrom(
+        project, element.GetChild("sharedPropertiesFolderStructure", 0));
+  }
+  // Compatibility with GD <= 5.6.251
+  sharedPropertyDescriptors.AddMissingPropertiesInRootFolder();
+  // end of compatibility code
+  if (element.HasChild("quickCustomizationVisibility")) {
+    quickCustomizationVisibility =
+        element.GetStringAttribute("quickCustomizationVisibility") == "visible"
+            ? QuickCustomization::Visibility::Visible
+            : QuickCustomization::Visibility::Hidden;
+  } else {
+    quickCustomizationVisibility = QuickCustomization::Visibility::Default;
+  }
 }
 
 }  // namespace gd
-
-#endif

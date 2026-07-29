@@ -4,6 +4,7 @@
  * reserved. This project is released under the MIT License.
  */
 #include "GDCore/Events/Serialization.h"
+
 #include "GDCore/CommonTools.h"
 #include "GDCore/Events/Event.h"
 #include "GDCore/Events/EventsList.h"
@@ -181,10 +182,10 @@ void EventsListSerialization::UpdateInstructionsFromGD2x(
     // Common updates for some parameters
     const std::vector<gd::Expression>& parameters = instr.GetParameters();
     for (std::size_t j = 0;
-         j < parameters.size() && j < metadata.parameters.size();
+         j < parameters.size() && j < metadata.parameters.GetParametersCount();
          ++j) {
-      if (metadata.parameters[j].type == "relationalOperator" ||
-          metadata.parameters[j].type == "operator") {
+      if (metadata.parameters.GetParameter(j).GetType() == "relationalOperator" ||
+          metadata.parameters.GetParameter(j).GetType() == "operator") {
         if (j == parameters.size() - 1) {
           std::cout << "ERROR: No more parameters after a [relational]operator "
                        "when trying to update an instruction from GD2.x";
@@ -218,8 +219,10 @@ void EventsListSerialization::UnserializeEventsFrom(
       event = std::make_shared<EmptyEvent>();
     }
 
-    event->SetDisabled(eventElem.GetBoolAttribute("disabled"));
-    event->SetFolded(eventElem.GetBoolAttribute("folded"));
+    event->SetDisabled(eventElem.GetBoolAttribute("disabled", false));
+    event->SetFolded(eventElem.GetBoolAttribute("folded", false));
+    event->SetAiGeneratedEventId(
+        eventElem.GetStringAttribute("aiGeneratedEventId", ""));
 
     list.InsertEvent(event, list.GetEventsCount());
   }
@@ -227,13 +230,18 @@ void EventsListSerialization::UnserializeEventsFrom(
 
 void EventsListSerialization::SerializeEventsTo(const EventsList& list,
                                                 SerializerElement& events) {
+  const bool canonical = gd::Serializer::IsCanonicalMode();
   events.ConsiderAsArrayOf("event");
   for (std::size_t j = 0; j < list.size(); j++) {
     const gd::BaseEvent& event = list.GetEvent(j);
     SerializerElement& eventElem = events.AddChild("event");
 
-    eventElem.SetAttribute("disabled", event.IsDisabled());
-    eventElem.SetAttribute("folded", event.IsFolded());
+    if (canonical || event.IsDisabled())
+      eventElem.SetAttribute("disabled", event.IsDisabled());
+    if (canonical || event.IsFolded())
+      eventElem.SetAttribute("folded", event.IsFolded());
+    if (!event.GetAiGeneratedEventId().empty())
+      eventElem.SetAttribute("aiGeneratedEventId", event.GetAiGeneratedEventId());
     eventElem.AddChild("type").SetValue(event.GetType());
 
     event.SerializeTo(eventElem);
@@ -266,6 +274,9 @@ void gd::EventsListSerialization::UnserializeInstructionsFrom(
     instruction.SetInverted(
         instrElement.GetChild("type", 0, "Type")
             .GetBoolAttribute("inverted", false, "Contraire"));
+
+    instruction.SetAwaited(
+        instrElement.GetChild("type", 0, "Type").GetBoolAttribute("await"));
 
     // Read parameters
     vector<gd::Expression> parameters;
@@ -337,24 +348,41 @@ void gd::EventsListSerialization::UnserializeInstructionsFrom(
 
 void gd::EventsListSerialization::SerializeInstructionsTo(
     const gd::InstructionsList& list, SerializerElement& instructions) {
+  const bool canonical = gd::Serializer::IsCanonicalMode();
   instructions.ConsiderAsArrayOf("instruction");
   for (std::size_t k = 0; k < list.size(); k++) {
     SerializerElement& instruction = instructions.AddChild("instruction");
-    instruction.AddChild("type")
-        .SetAttribute("value", list[k].GetType())
-        .SetAttribute("inverted", list[k].IsInverted());
+    instruction.AddChild("type").SetAttribute("value", list[k].GetType());
+
+    if (canonical || list[k].IsInverted())
+      instruction.GetChild("type").SetAttribute("inverted", list[k].IsInverted());
+    if (canonical || list[k].IsAwaited())
+      instruction.GetChild("type").SetAttribute("await", list[k].IsAwaited());
 
     // Parameters
     SerializerElement& parameters = instruction.AddChild("parameters");
     parameters.ConsiderAsArrayOf("parameter");
-    for (std::size_t l = 0; l < list[k].GetParameters().size(); l++)
+    for (std::size_t l = 0; l < list[k].GetParameters().size(); l++) {
+      if (l > 20000) {
+        // Even more than 100 parameters is suspicious but JS engines usually
+        // support up to 65k parameters. Stop at a fraction of that as we've seen
+        // in the wild some probable memory corruption that lead to serializing 2M
+        // parameters.
+        gd::LogError(
+            "Suspiciously very high number of parameters in an instruction. "
+            "Clamping at 20k. This might indicate a memory corruption.");
+        break;
+      }
+
       parameters.AddChild("parameter")
           .SetValue(list[k].GetParameter(l).GetPlainString());
+    }
 
     // Sub instructions
-    SerializerElement& subInstructions =
-        instruction.AddChild("subInstructions");
-    SerializeInstructionsTo(list[k].GetSubInstructions(), subInstructions);
+    if (canonical || !list[k].GetSubInstructions().empty()) {
+      SerializeInstructionsTo(list[k].GetSubInstructions(),
+                              instruction.AddChild("subInstructions"));
+    }
   }
 }
 

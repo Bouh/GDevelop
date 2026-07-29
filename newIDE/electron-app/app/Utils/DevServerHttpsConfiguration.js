@@ -1,4 +1,4 @@
-var fs = require("fs");
+var fs = require('fs');
 
 // This is a certificate generated from the private key below,
 // with passphrase 12345.
@@ -22,7 +22,7 @@ dvc+WEVll0GLtqGMzR/grVOzMdCQp30sMcTCI75arderUMTDc5Q4wiJRJDbvDTft
 019N5rvz1/c978m3pu6eyM5Mm3K/BHHZycjSY6T7wGpsGw==
 -----END CERTIFICATE-----`;
 
-// Private key used to generate the certifcate.
+// Private key used to generate the certificate.
 // Only to be used for development purpose.
 const key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAs74Q3MYrvYugXf3axe1SXk63n29Ihu9Dw9dlH2WfU9C1+n90
@@ -55,5 +55,5 @@ sqczMCnO4bcMHH0Oasnedk1KMALpeg+B6X+ClAr+9NvAmMPztkptVF+zyVjGBv3k
 module.exports = {
   cert: cert,
   key: key,
-  passphrase: "12345"
+  passphrase: '12345',
 };

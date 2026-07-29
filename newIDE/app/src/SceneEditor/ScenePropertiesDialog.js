@@ -1,211 +1,369 @@
 // @flow
-import { Trans } from '@lingui/macro';
-
-import React, { Component } from 'react';
-import FlatButton from '../UI/FlatButton';
+import { Trans, t } from '@lingui/macro';
+import React from 'react';
 import TextField from '../UI/TextField';
 import RaisedButton from '../UI/RaisedButton';
-import Dialog from '../UI/Dialog';
+import FlatButton from '../UI/FlatButton';
+import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import ColorField from '../UI/ColorField';
 import EmptyMessage from '../UI/EmptyMessage';
-import PropertiesEditor from '../PropertiesEditor';
+import BehaviorSharedPropertiesEditor from './BehaviorSharedPropertiesEditor';
 import propertiesMapToSchema from '../PropertiesEditor/PropertiesMapToSchema';
 import some from 'lodash/some';
 import Checkbox from '../UI/Checkbox';
 import { isNullPtr } from '../Utils/IsNullPtr';
-const gd = global.gd;
+import { ColumnStackLayout } from '../UI/Layout';
+import {
+  rgbColorToRGBString,
+  rgbStringAndAlphaToRGBColor,
+  clampRgbComponent,
+  type RGBColor,
+} from '../Utils/ColorTransformer';
+import HelpIcon from '../UI/HelpIcon';
+import { Column, Line } from '../UI/Grid';
+import DismissableTutorialMessage from '../Hints/DismissableTutorialMessage';
+import { Accordion, AccordionHeader, AccordionBody } from '../UI/Accordion';
+import { IconContainer } from '../UI/IconContainer';
+import { getBehaviorTutorialIds } from '../Utils/GDevelopServices/Tutorial';
+import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
+import SceneVariable from '../UI/CustomSvgIcons/SceneVariable';
+import SelectOption from '../UI/SelectOption';
+import SelectField from '../UI/SelectField';
+import Text from '../UI/Text';
+import { ProjectScopedContainersAccessor } from '../InstructionOrExpression/EventsScope';
+
+const gd: libGDevelop = global.gd;
+
+const noop = () => {};
 
 type Props = {|
   open: boolean,
   layout: gdLayout,
   project: gdProject,
-  onApply?: () => void,
+  onApply: () => void,
   onClose: () => void,
-  onOpenMoreSettings: () => void,
+  onOpenMoreSettings?: ?() => void,
   onEditVariables: () => void,
+  resourceManagementProps: ResourceManagementProps,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
+  onBackgroundColorChanged: () => void,
 |};
 
-type State = {|
-  windowTitle: string,
-  shouldStopSoundsOnStartup: boolean,
-  backgroundColor: {
-    r: number,
-    g: number,
-    b: number,
-    a: number,
-  },
-|};
+const ScenePropertiesDialog = ({
+  open,
+  layout,
+  project,
+  onApply,
+  onClose,
+  onOpenMoreSettings,
+  onEditVariables,
+  resourceManagementProps,
+  projectScopedContainersAccessor,
+  onBackgroundColorChanged,
+}: Props): React.Node => {
+  const [windowTitle, setWindowTitle] = React.useState<string>(
+    layout.getWindowDefaultTitle()
+  );
+  const [
+    shouldStopSoundsOnStartup,
+    setShouldStopSoundsOnStartup,
+  ] = React.useState<boolean>(layout.stopSoundsOnStartup());
 
-export default class ScenePropertiesDialog extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = this._loadFrom(props.layout);
-  }
+  const [resourcesPreloading, setResourcesPreloading] = React.useState<string>(
+    layout.getResourcesPreloading()
+  );
+  const [resourcesUnloading, setResourcesUnloading] = React.useState<string>(
+    layout.getResourcesUnloading()
+  );
 
-  _loadFrom(layout: gdLayout): State {
-    return {
-      windowTitle: layout.getWindowDefaultTitle(),
-      shouldStopSoundsOnStartup: layout.stopSoundsOnStartup(),
-      backgroundColor: {
-        r: layout.getBackgroundColorRed(),
-        g: layout.getBackgroundColorGreen(),
-        b: layout.getBackgroundColorBlue(),
-        a: 1,
-      },
-    };
-  }
+  const [backgroundColor, setBackgroundColor] = React.useState<?RGBColor>({
+    r: layout.getBackgroundColorRed(),
+    g: layout.getBackgroundColorGreen(),
+    b: layout.getBackgroundColorBlue(),
+    a: 1,
+  });
 
-  componentWillReceiveProps(newProps: Props) {
-    if (
-      (!this.props.open && newProps.open) ||
-      (newProps.open && this.props.layout !== newProps.layout)
-    ) {
-      this.setState(this._loadFrom(newProps.layout));
+  React.useEffect(
+    () => {
+      if (open && layout) {
+        setWindowTitle(layout.getWindowDefaultTitle());
+        setShouldStopSoundsOnStartup(layout.stopSoundsOnStartup());
+        setResourcesPreloading(layout.getResourcesPreloading());
+        setResourcesUnloading(layout.getResourcesUnloading());
+        setBackgroundColor({
+          r: layout.getBackgroundColorRed(),
+          g: layout.getBackgroundColorGreen(),
+          b: layout.getBackgroundColorBlue(),
+          a: 1,
+        });
+      }
+    },
+    [open, layout]
+  );
+
+  const onSubmit = () => {
+    layout.setWindowDefaultTitle(windowTitle);
+    layout.setStopSoundsOnStartup(shouldStopSoundsOnStartup);
+    layout.setResourcesPreloading(resourcesPreloading);
+    layout.setResourcesUnloading(resourcesUnloading);
+    const hasBackgroundColorChanged =
+      backgroundColor &&
+      layout.getBackgroundColorRed() !== backgroundColor.r &&
+      layout.getBackgroundColorGreen() !== backgroundColor.g &&
+      layout.getBackgroundColorBlue() !== backgroundColor.b;
+    layout.setBackgroundColor(
+      backgroundColor ? clampRgbComponent(backgroundColor.r) : 0,
+      backgroundColor ? clampRgbComponent(backgroundColor.g) : 0,
+      backgroundColor ? clampRgbComponent(backgroundColor.b) : 0
+    );
+    onApply();
+    if (hasBackgroundColorChanged) {
+      onBackgroundColorChanged();
     }
-  }
-
-  _onApply = () => {
-    this.props.layout.setWindowDefaultTitle(this.state.windowTitle);
-    this.props.layout.setStopSoundsOnStartup(
-      this.state.shouldStopSoundsOnStartup
-    );
-    this.props.layout.setBackgroundColor(
-      this.state.backgroundColor.r,
-      this.state.backgroundColor.g,
-      this.state.backgroundColor.b
-    );
-    if (this.props.onApply) this.props.onApply();
   };
 
-  render() {
-    const { layout, project } = this.props;
-    const actions = [
-      // TODO: Add support for cancelling modifications made to BehaviorSharedData
-      // (either by enhancing a function like propertiesMapToSchema or using copies)
-      // and then re-enable cancel button.
-      // <FlatButton
-      //   label={<Trans>Cancel</Trans>}
-      //   primary={false}
-      //   onClick={this.props.onClose}
-      // />,
-      <FlatButton
-        label={<Trans>Ok</Trans>}
-        key="ok"
-        primary={true}
-        keyboardFocused={true}
-        onClick={this._onApply}
-      />,
-    ];
+  const actions = [
+    // TODO: Add support for cancelling modifications made to BehaviorSharedData
+    // (either by enhancing a function like propertiesMapToSchema or using copies)
+    // and then re-enable cancel button.
+    // <FlatButton
+    //   label={<Trans>Cancel</Trans>}
+    //   primary={false}
+    //   onClick={onClose}
+    // />,
+    <DialogPrimaryButton
+      label={<Trans>Ok</Trans>}
+      key="ok"
+      primary={true}
+      onClick={onSubmit}
+    />,
+  ];
 
-    const allBehaviorSharedDataNames = layout
-      .getAllBehaviorSharedDataNames()
-      .toJSArray();
+  const allBehaviorSharedDataNames = layout
+    .getAllBehaviorSharedDataNames()
+    .toJSArray();
 
-    const propertiesEditors = allBehaviorSharedDataNames
-      .map(name => {
-        const sharedDataContent = layout.getBehaviorSharedData(name);
-        const type = sharedDataContent.getTypeName();
+  const areAdvancedPropertiesModified =
+    resourcesPreloading !== 'inherit' ||
+    resourcesUnloading !== 'inherit' ||
+    windowTitle !== '';
 
-        const behaviorSharedData = gd.JsPlatform.get().getBehaviorSharedDatas(
-          type
-        );
-        if (isNullPtr(gd, behaviorSharedData)) return null;
+  const propertiesEditors = allBehaviorSharedDataNames
+    .map(behaviorName => {
+      const behaviorSharedData = layout.getBehaviorSharedData(behaviorName);
 
-        const properties = behaviorSharedData.getProperties(
-          sharedDataContent.getContent(),
-          project
-        );
-        const propertiesSchema = propertiesMapToSchema(
-          properties,
-          sharedDataContent =>
-            behaviorSharedData.getProperties(
-              sharedDataContent.getContent(),
-              project
-            ),
-          (sharedDataContent, name, value) =>
-            behaviorSharedData.updateProperty(
-              sharedDataContent.getContent(),
-              name,
-              value,
-              project
-            )
-        );
+      // $FlowFixMe[incompatible-exact]
+      if (isNullPtr(gd, behaviorSharedData)) return null;
 
-        return (
-          !!propertiesSchema.length && (
-            <PropertiesEditor
-              key={name}
-              schema={propertiesSchema}
-              instances={[sharedDataContent]}
-            />
-          )
-        );
-      })
-      .filter(Boolean);
+      const behaviorTypeName = behaviorSharedData.getTypeName();
 
-    return (
-      <Dialog
-        title={<Trans>Scene properties</Trans>}
-        actions={actions}
-        secondaryActions={
-          <RaisedButton
-            label={<Trans>Edit scene variables</Trans>}
-            fullWidth
-            onClick={() => {
-              this.props.onEditVariables();
-              this.props.onClose();
-            }}
-          />
-        }
-        open={this.props.open}
-        onRequestClose={this.props.onClose}
-        maxWidth="sm"
-      >
-        <TextField
-          floatingLabelText={<Trans>Window title</Trans>}
+      const behaviorMetadata = gd.MetadataProvider.getBehaviorMetadata(
+        gd.JsPlatform.get(),
+        behaviorTypeName
+      );
+
+      const isEmpty =
+        propertiesMapToSchema({
+          properties: behaviorSharedData.getProperties(),
+          defaultValueProperties: behaviorMetadata
+            ? behaviorMetadata.getSharedProperties()
+            : null,
+          getPropertyValue: () => '',
+          onUpdateProperty: noop,
+          layersContainer: null,
+          shouldDisabledFieldsWithMixedValues: false,
+        }).length === 0;
+      const tutorialIds = getBehaviorTutorialIds(behaviorTypeName);
+      // TODO Make this a functional component to use PreferencesContext
+      const enabledTutorialIds: Array<string> = [];
+      const iconUrl = behaviorMetadata.getIconFilename();
+
+      return (
+        !isEmpty && (
+          <Accordion
+            key={behaviorName}
+            defaultExpanded
+            id={`behavior-parameters-${behaviorName}`}
+            noMargin
+          >
+            <AccordionHeader
+              actions={[
+                <HelpIcon
+                  key="help"
+                  size="small"
+                  helpPagePath={behaviorMetadata.getHelpPath()}
+                />,
+              ]}
+              noMargin
+            >
+              {iconUrl ? (
+                <IconContainer
+                  src={iconUrl}
+                  alt={behaviorMetadata.getFullName()}
+                  size={20}
+                />
+              ) : null}
+              <Column expand>
+                <TextField
+                  value={behaviorName}
+                  margin="none"
+                  fullWidth
+                  disabled
+                  onChange={(e, text) => {}}
+                  id={`behavior-${behaviorName}-name-text-field`}
+                />
+              </Column>
+            </AccordionHeader>
+            <AccordionBody disableGutters>
+              <Column
+                expand
+                noMargin
+                // Avoid Physics2 behavior overflow on small screens
+                noOverflowParent
+              >
+                {enabledTutorialIds.length ? (
+                  <Line>
+                    <ColumnStackLayout expand>
+                      {tutorialIds.map(tutorialId => (
+                        <DismissableTutorialMessage
+                          key={tutorialId}
+                          tutorialId={tutorialId}
+                        />
+                      ))}
+                    </ColumnStackLayout>
+                  </Line>
+                ) : null}
+                <Line>
+                  <BehaviorSharedPropertiesEditor
+                    key={behaviorName}
+                    behaviorSharedData={behaviorSharedData}
+                    project={project}
+                    resourceManagementProps={resourceManagementProps}
+                    projectScopedContainersAccessor={
+                      projectScopedContainersAccessor
+                    }
+                    layersContainer={layout.getLayers()}
+                  />
+                </Line>
+              </Column>
+            </AccordionBody>
+          </Accordion>
+        )
+      );
+    })
+    .filter(Boolean);
+
+  return (
+    <Dialog
+      title={<Trans>{layout.getName()} properties</Trans>}
+      // $FlowFixMe[incompatible-type]
+      actions={actions}
+      secondaryActions={[
+        <RaisedButton
+          key="edit-scene-variables"
+          icon={<SceneVariable fontSize="small" />}
+          label={<Trans>Edit scene variables</Trans>}
           fullWidth
-          type="text"
-          value={this.state.windowTitle}
-          onChange={(e, value) => this.setState({ windowTitle: value })}
-        />
-        <Checkbox
-          checked={this.state.shouldStopSoundsOnStartup}
-          label={<Trans>Stop musics and sounds on startup</Trans>}
-          onCheck={(e, check) =>
-            this.setState({
-              shouldStopSoundsOnStartup: check,
-            })
-          }
-        />
+          onClick={() => {
+            onEditVariables();
+            onClose();
+          }}
+        />,
+      ]}
+      onRequestClose={onClose}
+      onApply={onSubmit}
+      open={open}
+      maxWidth="sm"
+    >
+      <ColumnStackLayout expand noMargin>
         <ColorField
           floatingLabelText={<Trans>Scene background color</Trans>}
           fullWidth
           disableAlpha
-          color={this.state.backgroundColor}
-          onChangeComplete={color =>
-            this.setState({ backgroundColor: color.rgb })
+          color={rgbColorToRGBString(backgroundColor)}
+          onChange={color =>
+            setBackgroundColor(rgbStringAndAlphaToRGBColor(color))
           }
+        />
+        <Checkbox
+          checked={shouldStopSoundsOnStartup}
+          label={<Trans>Stop music and sounds at scene startup</Trans>}
+          onCheck={(e, check) => setShouldStopSoundsOnStartup(check)}
         />
         {!some(propertiesEditors) && (
           <EmptyMessage>
             <Trans>
-              Any additional properties will appear here if you add behaviors to
-              objects, like Physics behavior.
+              Additional properties will appear here when you add behaviors to
+              objects, such as the 2D or 3D Physics Engine.
             </Trans>
           </EmptyMessage>
         )}
         {propertiesEditors}
-        {this.props.onOpenMoreSettings && (
-          <RaisedButton
-            label={<Trans>Open advanced settings</Trans>}
+        <Accordion defaultExpanded={areAdvancedPropertiesModified} noMargin>
+          <AccordionHeader noMargin>
+            <Text size="sub-title">
+              <Trans>Advanced settings</Trans>
+            </Text>
+          </AccordionHeader>
+          <AccordionBody disableGutters>
+            <ColumnStackLayout expand noMargin>
+              <SelectField
+                floatingLabelText={<Trans>Resources preloading</Trans>}
+                fullWidth
+                value={resourcesPreloading}
+                onChange={e => setResourcesPreloading(e.target.value)}
+              >
+                <SelectOption
+                  value="inherit"
+                  label={t`Use the project setting`}
+                />
+                <SelectOption
+                  value="at-startup"
+                  label={t`Always preload at startup`}
+                />
+                <SelectOption value="never" label={t`Never preload`} />
+              </SelectField>
+              <SelectField
+                floatingLabelText={<Trans>Resources unloading</Trans>}
+                fullWidth
+                value={resourcesUnloading}
+                onChange={e => setResourcesUnloading(e.target.value)}
+              >
+                <SelectOption
+                  value="inherit"
+                  label={t`Use the project setting`}
+                />
+                <SelectOption
+                  value="at-scene-exit"
+                  label={t`Unload at scene exit`}
+                />
+                <SelectOption value="never" label={t`Never unload`} />
+              </SelectField>
+              <TextField
+                floatingLabelText={<Trans>Window title</Trans>}
+                fullWidth
+                type="text"
+                value={windowTitle}
+                onChange={(e, value) => setWindowTitle(value)}
+              />
+            </ColumnStackLayout>
+          </AccordionBody>
+        </Accordion>
+        {onOpenMoreSettings && (
+          <FlatButton
+            label={<Trans>Open more settings</Trans>}
+            primary
             fullWidth
             onClick={() => {
-              this.props.onOpenMoreSettings();
-              this.props.onClose();
+              // $FlowFixMe[constant-condition]
+              if (onOpenMoreSettings) onOpenMoreSettings();
+              onClose();
             }}
           />
         )}
-      </Dialog>
-    );
-  }
-}
+      </ColumnStackLayout>
+    </Dialog>
+  );
+};
+
+export default ScenePropertiesDialog;

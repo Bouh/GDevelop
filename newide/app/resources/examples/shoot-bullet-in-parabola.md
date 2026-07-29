@@ -1,4 +1,0 @@
-# README
-
-Show how to use various mathematical expressions to move an object following a parabola shape
-

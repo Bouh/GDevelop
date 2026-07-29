@@ -1,11 +1,13 @@
 // @flow
+import React from 'react';
 import { Trans } from '@lingui/macro';
-import { type EventsScope } from '../../EventsScope.flow';
-import React, { Component } from 'react';
-import FlatButton from '../../../UI/FlatButton';
+import { type EventsScope } from '../../../InstructionOrExpression/EventsScope';
 import ExpressionParametersEditor from './ExpressionParametersEditor';
-import Dialog from '../../../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../../../UI/Dialog';
+import Text from '../../../UI/Text';
 import { Column } from '../../../UI/Grid';
+import HelpButton from '../../../UI/HelpButton';
+import { ProjectScopedContainersAccessor } from '../../../InstructionOrExpression/EventsScope';
 
 export type ParameterValues = Array<string>;
 
@@ -24,6 +26,7 @@ type Props = {
   scope: EventsScope,
   globalObjectsContainer: gdObjectsContainer,
   objectsContainer: gdObjectsContainer,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
   expressionMetadata: gdExpressionMetadata,
   onDone: ParameterValues => void,
   onRequestClose: () => void,
@@ -33,68 +36,72 @@ type Props = {
   },
 };
 
-type State = {
-  parameterValues: ParameterValues,
+const ExpressionParametersEditorDialog = ({
+  project,
+  scope,
+  onDone,
+  onRequestClose,
+  globalObjectsContainer,
+  objectsContainer,
+  projectScopedContainersAccessor,
+  expressionMetadata,
+  parameterRenderingService,
+}: Props): React.Node => {
+  const [parameterValues, setParameterValues] = React.useState<Array<string>>(
+    Array(expressionMetadata.getParametersCount()).fill('')
+  );
+
+  return (
+    <Dialog
+      title={<Trans>Enter the expression parameters</Trans>}
+      id="expression-parameters-editor-dialog"
+      open
+      actions={[
+        <DialogPrimaryButton
+          id="apply-button"
+          key="apply"
+          label={<Trans>Apply</Trans>}
+          primary
+          onClick={() => onDone(parameterValues)}
+        />,
+      ]}
+      secondaryActions={
+        expressionMetadata.getHelpPath()
+          ? [
+              <HelpButton
+                key="help-button"
+                helpPagePath={expressionMetadata.getHelpPath()}
+              />,
+            ]
+          : []
+      }
+      onRequestClose={onRequestClose}
+      onApply={() => onDone(parameterValues)}
+    >
+      <Column noMargin>
+        <div style={styles.minHeightContainer}>
+          <Text>{expressionMetadata.getDescription()}</Text>
+          <ExpressionParametersEditor
+            project={project}
+            scope={scope}
+            globalObjectsContainer={globalObjectsContainer}
+            objectsContainer={objectsContainer}
+            projectScopedContainersAccessor={projectScopedContainersAccessor}
+            expressionMetadata={expressionMetadata}
+            parameterValues={parameterValues}
+            onChangeParameter={(editedIndex, value) => {
+              setParameterValues(
+                parameterValues.map((oldValue, index) =>
+                  index === editedIndex ? value : oldValue
+                )
+              );
+            }}
+            parameterRenderingService={parameterRenderingService}
+          />
+        </div>
+      </Column>
+    </Dialog>
+  );
 };
 
-export default class ExpressionParametersEditorDialog extends Component<
-  Props,
-  State
-> {
-  state = {
-    parameterValues: Array(
-      this.props.expressionMetadata.getParametersCount()
-    ).fill(''),
-  };
-
-  render() {
-    const {
-      project,
-      scope,
-      globalObjectsContainer,
-      objectsContainer,
-      expressionMetadata,
-      parameterRenderingService,
-    } = this.props;
-
-    return (
-      <Dialog
-        title={<Trans>Enter the expression parameters</Trans>}
-        open
-        actions={
-          <FlatButton
-            key="apply"
-            label={<Trans>Apply</Trans>}
-            primary
-            onClick={() => this.props.onDone(this.state.parameterValues)}
-          />
-        }
-        modal
-        noMargin
-        onRequestClose={this.props.onRequestClose}
-      >
-        <Column>
-          <div style={styles.minHeightContainer}>
-            <ExpressionParametersEditor
-              project={project}
-              scope={scope}
-              globalObjectsContainer={globalObjectsContainer}
-              objectsContainer={objectsContainer}
-              expressionMetadata={expressionMetadata}
-              parameterValues={this.state.parameterValues}
-              onChangeParameter={(editedIndex, value) => {
-                this.setState({
-                  parameterValues: this.state.parameterValues.map(
-                    (oldValue, index) =>
-                      index === editedIndex ? value : oldValue
-                  ),
-                });
-              }}
-              parameterRenderingService={parameterRenderingService}
-            />
-          </div>
-        </Column>
-      </Dialog>
-    );
-  }
-}
+export default ExpressionParametersEditorDialog;

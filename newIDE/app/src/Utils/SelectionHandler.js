@@ -11,9 +11,9 @@ type SelectionState<T> = {
   [number]: ?T,
 };
 
-export const getInitialSelection = () => ({});
+export const getInitialSelection = (): {} => ({});
 
-export const clearSelection = () => getInitialSelection();
+export const clearSelection = (): {} => getInitialSelection();
 
 export const getSelection = <T: ObjectType>(
   selection: SelectionState<T>
@@ -24,7 +24,6 @@ export const addToSelection = <T: ObjectType>(
   object: T,
   select: boolean = true
 ): SelectionState<T> => {
-  console.log(object, select);
   return {
     ...selection,
     [object.ptr]: select ? object : null,

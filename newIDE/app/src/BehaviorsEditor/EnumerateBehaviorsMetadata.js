@@ -1,6 +1,7 @@
 // @flow
 import { mapFor } from '../Utils/MapFor';
 import flatten from 'lodash/flatten';
+import { shouldHideExtension } from '../Version';
 
 export type EnumeratedBehaviorMetadata = {|
   extension: gdPlatformExtension,
@@ -10,18 +11,24 @@ export type EnumeratedBehaviorMetadata = {|
   defaultName: string,
   fullName: string,
   description: string,
-  iconFilename: string,
+  previewIconUrl: string,
+  category: string,
+  tags: Array<string>,
 |};
 
 export const enumerateBehaviorsMetadata = (
   platform: gdPlatform,
-  project: gdProject
+  project: gdProject,
+  eventsFunctionsExtension: gdEventsFunctionsExtension | null
 ): Array<EnumeratedBehaviorMetadata> => {
   const extensionsList = platform.getAllPlatformExtensions();
 
   return flatten(
     mapFor(0, extensionsList.size(), i => {
       const extension = extensionsList.at(i);
+      if (shouldHideExtension(project, extension)) {
+        return [];
+      }
 
       return extension
         .getBehaviorsTypes()
@@ -30,6 +37,12 @@ export const enumerateBehaviorsMetadata = (
           behaviorType,
           behaviorMetadata: extension.getBehaviorMetadata(behaviorType),
         }))
+        .filter(
+          ({ behaviorMetadata }) =>
+            !behaviorMetadata.isPrivate() ||
+            (eventsFunctionsExtension &&
+              extension.getName() === eventsFunctionsExtension.getName())
+        )
         .map(({ behaviorType, behaviorMetadata }) => ({
           extension,
           behaviorMetadata,
@@ -37,8 +50,10 @@ export const enumerateBehaviorsMetadata = (
           defaultName: behaviorMetadata.getDefaultName(),
           fullName: behaviorMetadata.getFullName(),
           description: behaviorMetadata.getDescription(),
-          iconFilename: behaviorMetadata.getIconFilename(),
+          previewIconUrl: behaviorMetadata.getIconFilename(),
           objectType: behaviorMetadata.getObjectType(),
+          category: extension.getCategory(),
+          tags: extension.getTags().toJSArray(),
         }));
     })
   );
@@ -62,4 +77,13 @@ export const filterEnumeratedBehaviorMetadata = (
         .indexOf(lowercaseSearchText) !== -1
     );
   });
+};
+
+export const isBehaviorDefaultCapability = (
+  behaviorMetadata: gdBehaviorMetadata
+): boolean => {
+  return (
+    behaviorMetadata.getName().includes('Capability') ||
+    behaviorMetadata.getName() === 'Scene3D::Base3DBehavior'
+  );
 };

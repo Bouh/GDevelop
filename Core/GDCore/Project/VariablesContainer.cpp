@@ -4,12 +4,14 @@
  * reserved. This project is released under the MIT License.
  */
 #include "GDCore/Project/VariablesContainer.h"
+
 #include <algorithm>
 #include <iostream>
+
 #include "GDCore/Project/Variable.h"
 #include "GDCore/Serialization/SerializerElement.h"
 #include "GDCore/String.h"
-#include "GDCore/TinyXml/tinyxml.h"
+#include "GDCore/Tools/UUID/UUID.h"
 
 namespace gd {
 
@@ -32,7 +34,13 @@ class VariableHasName {
 };
 }  // namespace
 
-VariablesContainer::VariablesContainer() {}
+VariablesContainer::VariablesContainer()
+    : sourceType(VariablesContainer::SourceType::Unknown) {}
+
+VariablesContainer::VariablesContainer(
+    VariablesContainer::SourceType sourceType_) {
+  sourceType = sourceType_;
+}
 
 bool VariablesContainer::Has(const gd::String& name) const {
   auto i =
@@ -78,6 +86,13 @@ Variable& VariablesContainer::Insert(const gd::String& name,
                                      const gd::Variable& variable,
                                      std::size_t position) {
   auto newVariable = std::make_shared<gd::Variable>(variable);
+  // The "mixed values" marker is an editor-only, display state used by the
+  // temporary containers merging the variables of several objects (see
+  // `gd::ObjectRefactorer::MergeVariableContainers`). A variable inserted in
+  // a container must always have an actual value, otherwise the marker could
+  // end up being persisted in the project - and a variable of a single object
+  // or instance would wrongly show "Mixed values" in the editor.
+  newVariable->ClearMixedValues();
   if (position < variables.size()) {
     variables.insert(variables.begin() + position,
                      std::make_pair(name, newVariable));
@@ -88,7 +103,6 @@ Variable& VariablesContainer::Insert(const gd::String& name,
   }
 }
 
-#if defined(GD_IDE_ONLY)
 void VariablesContainer::Remove(const gd::String& varName) {
   variables.erase(
       std::remove_if(
@@ -151,15 +165,35 @@ void VariablesContainer::Swap(std::size_t firstVariableIndex,
 }
 
 void VariablesContainer::Move(std::size_t oldIndex, std::size_t newIndex) {
-  if (oldIndex >= variables.size() || newIndex >= variables.size()) return;
+  if (oldIndex >= variables.size() || newIndex >= variables.size() ||
+      oldIndex == newIndex)
+    return;
 
   auto nameAndVariable = variables[oldIndex];
   variables.erase(variables.begin() + oldIndex);
   variables.insert(variables.begin() + newIndex, nameAndVariable);
 }
-#endif
+
+void VariablesContainer::ForEachVariableMatchingSearch(
+    const gd::String& search,
+    std::function<void(const gd::String& name, const gd::Variable& variable)>
+        fn) const {
+  for (const auto& nameAndVariable : variables) {
+    if (nameAndVariable.first.FindCaseInsensitive(search) != gd::String::npos)
+      fn(nameAndVariable.first, *nameAndVariable.second);
+  }
+}
+
+void VariablesContainer::ClearMixedValues() {
+  for (auto& nameAndVariable : variables) {
+    nameAndVariable.second->ClearMixedValues();
+  }
+}
 
 void VariablesContainer::SerializeTo(SerializerElement& element) const {
+  if (!persistentUuid.empty())
+    element.SetStringAttribute("persistentUuid", persistentUuid);
+
   element.ConsiderAsArrayOf("variable");
   for (std::size_t j = 0; j < variables.size(); j++) {
     SerializerElement& variableElement = element.AddChild("variable");
@@ -169,16 +203,49 @@ void VariablesContainer::SerializeTo(SerializerElement& element) const {
 }
 
 void VariablesContainer::UnserializeFrom(const SerializerElement& element) {
+  persistentUuid = element.GetStringAttribute("persistentUuid");
+
   Clear();
   element.ConsiderAsArrayOf("variable", "Variable");
   for (std::size_t j = 0; j < element.GetChildrenCount(); j++) {
     const SerializerElement& variableElement = element.GetChild(j);
 
-    Variable variable;
-    variable.UnserializeFrom(variableElement);
-    Insert(
-        variableElement.GetStringAttribute("name", "", "Name"), variable, -1);
+    // Don't use `Insert` so that the serialized state is restored exactly as
+    // it was - notably, the "mixed values" marker must be kept (it's used by
+    // the editor to snapshot the temporary containers merging the variables
+    // of several objects, and to compute changesets from them).
+    auto variable = std::make_shared<gd::Variable>();
+    variable->UnserializeFrom(variableElement);
+    variables.push_back(std::make_pair(
+        variableElement.GetStringAttribute("name", "", "Name"), variable));
   }
+}
+
+VariablesContainer& VariablesContainer::ResetPersistentUuid() {
+  persistentUuid = UUID::MakeUuid4();
+  for (auto& variable : variables) {
+    variable.second->ResetPersistentUuid();
+  }
+
+  return *this;
+}
+
+VariablesContainer& VariablesContainer::EnsurePersistentUuids() {
+  if (persistentUuid.empty()) persistentUuid = UUID::MakeUuid4();
+  for (auto& variable : variables) {
+    variable.second->EnsurePersistentUuid();
+  }
+
+  return *this;
+}
+
+VariablesContainer& VariablesContainer::ClearPersistentUuid() {
+  persistentUuid = "";
+  for (auto& variable : variables) {
+    variable.second->ClearPersistentUuid();
+  }
+
+  return *this;
 }
 
 VariablesContainer::VariablesContainer(const VariablesContainer& other) {
@@ -193,6 +260,8 @@ VariablesContainer& VariablesContainer::operator=(
 }
 
 void VariablesContainer::Init(const gd::VariablesContainer& other) {
+  sourceType = other.sourceType;
+  persistentUuid = other.persistentUuid;
   variables.clear();
   for (auto& it : other.variables) {
     variables.push_back(

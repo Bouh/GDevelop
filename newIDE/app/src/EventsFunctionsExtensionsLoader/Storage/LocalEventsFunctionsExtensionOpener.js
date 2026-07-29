@@ -1,57 +1,52 @@
 // @flow
-import optionalRequire from '../../Utils/OptionalRequire.js';
+import {
+  openFilesPicker,
+  openFilePicker,
+  readJSONFile,
+} from '../../Utils/FileSystem';
+import { type SerializedExtension } from '../../Utils/GDevelopServices/Extension';
+import optionalRequire from '../../Utils/OptionalRequire';
 const fs = optionalRequire('fs');
-const electron = optionalRequire('electron');
-const dialog = electron ? electron.remote.dialog : null;
-
-const readJSONFile = (filepath: string): Promise<Object> => {
-  if (!fs) return Promise.reject('Filesystem is not supported.');
-
-  return new Promise((resolve, reject) => {
-    fs.readFile(filepath, { encoding: 'utf8' }, (err, data) => {
-      if (err) return reject(err);
-
-      try {
-        const dataObject = JSON.parse(data);
-        return resolve(dataObject);
-      } catch (ex) {
-        return reject(filepath + ' is a corrupted/malformed file.');
-      }
-    });
-  });
-};
 
 export default class LocalEventsFunctionsExtensionOpener {
-  static chooseEventsFunctionExtensionFile = (): Promise<?string> => {
-    return new Promise((resolve, reject) => {
-      if (!dialog) return reject('Not supported');
-
-      const browserWindow = electron.remote.getCurrentWindow();
-      dialog.showOpenDialog(
-        browserWindow,
+  static chooseEventsFunctionExtensionFile = (): Promise<Array<string>> => {
+    return openFilesPicker({
+      title: 'Import extensions into the project',
+      properties: ['openFile', 'multiSelections'],
+      message: 'Choose extension files to import (.json file)',
+      filters: [
         {
-          title: 'Import an extension in the project',
-          properties: ['openFile'],
-          message: 'Choose an extension file to import (.json file)',
-          filters: [
-            {
-              name: 'GDevelop 5 "events based" extension',
-              extensions: ['json'],
-            },
-          ],
+          name: 'GDevelop 5 "events based" extension',
+          extensions: ['json'],
         },
-        paths => {
-          if (!paths || !paths.length) return resolve(null);
-
-          return resolve(paths[0]);
-        }
-      );
-    });
+      ],
+      // $FlowFixMe[incompatible-type]
+    }).then(filePaths => filePaths);
   };
 
   static readEventsFunctionExtensionFile = (
     filepath: string
-  ): Promise<Object> => {
+  ): Promise<SerializedExtension> => {
     return readJSONFile(filepath);
+  };
+
+  static chooseAssetPackFile = (): Promise<string> => {
+    return openFilePicker({
+      title: 'Import an asset pack',
+      properties: ['openFile'],
+      message: 'Choose an asset pack files to import (.gdo file)',
+      filters: [
+        {
+          name: 'GDevelop 5 asset pack',
+          extensions: ['gdo'],
+        },
+      ],
+      // $FlowFixMe[incompatible-type]
+    }).then(filePath => filePath);
+  };
+
+  static readAssetPackFile = async (filepath: string): Promise<Blob> => {
+    const buffer = await fs.promises.readFile(filepath);
+    return new Blob([buffer]);
   };
 }

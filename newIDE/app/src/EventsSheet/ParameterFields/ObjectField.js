@@ -2,76 +2,221 @@
 import * as React from 'react';
 import classNames from 'classnames';
 import { type ParameterInlineRendererProps } from './ParameterInlineRenderer.flow';
-import ObjectSelector from '../../ObjectsList/ObjectSelector';
-import { type ParameterFieldProps } from './ParameterFieldCommons';
+import ObjectSelector, {
+  type ObjectSelectorInterface,
+} from '../../ObjectsList/ObjectSelector';
+import {
+  type ParameterFieldProps,
+  type ParameterFieldInterface,
+  type FieldFocusFunction,
+} from './ParameterFieldCommons';
 import { Trans } from '@lingui/macro';
 import { nameAndIconContainer } from '../EventsTree/ClassNames';
+import InAppTutorialContext from '../../InAppTutorial/InAppTutorialContext';
+import { highlightSearchText } from '../../Utils/HighlightSearchText';
 
-export default class ObjectField extends React.Component<
-  ParameterFieldProps,
-  {||}
-> {
-  _description: ?string;
-  _longDescription: ?string;
-  _allowedObjectType: ?string;
-  _field: ?ObjectSelector;
+const gd: libGDevelop = global.gd;
 
-  constructor(props: ParameterFieldProps) {
-    super(props);
+const getRequiredBehaviorTypes = (
+  platform: gdPlatform,
+  functionMetadata: gdInstructionMetadata | gdExpressionMetadata,
+  parameterIndex: number,
+  shouldBeHidden: boolean | null
+) => {
+  const requiredBehaviorTypes: Array<string> = [];
+  for (
+    let index = parameterIndex + 1;
+    index < functionMetadata.getParametersCount();
+    index++
+  ) {
+    const behaviorParameter = functionMetadata.getParameter(index);
+    if (behaviorParameter.getType() !== 'behavior') {
+      break;
+    }
+    const behaviorType = behaviorParameter.getExtraInfo();
+    if (behaviorType.length === 0) {
+      continue;
+    }
+    const behaviorMetadata = gd.MetadataProvider.getBehaviorMetadata(
+      platform,
+      behaviorType
+    );
+    if (
+      shouldBeHidden === null ||
+      behaviorMetadata.isHidden() === shouldBeHidden
+    ) {
+      requiredBehaviorTypes.push(behaviorType);
+    }
+  }
+  return requiredBehaviorTypes;
+};
 
-    const { parameterMetadata } = this.props;
+const getRequiredCapabilitiesBehaviorTypes = (
+  platform: gdPlatform,
+  functionMetadata: gdInstructionMetadata | gdExpressionMetadata,
+  parameterIndex: number
+) => getRequiredBehaviorTypes(platform, functionMetadata, parameterIndex, true);
 
-    this._description = parameterMetadata
+const getRequiredVisibleBehaviorTypes = (
+  platform: gdPlatform,
+  functionMetadata: gdInstructionMetadata | gdExpressionMetadata,
+  parameterIndex: number
+) =>
+  getRequiredBehaviorTypes(platform, functionMetadata, parameterIndex, false);
+
+export const getAllRequiredBehaviorTypes = (
+  platform: gdPlatform,
+  functionMetadata: gdInstructionMetadata | gdExpressionMetadata,
+  parameterIndex: number
+): Array<string> =>
+  getRequiredBehaviorTypes(platform, functionMetadata, parameterIndex, null);
+
+export default (React.forwardRef<ParameterFieldProps, ParameterFieldInterface>(
+  function ObjectField(props: ParameterFieldProps, ref) {
+    const { currentlyRunningInAppTutorial } = React.useContext(
+      InAppTutorialContext
+    );
+    const field = React.useRef<?ObjectSelectorInterface>(null);
+    const focus: FieldFocusFunction = options => {
+      // Prevent focus of field if an in-app tutorial is running because
+      // the popper of the tooltip and the popper of the semi controlled
+      // autocomplete's dropdown are conflicting.
+      if (field.current && !currentlyRunningInAppTutorial)
+        field.current.focus(options);
+    };
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
+
+    const {
+      project,
+      parameterMetadata,
+      parameterIndex,
+      instructionMetadata,
+      expressionMetadata,
+      instruction,
+      projectScopedContainersAccessor,
+    } = props;
+
+    const description = parameterMetadata
       ? parameterMetadata.getDescription()
       : undefined;
 
-    this._longDescription = parameterMetadata
+    const longDescription = parameterMetadata
       ? parameterMetadata.getLongDescription()
       : undefined;
 
-    this._allowedObjectType = parameterMetadata
+    const allowedObjectType = parameterMetadata
       ? parameterMetadata.getExtraInfo()
       : undefined;
-  }
 
-  focus() {
-    if (this._field) this._field.focus();
-  }
+    const requiredCapabilitiesBehaviorTypes = React.useMemo<Array<string>>(
+      () => {
+        const functionMetadata = instructionMetadata || expressionMetadata;
+        if (!project || !functionMetadata || parameterIndex === undefined) {
+          return [];
+        }
+        return getRequiredCapabilitiesBehaviorTypes(
+          project.getCurrentPlatform(),
+          functionMetadata,
+          parameterIndex
+        );
+      },
+      [expressionMetadata, instructionMetadata, parameterIndex, project]
+    );
 
-  render() {
+    const requiredVisibleBehaviorTypes = React.useMemo(
+      () => {
+        const functionMetadata = instructionMetadata || expressionMetadata;
+        if (!project || !functionMetadata || parameterIndex === undefined) {
+          // $FlowFixMe[missing-empty-array-annot]
+          return [];
+        }
+        return getRequiredVisibleBehaviorTypes(
+          project.getCurrentPlatform(),
+          functionMetadata,
+          parameterIndex
+        );
+      },
+      [expressionMetadata, instructionMetadata, parameterIndex, project]
+    );
+
+    const onChange = React.useCallback(
+      (value: string) => {
+        props.onChange(value);
+        if (project && instructionMetadata && instruction) {
+          gd.BehaviorParameterFiller.fillBehaviorParameters(
+            project.getCurrentPlatform(),
+            projectScopedContainersAccessor.get(),
+            instructionMetadata,
+            instruction
+          );
+        }
+      },
+      [
+        project,
+        projectScopedContainersAccessor,
+        instructionMetadata,
+        instruction,
+        props,
+      ]
+    );
+
     return (
       <ObjectSelector
-        margin={this.props.isInline ? 'none' : 'dense'}
-        project={this.props.project}
-        value={this.props.value}
-        onChange={this.props.onChange}
-        allowedObjectType={this._allowedObjectType}
-        globalObjectsContainer={this.props.globalObjectsContainer}
-        objectsContainer={this.props.objectsContainer}
-        floatingLabelText={this._description}
-        helperMarkdownText={this._longDescription}
+        margin={props.isInline ? 'none' : 'dense'}
+        project={project}
+        value={props.value}
+        onChange={onChange}
+        onRequestClose={props.onRequestClose}
+        onApply={props.onApply}
+        // Some instructions apply to all objects BUT not some objects
+        // lacking a specific capability offered by a default behavior.
+        allowedObjectType={allowedObjectType}
+        requiredCapabilitiesBehaviorTypes={requiredCapabilitiesBehaviorTypes}
+        requiredVisibleBehaviorTypes={requiredVisibleBehaviorTypes}
+        projectScopedContainersAccessor={projectScopedContainersAccessor}
+        floatingLabelText={description}
+        helperMarkdownText={longDescription}
+        id={
+          parameterIndex !== undefined
+            ? `parameter-${parameterIndex}-object-selector`
+            : undefined
+        }
         fullWidth
         errorTextIfInvalid={
-          this._allowedObjectType ? (
+          allowedObjectType || requiredCapabilitiesBehaviorTypes.length > 0 ? (
             <Trans>The object does not exist or can't be used here.</Trans>
           ) : (
             <Trans>Enter the name of an object.</Trans>
           )
         }
         openOnFocus={
-          !this.props
-            .value /* Only force showing the list if no object is entered, see https://github.com/4ian/GDevelop/issues/859 */
+          !props.value /* Only force showing the list if no object is entered, see https://github.com/4ian/GDevelop/issues/859 */
         }
-        ref={field => (this._field = field)}
+        ref={field}
       />
     );
   }
-}
+): React.ComponentType<{
+  ...ParameterFieldProps,
+  +ref?: React.RefSetter<ParameterFieldInterface>,
+}>);
 
 export const renderInlineObjectWithThumbnail = ({
   value,
+  parameterMetadata,
   renderObjectThumbnail,
-}: ParameterInlineRendererProps) => {
+  expressionIsValid,
+  InvalidParameterValue,
+  MissingParameterValue,
+  highlightedSearchText,
+  highlightedSearchMatchCase,
+}: ParameterInlineRendererProps): React.Node => {
+  if (!value && !parameterMetadata.isOptional()) {
+    return <MissingParameterValue />;
+  }
+
   return (
     <span
       title={value}
@@ -80,7 +225,17 @@ export const renderInlineObjectWithThumbnail = ({
       })}
     >
       {renderObjectThumbnail(value)}
-      {value}
+      {expressionIsValid ? (
+        highlightSearchText(value, highlightedSearchText, {
+          matchCase: highlightedSearchMatchCase,
+        })
+      ) : (
+        <InvalidParameterValue>
+          {highlightSearchText(value, highlightedSearchText, {
+            matchCase: highlightedSearchMatchCase,
+          })}
+        </InvalidParameterValue>
+      )}
     </span>
   );
 };

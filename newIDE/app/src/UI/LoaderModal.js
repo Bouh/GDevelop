@@ -1,38 +1,112 @@
+// @flow
 import React from 'react';
-import CircularProgress from '@material-ui/core/CircularProgress';
+import { I18n } from '@lingui/react';
+import Dialog from '@material-ui/core/Dialog';
+import DialogContent from '@material-ui/core/DialogContent';
+
+import { type MessageDescriptor } from '../Utils/i18n/MessageDescriptor.flow';
+
+import Text from './Text';
+import CircularProgress from './CircularProgress';
+import { Column, Spacer } from './Grid';
+import PortalContainerContext from './PortalContainerContext';
 
 const loaderSize = 50;
+const dialogWithMessageWidth = 250;
 
-export default props => {
+const styles = {
+  dialogContent: {
+    padding: 10,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'row',
+  },
+};
+
+function useDelayedBoolean(target: boolean, delayMs: number): boolean {
+  const [value, setValue] = React.useState<boolean>(false);
+  const timerRef = React.useRef<?TimeoutID>(null);
+
+  React.useEffect(
+    () => {
+      if (target) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+          setValue(true);
+          timerRef.current = null;
+        }, delayMs);
+      } else {
+        setValue(false);
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+      }
+      return () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      };
+    },
+    [target, delayMs]
+  );
+
+  return value;
+}
+
+type Props = {|
+  showImmediately: boolean,
+  showAfterDelay?: boolean,
+  message?: ?MessageDescriptor,
+  progress?: ?number,
+|};
+
+const transitionDuration = { enter: 0, exit: 150 };
+
+const LoaderModal = ({
+  progress,
+  message,
+  showImmediately,
+  showAfterDelay,
+}: Props): React.Node => {
+  const delayedShow = useDelayedBoolean(!!showAfterDelay, 150);
+  const isInfinite = progress === null || progress === undefined;
+  const portalContainer = React.useContext(PortalContainerContext);
+
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        zIndex: 2000, // 2000 is higher than any Material-UI modal
-        pointerEvents: props.show ? 'cursor' : 'none',
-        display: props.show ? 'block' : 'none',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          marginTop: -loaderSize / 2,
-          marginLeft: -loaderSize / 2,
-          width: loaderSize,
-          height: loaderSize,
-        }}
-      >
-        {props.show /* Don't render CircularProgress to avoid it to use a timeout that would wake regularly the CPU  */ && (
-          <CircularProgress size={loaderSize} disableShrink />
-        )}
-      </div>
-    </div>
+    <I18n>
+      {({ i18n }) => (
+        <Dialog
+          open={showImmediately || delayedShow}
+          transitionDuration={transitionDuration}
+          container={portalContainer}
+        >
+          <DialogContent style={styles.dialogContent}>
+            <div
+              style={{
+                width: message ? dialogWithMessageWidth : undefined,
+              }}
+            >
+              <Column noMargin alignItems="center" expand>
+                <CircularProgress
+                  size={loaderSize}
+                  disableShrink={isInfinite}
+                  value={isInfinite ? undefined : progress}
+                  variant={isInfinite ? 'indeterminate' : 'determinate'}
+                />
+                {message && (
+                  <>
+                    <Spacer />
+                    <Text noMargin align="center">
+                      {i18n._(message)}
+                    </Text>
+                  </>
+                )}
+              </Column>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </I18n>
   );
 };
+
+export default LoaderModal;

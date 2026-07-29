@@ -4,16 +4,19 @@ import {
   type InstructionsListContext,
   type InstructionContext,
   type ParameterContext,
+  type VariableDeclarationContext,
 } from '../../SelectionHandler';
-import { type EventsScope } from '../../EventsScope.flow';
-import { type ScreenType } from '../../../UI/Reponsive/ScreenTypeMeasurer';
-import { type WidthType } from '../../../UI/Reponsive/ResponsiveWindowMeasurer';
+import { type EventsScope } from '../../../InstructionOrExpression/EventsScope';
+import { type ScreenType } from '../../../UI/Responsive/ScreenTypeMeasurer';
+import { type WindowSizeType } from '../../../UI/Responsive/ResponsiveWindowMeasurer';
+import { ProjectScopedContainersAccessor } from '../../../InstructionOrExpression/EventsScope';
 
 export type EventRendererProps = {
   project: gdProject,
   scope: EventsScope,
   globalObjectsContainer: gdObjectsContainer,
   objectsContainer: gdObjectsContainer,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
   event: gdBaseEvent,
   disabled: boolean,
 
@@ -28,13 +31,16 @@ export type EventRendererProps = {
   onInstructionClick: InstructionContext => void,
   onInstructionDoubleClick: InstructionContext => void,
   onInstructionContextMenu: (x: number, y: number, InstructionContext) => void,
-  onInstructionsListContextMenu: (
-    x: number,
-    y: number,
+  onAddInstructionContextMenu: (
+    HTMLButtonElement,
     InstructionsListContext
   ) => void,
   onParameterClick: ParameterContext => void,
+  onEndEditingEvent: () => void,
   selection: any,
+
+  onVariableDeclarationClick: VariableDeclarationContext => void,
+  onVariableDeclarationDoubleClick: VariableDeclarationContext => void,
 
   onOpenLayout: string => void,
   onOpenExternalEvents: string => void,
@@ -43,5 +49,12 @@ export type EventRendererProps = {
   renderObjectThumbnail: string => React.Node,
 
   screenType: ScreenType,
-  windowWidth: WidthType,
+  windowSize: WindowSizeType,
+  eventsSheetWidth: number,
+  eventsSheetHeight: number,
+
+  idPrefix: string,
+  isValidElseEvent?: boolean,
+  highlightedSearchText?: ?string,
+  highlightedSearchMatchCase?: boolean,
 };

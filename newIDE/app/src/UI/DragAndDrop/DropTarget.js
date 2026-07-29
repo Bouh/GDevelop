@@ -11,22 +11,28 @@ type Props<DraggedItemType> = {|
   children: ({
     connectDropTarget: ConnectDropTarget,
     isOver: boolean,
+    isOverLazy: boolean,
     canDrop: boolean,
-  }) => React.Node,
+  }) => ?React.Node,
   canDrop: (item: DraggedItemType) => boolean,
   hover?: (monitor: DropTargetMonitor) => void,
   drop: (monitor: DropTargetMonitor) => void,
 |};
 
+export type DropTargetComponent<DraggedItemType> = (
+  Props<DraggedItemType>
+) => React.Node;
+
 type DropTargetProps = {|
   connectDropTarget: ConnectDropTarget,
   isOver: boolean,
+  isOverLazy: boolean,
   canDrop: boolean,
 |};
 
 export const makeDropTarget = <DraggedItemType>(
   reactDndType: string
-): ((Props<DraggedItemType>) => React.Node) => {
+): DropTargetComponent<DraggedItemType> => {
   const targetSpec = {
     canDrop(props: Props<DraggedItemType>, monitor: DropTargetMonitor) {
       const item = monitor.getItem();
@@ -50,15 +56,20 @@ export const makeDropTarget = <DraggedItemType>(
     return {
       connectDropTarget: connect.dropTarget(),
       isOver: monitor.isOver({ shallow: true }),
+      isOverLazy: monitor.isOver({ shallow: false }),
       canDrop: monitor.canDrop(),
     };
   }
 
+  // $FlowFixMe[underconstrained-implicit-instantiation]
+  // $FlowFixMe[incompatible-variance]
   const InnerDropTarget = DropTarget(reactDndType, targetSpec, targetCollect)(
-    ({ children, connectDropTarget, isOver, canDrop }) => {
+    // $FlowFixMe[missing-local-annot]
+    ({ children, connectDropTarget, isOver, isOverLazy, canDrop }) => {
       return children({
         connectDropTarget,
         isOver,
+        isOverLazy,
         canDrop,
       });
     }

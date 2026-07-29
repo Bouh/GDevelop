@@ -1,173 +1,140 @@
 // @flow
 import { Trans } from '@lingui/macro';
 
-import React, { Component } from 'react';
-import FlatButton from '../UI/FlatButton';
-import RaisedButton from '../UI/RaisedButton';
-import Dialog from '../UI/Dialog';
-import { Column } from '../UI/Grid';
-import TextField from '../UI/TextField';
+import * as React from 'react';
+import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import {
-  type LoginForm,
-  type LoginError,
-} from '../Utils/GDevelopServices/Authentification';
-import RightLoader from '../UI/RightLoader';
+  type LoginForm as LoginFormType,
+  type ForgotPasswordForm,
+  type AuthError,
+  type IdentityProvider,
+} from '../Utils/GDevelopServices/Authentication';
+import LoginForm from './LoginForm';
 import LeftLoader from '../UI/LeftLoader';
 import Text from '../UI/Text';
-import { getEmailErrorText, getPasswordErrorText } from './CreateAccountDialog';
-import AlertMessage from '../UI/AlertMessage';
+import { ColumnStackLayout } from '../UI/Layout';
+import HelpButton from '../UI/HelpButton';
+import FlatButton from '../UI/FlatButton';
+import GDevelopGLogo from '../UI/CustomSvgIcons/GDevelopGLogo';
+import { useResponsiveWindowSize } from '../UI/Responsive/ResponsiveWindowMeasurer';
+
+// $FlowFixMe[missing-local-annot]
+const getStyles = ({ isMobile }) => {
+  return {
+    formContainer: {
+      display: 'flex',
+      width: isMobile ? '95%' : '90%',
+      marginTop: 10,
+      flexDirection: 'column',
+    },
+  };
+};
 
 type Props = {|
   onClose: () => void,
   onGoToCreateAccount: () => void,
-  onLogin: (form: LoginForm) => void,
-  onForgotPassword: (form: LoginForm) => void,
+  onLogin: (form: LoginFormType) => Promise<void>,
+  onLoginWithProvider: (provider: IdentityProvider) => Promise<void>,
+  onForgotPassword: (form: ForgotPasswordForm) => Promise<void>,
   loginInProgress: boolean,
-  error: ?LoginError,
-  resetPasswordDialogOpen: boolean,
-  onCloseResetPasswordDialog: () => void,
-  forgotPasswordInProgress: boolean,
+  error: ?AuthError,
 |};
 
-type State = {|
-  form: LoginForm,
-|};
+const LoginDialog = ({
+  onClose,
+  onGoToCreateAccount,
+  onLogin,
+  onLoginWithProvider,
+  onForgotPassword,
+  loginInProgress,
+  error,
+}: Props): React.Node => {
+  const { isMobile } = useResponsiveWindowSize();
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const styles = getStyles({ isMobile });
 
-export default class LoginDialog extends Component<Props, State> {
-  state = {
-    form: {
-      email: '',
-      password: '',
-    },
+  const doLogin = () => {
+    if (loginInProgress) return;
+
+    onLogin({
+      email: email.trim(),
+      password,
+    });
   };
 
-  _onLogin = () => {
-    const { form } = this.state;
-    this.props.onLogin(form);
-  };
+  const actions = [
+    <FlatButton
+      label={<Trans>Cancel</Trans>}
+      key="cancel"
+      primary={false}
+      onClick={onClose}
+    />,
+    <LeftLoader isLoading={loginInProgress} key="login">
+      <DialogPrimaryButton
+        id="login-button"
+        label={<Trans>Login</Trans>}
+        primary
+        onClick={doLogin}
+        disabled={loginInProgress}
+      />
+    </LeftLoader>,
+  ];
 
-  _onForgotPassword = () => {
-    const { form } = this.state;
-    this.props.onForgotPassword(form);
-  };
+  const secondaryActions = [
+    <HelpButton key="help" helpPagePath={'/interface/profile'} />,
+  ];
 
-  render() {
-    const {
-      onClose,
-      onGoToCreateAccount,
-      loginInProgress,
-      error,
-      resetPasswordDialogOpen,
-      onCloseResetPasswordDialog,
-      forgotPasswordInProgress,
-    } = this.props;
-    const actions = [
-      <FlatButton
-        label={<Trans>Back</Trans>}
-        disabled={loginInProgress || forgotPasswordInProgress}
-        key="back"
-        primary={false}
-        onClick={onClose}
-      />,
-      <LeftLoader isLoading={loginInProgress} key="login">
-        <RaisedButton
-          label={<Trans>Login</Trans>}
-          primary
-          onClick={this._onLogin}
-          disabled={loginInProgress || forgotPasswordInProgress}
+  const dialogContent = (
+    <ColumnStackLayout
+      noMargin
+      expand
+      justifyContent="center"
+      alignItems="center"
+    >
+      {
+        <ColumnStackLayout noMargin justifyContent="center" alignItems="center">
+          <GDevelopGLogo fontSize="large" />
+          <Text noMargin size="section-title" align="center">
+            <Trans>Log in to your account</Trans>
+          </Text>
+        </ColumnStackLayout>
+      }
+      <div style={styles.formContainer}>
+        <LoginForm
+          onLogin={doLogin}
+          onLoginWithProvider={onLoginWithProvider}
+          email={email}
+          onChangeEmail={setEmail}
+          password={password}
+          onChangePassword={setPassword}
+          onForgotPassword={onForgotPassword}
+          loginInProgress={loginInProgress}
+          error={error}
+          onGoToCreateAccount={onGoToCreateAccount}
         />
-      </LeftLoader>,
-    ];
+      </div>
+    </ColumnStackLayout>
+  );
 
-    return (
-      <Dialog
-        title={<Trans>Login to your GDevelop account</Trans>}
-        actions={actions}
-        secondaryActions={[
-          <RightLoader
-            isLoading={forgotPasswordInProgress}
-            key="forgot-password"
-          >
-            <FlatButton
-              label={<Trans>I forgot my password</Trans>}
-              primary={false}
-              disabled={loginInProgress || forgotPasswordInProgress}
-              onClick={this._onForgotPassword}
-            />
-          </RightLoader>,
-        ]}
-        onRequestClose={() => {
-          if (!loginInProgress && !forgotPasswordInProgress) onClose();
-        }}
-        maxWidth="sm"
-        open
-      >
-        <Column noMargin>
-          <AlertMessage
-            kind="info"
-            renderRightButton={() => (
-              <FlatButton
-                label={<Trans>Create my account</Trans>}
-                disabled={loginInProgress || forgotPasswordInProgress}
-                primary
-                onClick={onGoToCreateAccount}
-              />
-            )}
-          >
-            <Trans>Don't have an account yet?</Trans>
-          </AlertMessage>
-          <TextField
-            value={this.state.form.email}
-            floatingLabelText={<Trans>Email</Trans>}
-            errorText={getEmailErrorText(error)}
-            fullWidth
-            onChange={(e, value) => {
-              this.setState({
-                form: {
-                  ...this.state.form,
-                  email: value,
-                },
-              });
-            }}
-          />
-          <TextField
-            value={this.state.form.password}
-            floatingLabelText={<Trans>Password</Trans>}
-            errorText={getPasswordErrorText(error)}
-            type="password"
-            fullWidth
-            onChange={(e, value) => {
-              this.setState({
-                form: {
-                  ...this.state.form,
-                  password: value,
-                },
-              });
-            }}
-          />
-        </Column>
-        <Dialog
-          open={resetPasswordDialogOpen}
-          title={<Trans>Reset your password</Trans>}
-          actions={[
-            <FlatButton
-              label={<Trans>Close</Trans>}
-              key="close"
-              onClick={onCloseResetPasswordDialog}
-            />,
-          ]}
-        >
-          <Column noMargin>
-            <Text>
-              <Trans>
-                You should have received an email containing instructions to
-                reset and set a new password. Once it's done, you can use your
-                new password in GDevelop.
-              </Trans>
-            </Text>
-          </Column>
-        </Dialog>
-      </Dialog>
-    );
-  }
-}
+  return (
+    <Dialog
+      title={null} // This dialog has a custom design to be more welcoming, the title is set in the content.
+      id="login-dialog"
+      // $FlowFixMe[incompatible-type]
+      actions={actions}
+      // $FlowFixMe[incompatible-type]
+      secondaryActions={secondaryActions}
+      cannotBeDismissed={loginInProgress}
+      onRequestClose={onClose}
+      onApply={doLogin}
+      maxWidth="md"
+      open
+      flexColumnBody
+    >
+      {dialogContent}
+    </Dialog>
+  );
+};
+
+export default LoginDialog;

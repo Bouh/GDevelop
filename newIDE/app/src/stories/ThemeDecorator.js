@@ -1,16 +1,14 @@
 // @flow
 import React from 'react';
-import GDevelopThemeContext from '../UI/Theme/ThemeContext';
-import { ThemeProvider } from '@material-ui/styles';
-import defaultTheme from '../UI/Theme/DefaultTheme';
 import { type StoryDecorator } from '@storybook/react';
+import { FullThemeProvider } from '../UI/Theme/FullThemeProvider';
 
-const themeDecorator: StoryDecorator = (story, context) => (
-  <GDevelopThemeContext.Provider value={defaultTheme.gdevelopTheme}>
-    <ThemeProvider theme={defaultTheme.muiTheme}>
-      {story(context)}
-    </ThemeProvider>
-  </GDevelopThemeContext.Provider>
-);
+const themeDecorator: StoryDecorator = (Story, context) => {
+  return (
+    <FullThemeProvider forcedThemeName={context.globals.themeName}>
+      <Story />
+    </FullThemeProvider>
+  );
+};
 
 export default themeDecorator;

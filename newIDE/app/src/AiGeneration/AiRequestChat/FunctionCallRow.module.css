@@ -1,0 +1,9 @@
+.addedResourcesContainer {
+  padding-left: 20px;
+  user-select: all;
+  padding-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  outline: none;
+}

@@ -1,3 +1,4 @@
+// @flow
 import * as React from 'react';
 
 const style = {
@@ -7,8 +8,17 @@ const style = {
 type Props = {
   children: React.Node,
   height: number | string,
+  alignItems?: 'center',
+  justifyContent?: 'center',
 };
 
-export default ({ children, height }: Props) => (
-  <div style={{ ...style, height }}>{children}</div>
+const FixedHeightFlexContainer = ({
+  children,
+  height,
+  alignItems,
+  justifyContent,
+}: Props): React.MixedElement => (
+  <div style={{ ...style, height, alignItems, justifyContent }}>{children}</div>
 );
+
+export default FixedHeightFlexContainer;

@@ -3,22 +3,29 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#if defined(GD_IDE_ONLY)
-#ifndef GDCORE_EVENTSFUNCTIONEXTENSION_H
-#define GDCORE_EVENTSFUNCTIONEXTENSION_H
+#pragma once
 
 #include <vector>
-#include "GDCore/Project/EventsFunctionsContainer.h"
+
+#include "GDCore/Extensions/Metadata/DependencyMetadata.h"
+#include "GDCore/Extensions/Metadata/SourceFileMetadata.h"
 #include "GDCore/Project/EventsBasedBehavior.h"
+#include "GDCore/Project/EventsBasedObject.h"
+#include "GDCore/Project/EventsFunctionsContainer.h"
+#include "GDCore/Project/EventsFunctionsExtensionChangelog.h"
+#include "GDCore/Project/VariablesContainer.h"
 #include "GDCore/String.h"
 #include "GDCore/Tools/SerializableWithNameList.h"
+
 namespace gd {
 class SerializerElement;
 class Project;
 }  // namespace gd
 
 namespace gd {
-
+// TODO Remove the EventsFunctionsContainer inheritance and make it an attribute.
+// This will allow to get EventsFunctionsContainer the same way for extensions,
+// objects and behaviors.
 /**
  * \brief Hold a list of Events Functions (gd::EventsFunction) and Events Based
  * Behaviors.
@@ -31,7 +38,7 @@ namespace gd {
  *
  * \ingroup PlatformDefinition
  */
-class GD_CORE_API EventsFunctionsExtension : public EventsFunctionsContainer {
+class GD_CORE_API EventsFunctionsExtension {
  public:
   EventsFunctionsExtension();
   EventsFunctionsExtension(const EventsFunctionsExtension&);
@@ -59,7 +66,8 @@ class GD_CORE_API EventsFunctionsExtension : public EventsFunctionsContainer {
   }
 
   const gd::String& GetShortDescription() const { return shortDescription; };
-  EventsFunctionsExtension& SetShortDescription(const gd::String& shortDescription_) {
+  EventsFunctionsExtension& SetShortDescription(
+      const gd::String& shortDescription_) {
     shortDescription = shortDescription_;
     return *this;
   }
@@ -67,6 +75,12 @@ class GD_CORE_API EventsFunctionsExtension : public EventsFunctionsContainer {
   const gd::String& GetDescription() const { return description; };
   EventsFunctionsExtension& SetDescription(const gd::String& description_) {
     description = description_;
+    return *this;
+  }
+
+  const gd::String& GetDimension() const { return dimension; };
+  EventsFunctionsExtension& SetDimension(const gd::String& dimension_) {
+    dimension = dimension_;
     return *this;
   }
 
@@ -82,11 +96,17 @@ class GD_CORE_API EventsFunctionsExtension : public EventsFunctionsContainer {
     return *this;
   }
 
-  const gd::String& GetTags() const { return tags; };
-  EventsFunctionsExtension& SetTags(const gd::String& tags_) {
-    tags = tags_;
+  const gd::String& GetCategory() const { return category; };
+  EventsFunctionsExtension& SetCategory(const gd::String& category_) {
+    category = category_;
     return *this;
   }
+
+  const std::vector<gd::String>& GetTags() const { return tags; };
+  std::vector<gd::String>& GetTags() { return tags; };
+
+  const std::vector<gd::String>& GetAuthorIds() const { return authorIds; };
+  std::vector<gd::String>& GetAuthorIds() { return authorIds; };
 
   const gd::String& GetAuthor() const { return author; };
   EventsFunctionsExtension& SetAuthor(const gd::String& author_) {
@@ -94,20 +114,179 @@ class GD_CORE_API EventsFunctionsExtension : public EventsFunctionsContainer {
     return *this;
   }
 
+  const gd::String& GetPreviewIconUrl() const { return previewIconUrl; };
+  EventsFunctionsExtension& SetPreviewIconUrl(
+      const gd::String& previewIconUrl_) {
+    previewIconUrl = previewIconUrl_;
+    return *this;
+  }
+
+  const gd::String& GetIconUrl() const { return iconUrl; };
+  EventsFunctionsExtension& SetIconUrl(const gd::String& iconUrl_) {
+    iconUrl = iconUrl_;
+    return *this;
+  }
+
+  /**
+   * \brief Get the help path of this extension, relative to the GDevelop
+   * documentation root.
+   */
+  const gd::String& GetHelpPath() const { return helpPath; };
+
+  /**
+   * \brief Set the help path of this extension, relative to the GDevelop
+   * documentation root.
+   */
+  EventsFunctionsExtension& SetHelpPath(const gd::String& helpPath_) {
+    helpPath = helpPath_;
+    return *this;
+  }
+
+  /**
+   * \brief Get the GDevelop version required by this extension.
+   */
+  const gd::String& GetGDevelopVersion() const { return gdevelopVersion; };
+
+  /**
+   * \brief Set the GDevelop version required by this extension.
+   */
+  EventsFunctionsExtension& SetGDevelopVersion(const gd::String& gdevelopVersion_) {
+    gdevelopVersion = gdevelopVersion_;
+    return *this;
+  }
+
   /**
    * \brief Return a reference to the list of the events based behaviors.
    */
-  SerializableWithNameList<EventsBasedBehavior>& GetEventsBasedBehaviors() {
+  gd::SerializableWithNameList<EventsBasedBehavior>& GetEventsBasedBehaviors() {
     return eventsBasedBehaviors;
   }
 
   /**
    * \brief Return a const reference to the list of the events based behaviors.
    */
-  const SerializableWithNameList<EventsBasedBehavior>& GetEventsBasedBehaviors()
-      const {
+  const gd::SerializableWithNameList<EventsBasedBehavior>&
+  GetEventsBasedBehaviors() const {
     return eventsBasedBehaviors;
   }
+
+  /**
+   * \brief Return a reference to the list of the events based objects.
+   */
+  gd::SerializableWithNameList<EventsBasedObject>& GetEventsBasedObjects() {
+    return eventsBasedObjects;
+  }
+
+  /**
+   * \brief Return a const reference to the list of the events based objects.
+   */
+  const gd::SerializableWithNameList<EventsBasedObject>&
+  GetEventsBasedObjects() const {
+    return eventsBasedObjects;
+  }
+
+  /**
+   * \brief Sets an extension origin. This method is not present since the
+   * beginning so the projects created before that will have extensions
+   * installed from the store without an origin. Keep that in mind when creating
+   * features that rely on an extension's origin.
+   */
+  virtual void SetOrigin(const gd::String& originName_,
+                         const gd::String& originIdentifier_) {
+    originName = originName_;
+    originIdentifier = originIdentifier_;
+  }
+
+  virtual const gd::String& GetOriginName() const { return originName; }
+  virtual const gd::String& GetOriginIdentifier() const {
+    return originIdentifier;
+  }
+
+  /**
+   * \brief Return a reference to the functions of the events based behavior or object.
+   */
+  EventsFunctionsContainer& GetEventsFunctions() {
+    return eventsFunctionsContainer;
+  }
+
+  /**
+   * \brief Return a const reference to the functions of the events based
+   * behavior or object.
+   */
+  const EventsFunctionsContainer& GetEventsFunctions() const {
+    return eventsFunctionsContainer;
+  }
+
+  /** \name Dependencies
+   */
+  ///@{
+
+  /**
+   * \brief Adds a new dependency.
+   */
+  gd::DependencyMetadata& AddDependency() {
+    gd::DependencyMetadata dependency;
+    dependencies.push_back(dependency);
+    return dependencies.back();
+  };
+
+  /**
+   * \brief Adds a new dependency.
+   */
+  void RemoveDependencyAt(size_t index) {
+    dependencies.erase(dependencies.begin() + index);
+  };
+
+  /**
+   * \brief Returns the list of dependencies.
+   */
+  std::vector<gd::DependencyMetadata>& GetAllDependencies() {
+    return dependencies;
+  };
+
+  /**
+   * \brief Returns the list of dependencies.
+   */
+  const std::vector<gd::DependencyMetadata>& GetAllDependencies() const {
+    return dependencies;
+  };
+
+  ///@}
+
+  /** \name Variable management
+   * Members functions related to layout variables management.
+   */
+  ///@{
+
+  /**
+   * Return the global variables of the extension (variables scoped to the
+   * entire game lifetime).
+   */
+  inline const gd::VariablesContainer& GetGlobalVariables() const {
+    return globalVariables;
+  }
+
+  /**
+   * Return the global variables of the extension (variables scoped to the
+   * entire game lifetime).
+   */
+  inline gd::VariablesContainer& GetGlobalVariables() { return globalVariables; }
+
+  /**
+   * Return the global variables of the extension (variables scoped to the
+   * lifetime of a scene).
+   */
+  inline const gd::VariablesContainer& GetSceneVariables() const {
+    return sceneVariables;
+  }
+
+  /**
+   * Return the global variables of the extension (variables scoped to the
+   * lifetime of a scene).
+   */
+  inline gd::VariablesContainer& GetSceneVariables() { return sceneVariables; }
+
+  ///@}
 
   /** \name Serialization
    */
@@ -115,13 +294,85 @@ class GD_CORE_API EventsFunctionsExtension : public EventsFunctionsContainer {
   /**
    * \brief Serialize the EventsFunctionsExtension to the specified element
    */
-  void SerializeTo(gd::SerializerElement& element) const;
+  void SerializeTo(gd::SerializerElement& element, bool isExternal = false) const;
 
   /**
-   * \brief Load the EventsFunctionsExtension from the specified element
+   * \brief Serialize the EventsFunctionsExtension to the specified element
+   */
+  void SerializeToExternal(gd::SerializerElement& element) const {
+    SerializeTo(element, true);
+  }
+
+  /**
+   * \brief Load the EventsFunctionsExtension from the specified element.
    */
   void UnserializeFrom(gd::Project& project,
                        const gd::SerializerElement& element);
+
+  /**
+   * \brief Load the extension without free functions, behaviors and objects
+   * implementation.
+   */
+  void UnserializeExtensionDeclarationFrom(
+      gd::Project& project,
+      const gd::SerializerElement& element);
+
+  /**
+   * \brief Load default variants of all the events-based objects.
+   */
+  void UnserializeExtensionDefaultVariantsFrom(gd::Project &project,
+                                            const SerializerElement &element);
+
+  /**
+   * \brief Load free functions, behaviors and objects implementation
+   * (in opposition to load just their "declaration" by reading their name).
+   */
+  void UnserializeExtensionImplementationFrom(
+      gd::Project& project,
+      const gd::SerializerElement& element);
+  ///@}
+
+  /** \name Lifecycle event functions
+   */
+  ///@{
+  static bool IsExtensionLifecycleEventsFunction(
+      const gd::String& eventsFunctionName);
+  ///@}
+
+  /** \name Source files
+   */
+  ///@{
+
+  /**
+   * \brief Adds a new source file.
+   */
+  gd::SourceFileMetadata& AddSourceFile() {
+    gd::SourceFileMetadata sourceFile;
+    sourceFiles.push_back(sourceFile);
+    return sourceFiles.back();
+  };
+
+  /**
+   * \brief Removes a source file.
+   */
+  void RemoveSourceFileAt(size_t index) {
+    sourceFiles.erase(sourceFiles.begin() + index);
+  };
+
+  /**
+   * \brief Returns the list of source files.
+   */
+  std::vector<gd::SourceFileMetadata>& GetAllSourceFiles() {
+    return sourceFiles;
+  };
+
+  /**
+   * \brief Returns the list of source files.
+   */
+  const std::vector<gd::SourceFileMetadata>& GetAllSourceFiles() const {
+    return sourceFiles;
+  };
+
   ///@}
 
  private:
@@ -131,18 +382,51 @@ class GD_CORE_API EventsFunctionsExtension : public EventsFunctionsContainer {
    */
   void Init(const gd::EventsFunctionsExtension& other);
 
+  void SerializeDependencyTo(const gd::DependencyMetadata& dependency,
+                             gd::SerializerElement& serializer) const {
+    serializer.SetStringAttribute("type", dependency.GetDependencyType());
+    serializer.SetStringAttribute("exportName", dependency.GetExportName());
+    serializer.SetStringAttribute("name", dependency.GetName());
+    serializer.SetStringAttribute("version", dependency.GetVersion());
+  }
+
+  gd::DependencyMetadata UnserializeDependencyFrom(
+      gd::SerializerElement& serializer) {
+    gd::DependencyMetadata dependency;
+    dependency.SetDependencyType(serializer.GetStringAttribute("type"));
+    dependency.SetExportName(serializer.GetStringAttribute("exportName"));
+    dependency.SetName(serializer.GetStringAttribute("name"));
+    dependency.SetVersion(serializer.GetStringAttribute("version"));
+    return dependency;
+  }
+
   gd::String version;
   gd::String extensionNamespace;
   gd::String shortDescription;
   gd::String description;
+  gd::String dimension;
   gd::String name;
   gd::String fullName;
-  gd::String tags;
+  gd::String category;
+  std::vector<gd::String> tags;
+  std::vector<gd::String> authorIds;
   gd::String author;
-  SerializableWithNameList<EventsBasedBehavior> eventsBasedBehaviors;
+  gd::String previewIconUrl;
+  gd::String originName;
+  gd::String originIdentifier;
+  gd::String iconUrl;
+  gd::String helpPath;  ///< The relative path to the help for this extension in
+                        ///< the documentation (or an absolute URL).
+  gd::String gdevelopVersion;
+  gd::EventsFunctionsExtensionChangelog changelog;
+  gd::SerializableWithNameList<EventsBasedBehavior> eventsBasedBehaviors;
+  gd::SerializableWithNameList<EventsBasedObject> eventsBasedObjects;
+  std::vector<gd::DependencyMetadata> dependencies;
+  std::vector<gd::SourceFileMetadata> sourceFiles;
+
+  gd::EventsFunctionsContainer eventsFunctionsContainer;
+  gd::VariablesContainer globalVariables;
+  gd::VariablesContainer sceneVariables;
 };
 
 }  // namespace gd
-
-#endif  // GDCORE_EVENTSFUNCTIONEXTENSION_H
-#endif

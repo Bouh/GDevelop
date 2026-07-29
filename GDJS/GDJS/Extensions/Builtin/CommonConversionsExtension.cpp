@@ -23,6 +23,30 @@ CommonConversionsExtension::CommonConversionsExtension() {
       "gdjs.evtTools.common.toString");
   GetAllExpressions()["ToRad"].SetFunctionName("gdjs.toRad");
   GetAllExpressions()["ToDeg"].SetFunctionName("gdjs.toDegrees");
+
+  GetAllActions()["JSONToVariableStructure"].SetFunctionName(
+      "gdjs.evtTools.network.jsonToVariableStructure");
+  GetAllActions()["JSONToGlobalVariableStructure"].SetFunctionName(
+      "gdjs.evtTools.network.jsonToVariableStructure");
+  GetAllActions()["JSONToVariableStructure2"].SetFunctionName(
+      "gdjs.evtTools.network.jsonToVariableStructure");
+  GetAllActions()["JSONToObjectVariableStructure"].SetFunctionName(
+      "gdjs.evtTools.network.jsonToObjectVariableStructure");
+
+  GetAllStrExpressions()["ToJSON"].SetCustomCodeGenerator(
+      [](const std::vector<gd::Expression> &parameters,
+         gd::EventsCodeGenerator &codeGenerator,
+         gd::EventsCodeGenerationContext &context) {
+        // This expression used to be declared with a scenevar parameter.
+        return "gdjs.evtTools.network.variableStructureToJSON(" +
+               codeGenerator.GenerateAnyOrSceneVariableGetter(parameters[0],
+                                                              context) +
+               ")";
+      });
+  GetAllStrExpressions()["GlobalVarToJSON"].SetFunctionName(
+      "gdjs.evtTools.network.variableStructureToJSON");
+  GetAllStrExpressions()["ObjectVarToJSON"].SetFunctionName(
+      "gdjs.evtTools.network.objectVariableStructureToJSON");
 }
 
 }  // namespace gdjs

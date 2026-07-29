@@ -1,7 +1,6 @@
 // @flow
-
-const gdjsRoot =
-  'https://s3-eu-west-1.amazonaws.com/gdevelop-resources/GDJS-5.0.0-beta86';
+import Window from '../Utils/Window';
+import { getIDEVersionWithHash } from '../Version';
 
 type FileSet =
   | 'preview'
@@ -13,7 +12,7 @@ type FileSet =
 
 const filesToDownload: { [FileSet]: Array<string> } = {
   preview: ['/Runtime/index.html'],
-  web: ['/Runtime/index.html'],
+  web: ['/Runtime/index.html', '/Runtime/Electron/LICENSE.GDevelop.txt'],
   'cocos2d-js': [
     '/Runtime/Cocos2d/cocos2d-js-v3.10.js',
     '/Runtime/Cocos2d/index.html',
@@ -26,6 +25,7 @@ const filesToDownload: { [FileSet]: Array<string> } = {
   ],
   cordova: [
     '/Runtime/Cordova/www/index.html',
+    '/Runtime/Cordova/www/LICENSE.GDevelop.txt',
     '/Runtime/Cordova/config.xml',
     '/Runtime/Cordova/package.json',
   ],
@@ -33,6 +33,7 @@ const filesToDownload: { [FileSet]: Array<string> } = {
     '/Runtime/index.html',
     '/Runtime/Electron/main.js',
     '/Runtime/Electron/package.json',
+    '/Runtime/Electron/LICENSE.GDevelop.txt',
   ],
 };
 
@@ -44,6 +45,23 @@ export const findGDJS = (
   gdjsRoot: string,
   filesContent: Array<TextFileDescriptor>,
 |}> => {
+  // Get GDJS for this version. If you updated the version,
+  // run `newIDE/web-app/scripts/deploy-GDJS-Runtime` script.
+  let gdjsRoot = `https://resources.gdevelop-app.com/GDJS-${getIDEVersionWithHash()}`;
+
+  if (Window.isDev()) {
+    gdjsRoot =
+      window.location.hostname === 'localhost'
+        ? // Served by `watch-serve-GDJS-runtime.js` when running the IDE locally.
+          `http://localhost:5002`
+        : // On a deployed development build (e.g. editor-dev), use the runtime
+          // bundled with the build (see `copy-GDJS-Runtime-to-build.js`).
+          // Fetching localhost from a public origin would trigger the browser
+          // "Local Network Access" permission prompt and fail for anyone
+          // not running a local server.
+          `${window.location.origin}/GDJS`;
+  }
+
   return Promise.all(
     filesToDownload[fileSet].map(relativeFilePath => {
       const url = gdjsRoot + relativeFilePath;

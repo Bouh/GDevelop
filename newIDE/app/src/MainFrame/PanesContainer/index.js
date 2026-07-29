@@ -1,0 +1,649 @@
+// @flow
+
+import * as React from 'react';
+import classes from './PanesContainer.module.css';
+import classNames from 'classnames';
+import useForceUpdate from '../../Utils/UseForceUpdate';
+import { useDebounce } from '../../Utils/UseDebounce';
+import { useResponsiveWindowSize } from '../../UI/Responsive/ResponsiveWindowMeasurer';
+
+const styles = {
+  pointerEventsNone: {
+    pointerEvents: 'none',
+  },
+  pointerEventsAll: {
+    pointerEvents: 'all',
+  },
+};
+
+export type FloatingPaneState = 'open' | 'closed';
+
+type Props = {|
+  renderPane: ({
+    paneIdentifier: string,
+    isLeftMostPane: boolean,
+    isRightMostPane: boolean,
+    isDrawer: boolean,
+    areSidePanesDrawers: boolean,
+    onSetPointerEventsNone: (enablePointerEventsNone: boolean) => void,
+    onSetPaneDrawerState: (
+      paneIdentifier: string,
+      newState: FloatingPaneState
+    ) => void,
+    onRequestPaneClose?: (onClosed: () => void) => void,
+    drawerState?: FloatingPaneState,
+    rightPaneDrawerOpen?: boolean,
+  }) => React.Node,
+  hasEditorsInLeftPane: boolean,
+  hasEditorsInRightPane: boolean,
+  // Asked before a drawer is hidden by an explicit user gesture (swipe). Lets
+  // the Ask AI editor in that pane confirm/suspend a running request first.
+  // Returns whether the drawer should actually be hidden. Switching layouts
+  // does not go through this, so it never prompts.
+  onRequestDrawerClose?: (paneIdentifier: string) => Promise<boolean>,
+|};
+
+type DraggingState = {|
+  paneIdentifier: 'left' | 'right',
+  startClientX: number,
+  startWidth: number,
+|};
+
+const paneWidthMin = 300;
+
+/** Allow a pane to be moved and closed with a swipe on touchscreens. */
+const useSwipeableDrawer = ({
+  enabled,
+  paneRef,
+  direction,
+  onClose,
+}: {|
+  enabled: boolean,
+  paneRef: {| current: HTMLDivElement | null |},
+  direction: 'left' | 'right',
+  onClose: () => void,
+|}) => {
+  React.useEffect(
+    () => {
+      const drawer = paneRef.current;
+      if (!drawer) return;
+      if (!enabled) return;
+
+      let startX = 0;
+      let currentX = 0;
+      let isDragging = false;
+
+      const minDistanceForAction = 80;
+      const minDistanceForMovement = 30;
+
+      const onTouchStart = (e: TouchEvent) => {
+        startX = e.touches[0].clientX;
+        currentX = e.touches[0].clientX;
+        isDragging = true;
+        drawer.style.transition = 'none';
+      };
+
+      const onTouchMove = (e: TouchEvent) => {
+        if (!isDragging) return;
+
+        currentX = e.touches[0].clientX;
+        const deltaX = currentX - startX;
+
+        const hasMovedEnough = Math.abs(deltaX) > minDistanceForMovement;
+
+        const translate = !hasMovedEnough
+          ? 0
+          : direction === 'left'
+          ? Math.max(0, deltaX)
+          : Math.min(0, deltaX); // Prevent dragging in wrong direction
+
+        drawer.style.transform = `translateX(${translate}px)`;
+      };
+
+      const onTouchEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+
+        const deltaX = currentX - startX;
+        const shouldClose =
+          direction === 'left'
+            ? deltaX > minDistanceForAction
+            : deltaX < -minDistanceForAction;
+
+        const animationTimeInMs = 200;
+
+        if (shouldClose) {
+          // Do NOT fling the drawer off-screen here. Closing is driven by
+          // onClose() -> drawer state, which may first show a confirmation (when
+          // the AI is working). We hand the drawer's position back to its state
+          // (still open) so the confirmation appears with the drawer visible,
+          // instead of the drawer flashing closed and then reopening.
+          drawer.style.transition = '';
+          drawer.style.transform = '';
+          onClose();
+        } else {
+          // Swipe didn't reach the threshold: snap back to the open position.
+          drawer.style.transition = `transform 0.${animationTimeInMs}s ease-out`;
+          drawer.style.transform = 'translateX(0)';
+          setTimeout(() => {
+            drawer.style.transform = ''; // Reset for future swipes
+          }, 250);
+        }
+      };
+
+      drawer.addEventListener('touchstart', onTouchStart);
+      drawer.addEventListener('touchmove', onTouchMove);
+      drawer.addEventListener('touchend', onTouchEnd);
+
+      return () => {
+        drawer.removeEventListener('touchstart', onTouchStart);
+        drawer.removeEventListener('touchmove', onTouchMove);
+        drawer.removeEventListener('touchend', onTouchEnd);
+        drawer.style.transform = '';
+      };
+    },
+    [enabled, paneRef, direction, onClose]
+  );
+};
+
+const PANE_ANIMATION_DURATION_MS = 250;
+
+/**
+ * Manages the open/close animation state for a side pane.
+ *
+ * When requestPaneClose(callback) is called, the pane plays its slide-out
+ * animation for PANE_ANIMATION_DURATION_MS, then fires the callback and hides
+ * the pane — all batched into one React render so there's no visible flash.
+ *
+ * requestedCloseRef prevents a double-animation: when requestPaneClose has
+ * already started the slide-out (setting requestedCloseRef = true), the
+ * hasEditors=false effect skips re-starting it.
+ */
+const usePaneCloseAnimation = ({
+  hasEditors,
+  paneRef,
+  areSidePanesDrawers,
+}: {|
+  hasEditors: boolean,
+  paneRef: {| current: HTMLDivElement | null |},
+  areSidePanesDrawers: boolean,
+|}): {|
+  paneRendered: boolean,
+  paneClosing: boolean,
+  requestPaneClose: (onClosed: () => void) => void,
+|} => {
+  const [paneRendered, setPaneRendered] = React.useState(hasEditors);
+  const [paneClosing, setPaneClosing] = React.useState(false);
+  const closeTimeoutRef = React.useRef<?TimeoutID>(null);
+  const requestedCloseRef = React.useRef(false);
+  const closeCallbackRef = React.useRef<null | (() => void)>(null);
+
+  const startCloseAnimation = React.useCallback(
+    () => {
+      const pane = paneRef.current;
+      if (pane) {
+        pane.style.setProperty('--pane-close-width', `${pane.offsetWidth}px`);
+      }
+      setPaneClosing(true);
+      closeTimeoutRef.current = setTimeout(() => {
+        closeTimeoutRef.current = null;
+        // React 18 batches all state updates in a setTimeout callback into one
+        // render, so the callback (onCloseEditorTab) and the pane hide land
+        // in the same frame — no flash between tab disappearing and button appearing.
+        const callback = closeCallbackRef.current;
+        closeCallbackRef.current = null;
+        if (callback) callback();
+        setPaneRendered(false);
+        setPaneClosing(false);
+      }, PANE_ANIMATION_DURATION_MS);
+    },
+    [paneRef]
+  );
+
+  const cancelCloseAnimation = React.useCallback(() => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    closeCallbackRef.current = null;
+  }, []);
+
+  const requestPaneClose = React.useCallback(
+    (onClosed: () => void) => {
+      if (areSidePanesDrawers) {
+        // On mobile, panes are drawers — no slide-out animation, close immediately.
+        onClosed();
+        return;
+      }
+      requestedCloseRef.current = true;
+      closeCallbackRef.current = onClosed;
+      startCloseAnimation();
+    },
+    [areSidePanesDrawers, startCloseAnimation]
+  );
+
+  React.useEffect(
+    () => {
+      if (hasEditors) {
+        cancelCloseAnimation();
+        requestedCloseRef.current = false;
+        const pane = paneRef.current;
+        if (pane) {
+          pane.style.setProperty(
+            '--pane-close-width',
+            pane.style.flexBasis || '300px'
+          );
+        }
+        setPaneRendered(true);
+        setPaneClosing(false);
+      } else {
+        if (requestedCloseRef.current) {
+          requestedCloseRef.current = false;
+          return;
+        }
+        startCloseAnimation();
+      }
+    },
+    [hasEditors, paneRef, startCloseAnimation, cancelCloseAnimation]
+  );
+
+  // Unmount-only cleanup.
+  React.useEffect(() => cancelCloseAnimation, [cancelCloseAnimation]);
+
+  return { paneRendered, paneClosing, requestPaneClose };
+};
+
+export const PanesContainer = ({
+  renderPane,
+  hasEditorsInLeftPane,
+  hasEditorsInRightPane,
+  onRequestDrawerClose,
+}: Props): React.MixedElement => {
+  const { isMobile } = useResponsiveWindowSize();
+  const forceUpdate = useForceUpdate();
+  const debouncedForceUpdate = useDebounce(forceUpdate, 200);
+
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const leftResizerRef = React.useRef<HTMLDivElement | null>(null);
+  const leftPaneRef = React.useRef<HTMLDivElement | null>(null);
+  const centerPaneRef = React.useRef<HTMLDivElement | null>(null);
+  const rightPaneRef = React.useRef<HTMLDivElement | null>(null);
+  const rightResizerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const areSidePanesDrawers = isMobile;
+
+  const {
+    paneRendered: leftPaneRendered,
+    paneClosing: leftPaneClosing,
+    requestPaneClose: requestLeftPaneClose,
+  } = usePaneCloseAnimation({
+    hasEditors: hasEditorsInLeftPane,
+    paneRef: leftPaneRef,
+    areSidePanesDrawers,
+  });
+
+  const {
+    paneRendered: rightPaneRendered,
+    paneClosing: rightPaneClosing,
+    requestPaneClose: requestRightPaneClose,
+  } = usePaneCloseAnimation({
+    hasEditors: hasEditorsInRightPane,
+    paneRef: rightPaneRef,
+    areSidePanesDrawers,
+  });
+
+  const [panesDrawerState, setPanesDrawerState] = React.useState<{
+    [string]: FloatingPaneState,
+  }>({
+    left: 'open',
+    right: 'open',
+  });
+
+  const setPaneDrawerState = React.useCallback(
+    (paneIdentifier: string, newState: FloatingPaneState) => {
+      setPanesDrawerState(panesDrawerState => ({
+        ...panesDrawerState,
+        [paneIdentifier]: newState,
+      }));
+    },
+    []
+  );
+
+  // Latest "has editors" values, read inside the layout-switch effect below
+  // without making it depend on them (it must only run when the layout
+  // actually switches, not whenever an editor is opened/closed in a pane).
+  const hasEditorsInLeftPaneRef = React.useRef(hasEditorsInLeftPane);
+  hasEditorsInLeftPaneRef.current = hasEditorsInLeftPane;
+  const hasEditorsInRightPaneRef = React.useRef(hasEditorsInRightPane);
+  hasEditorsInRightPaneRef.current = hasEditorsInRightPane;
+
+  React.useEffect(
+    () => {
+      if (areSidePanesDrawers) {
+        // Just switched to mobile view. Keep a side pane that was visible on
+        // desktop (i.e. has editors, e.g. the Ask AI panel) open as a drawer so
+        // the switch is seamless. Two drawers can't be shown at once on mobile,
+        // so if both side panes have editors we prefer the right one (where the
+        // Ask AI panel lives by default) and keep the left closed.
+        const openRight = hasEditorsInRightPaneRef.current;
+        const openLeft = !openRight && hasEditorsInLeftPaneRef.current;
+        setPanesDrawerState({
+          left: openLeft ? 'open' : 'closed',
+          right: openRight ? 'open' : 'closed',
+        });
+      } else {
+        // Just switched to non-mobile view: always consider the pane drawers as open.
+        setPanesDrawerState({
+          left: 'open',
+          right: 'open',
+        });
+      }
+    },
+    [areSidePanesDrawers]
+  );
+
+  React.useEffect(
+    () => {
+      if (hasEditorsInRightPane) {
+        // Just opened the first editor in the right pane: ensure the drawer
+        // pane is shown.
+        // Note that is the screen is big enough so that drawers are not shown,
+        // the state is "open" anyway, this is fine.
+        setPaneDrawerState('right', 'open');
+      }
+    },
+    [setPaneDrawerState, hasEditorsInRightPane]
+  );
+
+  React.useEffect(
+    () => {
+      if (hasEditorsInLeftPane) {
+        // Just opened the first editor in the left pane: ensure the drawer
+        // pane is shown.
+        // Note that is the screen is big enough so that drawers are not shown,
+        // the state is "open" anyway, this is fine.
+        setPaneDrawerState('left', 'open');
+      }
+    },
+    [setPaneDrawerState, hasEditorsInLeftPane]
+  );
+
+  // Hiding a drawer via a swipe is an explicit user gesture: let the pane's Ask
+  // AI editor (if any) confirm/suspend a running request first, and only hide
+  // the drawer if confirmed (otherwise keep it open). Layout switches reset the
+  // drawer state directly (not through here), so they never prompt.
+  const requestHideDrawer = React.useCallback(
+    (paneIdentifier: 'left' | 'right') => {
+      const proceed = onRequestDrawerClose
+        ? onRequestDrawerClose(paneIdentifier)
+        : Promise.resolve(true);
+      proceed.then(shouldClose => {
+        setPaneDrawerState(paneIdentifier, shouldClose ? 'closed' : 'open');
+      });
+    },
+    [onRequestDrawerClose, setPaneDrawerState]
+  );
+
+  const onCloseLeftPane = React.useCallback(() => requestHideDrawer('left'), [
+    requestHideDrawer,
+  ]);
+  useSwipeableDrawer({
+    enabled: areSidePanesDrawers,
+    paneRef: leftPaneRef,
+    direction: 'left',
+    onClose: onCloseLeftPane,
+  });
+
+  const onCloseRightPane = React.useCallback(() => requestHideDrawer('right'), [
+    requestHideDrawer,
+  ]);
+  useSwipeableDrawer({
+    enabled: areSidePanesDrawers,
+    paneRef: rightPaneRef,
+    direction: 'left',
+    onClose: onCloseRightPane,
+  });
+
+  const draggingStateRef = React.useRef<DraggingState | null>(null);
+
+  React.useEffect(
+    () => {
+      const onPointerMove = (event: PointerEvent) => {
+        const leftPane = leftPaneRef.current;
+        const rightPane = rightPaneRef.current;
+        const draggingState = draggingStateRef.current;
+        if (!draggingState || !containerRef.current || !leftPane || !rightPane)
+          return;
+
+        const containerRect = containerRef.current.getBoundingClientRect();
+
+        const newWidth =
+          draggingState.paneIdentifier === 'left'
+            ? draggingState.startWidth +
+              (event.clientX - draggingState.startClientX)
+            : draggingState.startWidth -
+              (event.clientX - draggingState.startClientX);
+
+        const min = paneWidthMin;
+        const max = containerRect.width - paneWidthMin;
+        const clampedWidth = Math.max(min, Math.min(max, newWidth));
+
+        if (draggingState.paneIdentifier === 'left') {
+          leftPane.style.flexBasis = `${clampedWidth}px`;
+        } else {
+          rightPane.style.flexBasis = `${clampedWidth}px`;
+        }
+
+        // Only trigger a React re-render after the user has stopped dragging,
+        // to avoid re-rendering the panes too often.
+        debouncedForceUpdate();
+      };
+
+      const onPointerUp = () => {
+        draggingStateRef.current = null;
+        forceUpdate();
+
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+      };
+
+      const onLeftResizerPointerDown = (event: PointerEvent) => {
+        event.preventDefault();
+        const leftPane = leftPaneRef.current;
+        if (!leftPane) return;
+
+        draggingStateRef.current = {
+          paneIdentifier: 'left',
+          startClientX: event.clientX,
+          startWidth: leftPane.getBoundingClientRect().width,
+        };
+        forceUpdate();
+
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+      };
+
+      const onRightResizerPointerDown = (event: PointerEvent) => {
+        event.preventDefault();
+        const rightPane = rightPaneRef.current;
+        if (!rightPane) return;
+
+        draggingStateRef.current = {
+          paneIdentifier: 'right',
+          startClientX: event.clientX,
+          startWidth: rightPane.getBoundingClientRect().width,
+        };
+        forceUpdate();
+
+        document.addEventListener('pointermove', onPointerMove);
+        document.addEventListener('pointerup', onPointerUp);
+      };
+
+      const leftResizer = leftResizerRef.current;
+      if (leftResizer) {
+        leftResizer.addEventListener('pointerdown', onLeftResizerPointerDown);
+      }
+
+      const rightResizer = rightResizerRef.current;
+      if (rightResizer) {
+        rightResizer.addEventListener('pointerdown', onRightResizerPointerDown);
+      }
+
+      return () => {
+        if (leftResizer) {
+          leftResizer.removeEventListener(
+            'pointerdown',
+            onLeftResizerPointerDown
+          );
+        }
+        if (rightResizer) {
+          rightResizer.removeEventListener(
+            'pointerdown',
+            onRightResizerPointerDown
+          );
+        }
+      };
+    },
+    [debouncedForceUpdate, forceUpdate]
+  );
+
+  const [
+    leftPanePointerEventsNone,
+    setLeftPanePointerEventsNone,
+  ] = React.useState(false);
+  const [
+    centerPanePointerEventsNone,
+    setCenterPanePointerEventsNone,
+  ] = React.useState(false);
+  const [
+    rightPanePointerEventsNone,
+    setRightPanePointerEventsNone,
+  ] = React.useState(false);
+
+  const isDragging = draggingStateRef.current !== null;
+
+  return (
+    <div
+      ref={containerRef}
+      className={classes.container}
+      role="group"
+      aria-label="Resizable split pane"
+      style={isDragging ? styles.pointerEventsAll : undefined}
+    >
+      <div
+        ref={leftPaneRef}
+        className={classNames({
+          [classes.pane]: true,
+          [classes.leftPane]: true,
+          [classes.drawer]: areSidePanesDrawers,
+          [classes.closedDrawer]:
+            areSidePanesDrawers && panesDrawerState['left'] === 'closed',
+          [classes.hidden]: !leftPaneRendered,
+          [classes.closing]: leftPaneClosing && !areSidePanesDrawers,
+        })}
+        style={
+          leftPanePointerEventsNone && !isDragging
+            ? styles.pointerEventsNone
+            : undefined
+        }
+        id="pane-left"
+      >
+        <div className={classes.paneContent}>
+          {renderPane({
+            paneIdentifier: 'left',
+            isLeftMostPane: true,
+            isRightMostPane: false,
+            isDrawer: areSidePanesDrawers,
+            areSidePanesDrawers,
+            onSetPaneDrawerState: setPaneDrawerState,
+            onSetPointerEventsNone: setLeftPanePointerEventsNone,
+            onRequestPaneClose: requestLeftPaneClose,
+            drawerState: panesDrawerState['left'],
+          })}
+        </div>
+      </div>
+      <div
+        className={classNames({
+          [classes.resizer]: true,
+          [classes.leftResizer]: true,
+          [classes.hidden]: !leftPaneRendered || areSidePanesDrawers,
+          [classes.resizerClosing]: leftPaneClosing && !areSidePanesDrawers,
+        })}
+        role="separator"
+        aria-orientation="vertical"
+        aria-controls="pane-left pane-center"
+        tabIndex={0}
+        ref={leftResizerRef}
+      />
+      <div
+        ref={centerPaneRef}
+        className={classNames({
+          [classes.pane]: true,
+          [classes.centerPane]: true,
+        })}
+        style={
+          centerPanePointerEventsNone && !isDragging
+            ? styles.pointerEventsNone
+            : undefined
+        }
+        id="pane-center"
+      >
+        {renderPane({
+          paneIdentifier: 'center',
+          isLeftMostPane: areSidePanesDrawers || !leftPaneRendered,
+          isRightMostPane: areSidePanesDrawers || !rightPaneRendered,
+          isDrawer: false,
+          areSidePanesDrawers,
+          onSetPaneDrawerState: setPaneDrawerState,
+          onSetPointerEventsNone: setCenterPanePointerEventsNone,
+          rightPaneDrawerOpen: panesDrawerState['right'] === 'open',
+        })}
+      </div>
+      <div
+        className={classNames({
+          [classes.resizer]: true,
+          [classes.rightResizer]: true,
+          [classes.hidden]: !rightPaneRendered || areSidePanesDrawers,
+          [classes.resizerClosing]: rightPaneClosing && !areSidePanesDrawers,
+        })}
+        role="separator"
+        aria-orientation="vertical"
+        aria-controls="pane-center pane-right"
+        tabIndex={0}
+        ref={rightResizerRef}
+      />
+      <div
+        ref={rightPaneRef}
+        className={classNames({
+          [classes.pane]: true,
+          [classes.rightPane]: true,
+          [classes.drawer]: areSidePanesDrawers,
+          [classes.closedDrawer]:
+            areSidePanesDrawers && panesDrawerState['right'] === 'closed',
+          [classes.hidden]: !rightPaneRendered,
+          [classes.closing]: rightPaneClosing && !areSidePanesDrawers,
+        })}
+        style={
+          rightPanePointerEventsNone && !isDragging
+            ? styles.pointerEventsNone
+            : undefined
+        }
+        id="pane-right"
+      >
+        <div className={classes.paneContent}>
+          {renderPane({
+            paneIdentifier: 'right',
+            isLeftMostPane: false,
+            isRightMostPane: true,
+            isDrawer: areSidePanesDrawers,
+            areSidePanesDrawers,
+            onSetPaneDrawerState: setPaneDrawerState,
+            onSetPointerEventsNone: setRightPanePointerEventsNone,
+            onRequestPaneClose: requestRightPaneClose,
+            drawerState: panesDrawerState['right'],
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};

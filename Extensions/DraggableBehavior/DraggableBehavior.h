@@ -5,12 +5,13 @@ Copyright (c) 2013-2016 Florian Rival (Florian.Rival@gmail.com)
 This project is released under the MIT License.
 */
 
-#ifndef DRAGGABLEBEHAVIOR_H
-#define DRAGGABLEBEHAVIOR_H
-#include <SFML/System/Vector2.hpp>
+#pragma once
+
+#include "GDCore/Vector2.h"
 #include <map>
-#include "GDCpp/Runtime/Project/Behavior.h"
-#include "GDCpp/Runtime/Project/Object.h"
+#include "GDCore/Project/Behavior.h"
+#include "GDCore/Project/Object.h"
+
 class RuntimeScene;
 namespace gd {
 class SerializerElement;
@@ -20,13 +21,20 @@ class Layout;
 /**
  * \brief Behavior that allows objects to be dragged with the mouse
  */
-class GD_EXTENSION_API DraggableBehavior : public Behavior {
+class GD_EXTENSION_API DraggableBehavior : public gd::Behavior {
  public:
   DraggableBehavior();
   virtual ~DraggableBehavior(){};
-  virtual Behavior* Clone() const { return new DraggableBehavior(*this); }
+  virtual std::unique_ptr<gd::Behavior> Clone() const override {
+    return gd::make_unique<DraggableBehavior>(*this);
+  }
 
- private:
+  virtual std::map<gd::String, gd::PropertyDescriptor> GetProperties(
+      const gd::SerializerElement& behaviorContent) const override;
+  virtual bool UpdateProperty(gd::SerializerElement& behaviorContent,
+                              const gd::String& name,
+                              const gd::String& value) override;
+
+  virtual void InitializeContent(
+      gd::SerializerElement& behaviorContent) override;
 };
-
-#endif  // DRAGGABLEBEHAVIOR_H

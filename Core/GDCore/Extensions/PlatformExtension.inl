@@ -5,6 +5,8 @@
  * project is released under the MIT License.
  */
 
+// NOLINTBEGIN
+
 #ifndef GDCORE_PLATFORMEXTENSION_INL
 #define GDCORE_PLATFORMEXTENSION_INL
 
@@ -25,8 +27,8 @@ gd::ObjectMetadata& PlatformExtension::AddObject(const gd::String& name,
                      fullname,
                      description,
                      icon24x24,
-                     [](gd::String name) -> std::unique_ptr<gd::Object> {
-                       return gd::make_unique<T>(name);
+                     []() -> std::unique_ptr<gd::ObjectConfiguration> {
+                       return gd::make_unique<T>();
                      })
           .SetHelpPath(GetHelpPath());
 
@@ -36,3 +38,5 @@ gd::ObjectMetadata& PlatformExtension::AddObject(const gd::String& name,
 }  // namespace gd
 
 #endif
+
+// NOLINTEND

@@ -4,6 +4,7 @@
  * reserved. This project is released under the MIT License.
  */
 #include "AllBuiltinExtensions.h"
+#include "GDCore/Extensions/Metadata/MultipleInstructionMetadata.h"
 #include "GDCore/Tools/Localization.h"
 
 using namespace std;
@@ -14,29 +15,24 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
   extension
       .SetExtensionInformation(
           "BuiltinMouse",
-          _("Mouse features"),
-          _("Built-in extension that enables the use of a mouse"),
+          _("Mouse and touch"),
+          "Conditions, actions and expressions to handle either the mouse or "
+          "touches on a touchscreen. Notably: cursor position, mouse wheel, "
+          "mouse buttons, touch positions, started/end touches, etc...\n"
+          "\n"
+          "By default, conditions related to the mouse will also "
+          "handle the touches - so that it's easier to handle both in your "
+          "game. You can disable this behavior if you want to handle them "
+          "separately in different events.",
           "Florian Rival",
           "Open source (MIT License)")
-      .SetExtensionHelpPath("/all-features/mouse-touch");
-
-#if defined(GD_IDE_ONLY)
-  extension
-      .AddCondition("SourisSurObjet",
-                    _("The cursor/touch is on an object"),
-                    _("Test if the cursor is over an object, or if the object "
-                      "is being touched."),
-                    _("The cursor/touch is on _PARAM0_"),
-                    _("Mouse and touch"),
-                    "res/conditions/surObjet24.png",
-                    "res/conditions/surObjet.png")
-
-      .AddParameter("objectList", _("Object"))
-      .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("yesorno", _("Accurate test (yes by default)"), "", true)
-      .SetDefaultValue("yes")
-      .AddCodeOnlyParameter("conditionInverted", "")
-      .MarkAsSimple();
+      .SetShortDescription("Mouse buttons, wheel, cursor position. Touch positions, started/ended touches. Multi-touch support.")
+      .SetExtensionHelpPath("/all-features/mouse-touch")
+      .SetCategory("Input");
+  extension.AddInstructionOrExpressionGroupMetadata(_("Mouse and touch"))
+      .SetIcon("res/actions/mouse24.png");
+  extension.AddInstructionOrExpressionGroupMetadata(_("Multitouch"))
+      .SetIcon("res/conditions/touch24.png");
 
   extension
       .AddCondition(
@@ -45,7 +41,7 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
           _("Check if the mouse wheel is scrolling up. Use MouseWheelDelta "
             "expression if you want to know the amount that was scrolled."),
           _("The mouse wheel is scrolling up"),
-          _("Mouse and touch"),
+          "",
           "res/actions/mouse24.png",
           "res/actions/mouse.png")
 
@@ -59,7 +55,7 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
           _("Check if the mouse wheel is scrolling down. Use MouseWheelDelta "
             "expression if you want to know the amount that was scrolled."),
           _("The mouse wheel is scrolling down"),
-          _("Mouse and touch"),
+          "",
           "res/actions/mouse24.png",
           "res/actions/mouse.png")
 
@@ -77,7 +73,7 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
             "touchscreens. If you want to have multitouch and differentiate "
             "mouse movement and touches, just deactivate it with this action."),
           _("Move mouse cursor when touching screen: _PARAM1_"),
-          _("Mouse and touch"),
+          "",
           "res/conditions/touch24.png",
           "res/conditions/touch.png")
 
@@ -88,58 +84,76 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
       .MarkAsAdvanced();
 
   extension
-      .AddAction("CentreSourisX",
+      .AddAction("CenterCursorHorizontally",
                  _("Center cursor horizontally"),
                  _("Put the cursor in the middle of the screen horizontally."),
                  _("Center cursor horizontally"),
-                 _("Mouse and touch"),
+                 "",
                  "res/actions/mouse24.png",
                  "res/actions/mouse.png")
 
       .AddCodeOnlyParameter("currentScene", "")
       .MarkAsAdvanced();
 
+  // Compatibility with GD <= 5.6.251
+  extension.AddDuplicatedAction("CentreSourisX", "CenterCursorHorizontally")
+      .SetHidden();
+  // End of compatibility code
+
   extension
-      .AddAction("CentreSourisY",
+      .AddAction("CenterCursorVertically",
                  _("Center cursor vertically"),
                  _("Put the cursor in the middle of the screen vertically."),
                  _("Center cursor vertically"),
-                 _("Mouse and touch"),
+                 "",
                  "res/actions/mouse24.png",
                  "res/actions/mouse.png")
 
       .AddCodeOnlyParameter("currentScene", "")
       .MarkAsAdvanced();
 
+  // Compatibility with GD <= 5.6.251
+  extension.AddDuplicatedAction("CentreSourisY", "CenterCursorVertically")
+      .SetHidden();
+  // End of compatibility code
+
   extension
-      .AddAction("CacheSouris",
+      .AddAction("HideCursor",
                  _("Hide the cursor"),
                  _("Hide the cursor."),
                  _("Hide the cursor"),
-                 _("Mouse and touch"),
+                 "",
                  "res/actions/mouse24.png",
                  "res/actions/mouse.png")
       .AddCodeOnlyParameter("currentScene", "")
       .MarkAsAdvanced();
 
+  // Compatibility with GD <= 5.6.251
+  extension.AddDuplicatedAction("CacheSouris", "HideCursor").SetHidden();
+  // End of compatibility code
+
   extension
-      .AddAction("MontreSouris",
+      .AddAction("ShowCursor",
                  _("Show the cursor"),
                  _("Show the cursor."),
                  _("Show the cursor"),
-                 _("Mouse and touch"),
+                 "",
                  "res/actions/mouse24.png",
                  "res/actions/mouse.png")
 
       .AddCodeOnlyParameter("currentScene", "")
       .MarkAsAdvanced();
 
+  // Compatibility with GD <= 5.6.251
+  extension.AddDuplicatedAction("MontreSouris", "ShowCursor").SetHidden();
+  // End of compatibility code
+
   extension
-      .AddAction("SetSourisXY",
+      .AddAction("SetCursorPosition",
                  _("Position the cursor of the mouse"),
                  _("Position the cursor at the given coordinates."),
                  _("Position cursor at _PARAM1_;_PARAM2_"),
-                 _("Mouse and touch"),
+                 "",
                  "res/actions/mouse24.png",
                  "res/actions/mouse.png")
 
@@ -148,219 +162,331 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
       .AddParameter("expression", _("Y position"))
       .MarkAsAdvanced();
 
+  // Compatibility with GD <= 5.6.251
+  extension.AddDuplicatedAction("SetSourisXY", "SetCursorPosition").SetHidden();
+  // End of compatibility code
+
   extension
-      .AddAction("CentreSouris",
+      .AddAction("CenterCursor",
                  _("Center the cursor"),
                  _("Center the cursor on the screen."),
                  _("Center the cursor"),
-                 _("Mouse and touch"),
+                 "",
                  "res/actions/mouse24.png",
                  "res/actions/mouse.png")
 
       .AddCodeOnlyParameter("currentScene", "")
       .MarkAsAdvanced();
 
+  // Compatibility with GD <= 5.6.251
+  extension.AddDuplicatedAction("CentreSouris", "CenterCursor").SetHidden();
+  // End of compatibility code
+
   extension
-      .AddCondition("SourisX",
-                    _("Cursor X position"),
-                    _("Compare the X position of the cursor or of a touch."),
-                    _("the cursor X position"),
-                    _("Mouse and touch"),
-                    "res/conditions/mouse24.png",
-                    "res/conditions/mouse.png")
+      .AddExpressionAndCondition(
+          "number",
+          "CursorX",
+          _("Cursor X position"),
+          _("the X position of the cursor or of a touch"),
+          _("the cursor (or touch) X position"),
+          "",
+          "res/conditions/mouse24.png")
       .AddCodeOnlyParameter("currentScene", "")
-      .UseStandardRelationalOperatorParameters("number")
-      .AddParameter("layer", _("Layer (base layer if empty)"), "", true)
+      .UseStandardParameters("number", ParameterOptions::MakeNewOptions())
+      .AddParameter("layer", _("Layer"), "", true)
       .SetDefaultValue("\"\"")
       .AddParameter("expression", _("Camera number (default : 0)"), "", true)
       .SetDefaultValue("0");
 
+  // Support for deprecated names:
+  extension.AddDuplicatedCondition("MouseX", "CursorX").SetHidden();
+  extension.AddDuplicatedExpression("MouseX", "CursorX").SetHidden();
+  extension.AddDuplicatedCondition("SourisX", "CursorX").SetHidden();
+  extension.AddDuplicatedExpression("SourisX", "CursorX").SetHidden();
+
   extension
-      .AddCondition("SourisY",
-                    _("Cursor Y position"),
-                    _("Compare the Y position of the cursor or of a touch."),
-                    _("the cursor Y position"),
-                    _("Mouse and touch"),
-                    "res/conditions/mouse24.png",
-                    "res/conditions/mouse.png")
+      .AddExpressionAndCondition(
+          "number",
+          "CursorY",
+          _("Cursor Y position"),
+          _("the Y position of the cursor or of a touch"),
+          _("the cursor (or touch) Y position"),
+          "",
+          "res/conditions/mouse24.png")
       .AddCodeOnlyParameter("currentScene", "")
-      .UseStandardRelationalOperatorParameters("number")
-      .AddParameter("layer", _("Layer (base layer if empty)"), "", true)
+      .UseStandardParameters("number", ParameterOptions::MakeNewOptions())
+      .AddParameter("layer", _("Layer"), "", true)
       .SetDefaultValue("\"\"")
       .AddParameter("expression", _("Camera number (default : 0)"), "", true)
       .SetDefaultValue("0");
 
+  // Support for deprecated names:
+  extension.AddDuplicatedCondition("MouseY", "CursorY").SetHidden();
+  extension.AddDuplicatedExpression("MouseY", "CursorY").SetHidden();
+  extension.AddDuplicatedCondition("SourisY", "CursorY").SetHidden();
+  extension.AddDuplicatedExpression("SourisY", "CursorY").SetHidden();
+
   extension
-      .AddCondition("SourisBouton",
+      .AddExpressionAndCondition("number",
+                                 "MouseOnlyCursorX",
+                                 _("Mouse cursor X position"),
+                                 _("the X position of the mouse cursor"),
+                                 _("the mouse cursor X position"),
+                                 "",
+                                 "res/conditions/mouse24.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .UseStandardParameters("number", ParameterOptions::MakeNewOptions())
+      .AddParameter("layer", _("Layer"), "", true)
+      .SetDefaultValue("\"\"")
+      .AddParameter("expression", _("Camera number (default : 0)"), "", true)
+      .SetDefaultValue("0")
+      // It's only useful for extensions as they can't use TouchSimulateMouse.
+      .SetHidden();
+
+  extension
+      .AddExpressionAndCondition("number",
+                                 "MouseOnlyCursorY",
+                                 _("Mouse cursor Y position"),
+                                 _("the Y position of the mouse cursor"),
+                                 _("the mouse cursor Y position"),
+                                 "",
+                                 "res/conditions/mouse24.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .UseStandardParameters("number", ParameterOptions::MakeNewOptions())
+      .AddParameter("layer", _("Layer"), "", true)
+      .SetDefaultValue("\"\"")
+      .AddParameter("expression", _("Camera number (default : 0)"), "", true)
+      .SetDefaultValue("0")
+      // It's only useful for extensions as they can't use TouchSimulateMouse.
+      .SetHidden();
+
+  extension
+      .AddCondition("IsMouseInsideCanvas",
+                    _("Mouse cursor is inside the window"),
+                    _("Check if the mouse cursor is inside the window."),
+                    _("The mouse cursor is inside the window"),
+                    "",
+                    "res/conditions/mouse24.png",
+                    "res/conditions/mouse.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .MarkAsAdvanced();
+
+  extension
+      .AddCondition("MouseButtonPressed",
                     _("Mouse button pressed or touch held"),
-                    _("Return true if the specified mouse button is pressed or "
+                    _("Check if the specified mouse button is pressed or "
                       "if a touch is in contact with the screen."),
                     _("Touch or _PARAM1_ mouse button is down"),
-                    _("Mouse and touch"),
+                    "",
                     "res/conditions/mouse24.png",
                     "res/conditions/mouse.png")
       .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("mouse", _("Button to test"))
-      .MarkAsSimple();
+      .AddParameter("mouse", _("Button to check"))
+      .MarkAsSimple()
+      .SetHidden();
+
+  // Support for deprecated names:
+  extension.AddDuplicatedCondition("SourisBouton", "MouseButtonPressed")
+      .SetHidden();
 
   extension
-      .AddCondition(
-          "MouseButtonReleased",
-          _("Mouse button released"),
-          _("Return true if the specified mouse button was released."),
-          _("_PARAM1_ mouse button was released"),
-          _("Mouse and touch"),
-          "res/conditions/mouse24.png",
-          "res/conditions/mouse.png")
+      .AddCondition("MouseButtonReleased",
+                    _("Mouse button released"),
+                    _("Check if the specified mouse button was released."),
+                    _("Touch or _PARAM1_ mouse button is released"),
+                    "",
+                    "res/conditions/mouse24.png",
+                    "res/conditions/mouse.png")
       .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("mouse", _("Button to test"))
+      .AddParameter("mouse", _("Button to check"))
+      .MarkAsSimple()
+      .SetHidden();
+
+  extension
+      .AddCondition("MouseButtonFromTextPressed",
+                    _("Mouse button pressed or touch held"),
+                    _("Check if the specified mouse button is pressed or "
+                      "if a touch is in contact with the screen."),
+                    _("Touch or _PARAM1_ mouse button is down"),
+                    "",
+                    "res/conditions/mouse24.png",
+                    "res/conditions/mouse.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .AddParameter("mouseButton", _("Button to check"))
       .MarkAsSimple();
 
   extension
-      .AddCondition("TouchX",
-                    _("Touch X position"),
-                    _("Compare the X position of a specific touch."),
-                    _("the touch #_PARAM1_ X position"),
-                    _("Mouse and touch/Multitouch"),
-                    "res/conditions/touch24.png",
-                    "res/conditions/touch.png")
+      .AddCondition("MouseButtonFromTextReleased",
+                    _("Mouse button released"),
+                    _("Check if the specified mouse button was released."),
+                    _("Touch or _PARAM1_ mouse button is released"),
+                    "",
+                    "res/conditions/mouse24.png",
+                    "res/conditions/mouse.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .AddParameter("mouseButton", _("Button to check"))
+      .MarkAsSimple();
+
+  extension
+      .AddExpressionAndCondition("number",
+                                 "TouchX",
+                                 _("Touch X position"),
+                                 _("the X position of a specific touch"),
+                                 _("the touch #_PARAM1_ X position"),
+                                 _("Multitouch"),
+                                 "res/conditions/touch24.png")
       .AddCodeOnlyParameter("currentScene", "")
       .AddParameter("expression", _("Touch identifier"))
-      .UseStandardRelationalOperatorParameters("number")
-      .AddParameter("layer", _("Layer (base layer if empty)"), "", true)
+      .UseStandardParameters("number", ParameterOptions::MakeNewOptions())
+      .AddParameter("layer", _("Layer"), "", true)
       .SetDefaultValue("\"\"")
       .AddParameter("expression", _("Camera number (default : 0)"), "", true)
       .SetDefaultValue("0");
 
   extension
-      .AddCondition("TouchY",
-                    _("Touch Y position"),
-                    _("Compare the Y position of a specific touch."),
-                    _("the touch #_PARAM1_ Y position"),
-                    _("Mouse and touch/Multitouch"),
-                    "res/conditions/touch24.png",
-                    "res/conditions/touch.png")
+      .AddExpressionAndCondition("number",
+                                 "TouchY",
+                                 _("Touch Y position"),
+                                 _("the Y position of a specific touch"),
+                                 _("the touch #_PARAM1_ Y position"),
+                                 _("Multitouch"),
+                                 "res/conditions/touch24.png")
       .AddCodeOnlyParameter("currentScene", "")
       .AddParameter("expression", _("Touch identifier"))
-      .UseStandardRelationalOperatorParameters("number")
-      .AddParameter("layer", _("Layer (base layer if empty)"), "", true)
+      .UseStandardParameters("number", ParameterOptions::MakeNewOptions())
+      .AddParameter("layer", _("Layer"), "", true)
       .SetDefaultValue("\"\"")
       .AddParameter("expression", _("Camera number (default : 0)"), "", true)
       .SetDefaultValue("0");
 
+  // Deprecated
   extension
       .AddCondition(
           "PopStartedTouch",
           _("A new touch has started"),
-          _("Return true if a touch has started. The touch identifier can be "
+          _("Check if a touch has started. The touch identifier can be "
             "accessed using LastTouchId().\nAs more than one touch can be "
             "started, this condition is only true once for each touch: the "
             "next time you use it, it will be for a new touch, or it will "
             "return false if no more touches have just started."),
           _("A new touch has started"),
-          _("Mouse and touch/Multitouch"),
+          _("Multitouch"),
           "res/conditions/touch24.png",
           "res/conditions/touch.png")
-      .AddCodeOnlyParameter("currentScene", "");
+      .AddCodeOnlyParameter("currentScene", "")
+      .SetHidden();
 
+  // Deprecated
   extension
       .AddCondition(
           "PopEndedTouch",
           _("A touch has ended"),
-          _("Return true if a touch has ended. The touch identifier can be "
+          _("Check if a touch has ended. The touch identifier can be "
             "accessed using LastEndedTouchId().\nAs more than one touch can be "
             "ended, this condition is only true once for each touch: the next "
             "time you use it, it will be for a new touch, or it will return "
             "false if no more touches have just ended."),
           _("A touch has ended"),
-          _("Mouse and touch/Multitouch"),
+          _("Multitouch"),
+          "res/conditions/touch24.png",
+          "res/conditions/touch.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .SetHidden();
+
+  // Deprecated
+  extension
+      .AddCondition(
+          "HasAnyTouchStarted",
+          _("A new touch has started"),
+          _("Check if a touch has just started on this frame. The touch "
+            "identifiers can be "
+            "accessed using StartedTouchId() and StartedTouchCount()."),
+          _("A new touch has started"),
+          _("Multitouch"),
+          "res/conditions/touch24.png",
+          "res/conditions/touch.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .SetHidden();
+
+  extension
+      .AddExpression("StartedTouchCount",
+                     _("Started touch count"),
+                     _("The number of touches that have just started on this "
+                       "frame. The touch identifiers can be "
+                       "accessed using StartedTouchId()."),
+                     _("Multitouch"),
+                     "res/conditions/touch.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .SetHidden();
+
+  extension
+      .AddExpression("StartedTouchId",
+                     _("Started touch identifier"),
+                     _("The identifier of the touch that has just started on "
+                       "this frame. The number of touches can be "
+                       "accessed using StartedTouchCount()."),
+                     _("Multitouch"),
+                     "res/conditions/touch.png")
+      .AddCodeOnlyParameter("currentScene", "")
+      .AddParameter("expression", _("Touch index"))
+      .SetHidden();
+
+  extension
+      .AddCondition(
+          "HasAnyTouchOrMouseStarted",
+          _("A new touch has started"),
+          _("Check if a touch has just started or the mouse left button has "
+            "been pressed on this frame. The touch identifiers can be "
+            "accessed using StartedTouchOrMouseId() and "
+            "StartedTouchOrMouseCount()."),
+          _("A new touch has started"),
+          _("Multitouch"),
           "res/conditions/touch24.png",
           "res/conditions/touch.png")
       .AddCodeOnlyParameter("currentScene", "");
 
   extension
-      .AddExpression("MouseX",
-                     _("Cursor X position"),
-                     _("Cursor X position"),
-                     _("Mouse cursor"),
-                     "res/actions/mouse.png")
-      .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("layer", _("Layer"), "", true)
-      .SetDefaultValue("\"\"")
-      .AddParameter("camera", _("Camera"), "", true)
-      .SetDefaultValue("0");
+      .AddExpression(
+          "StartedTouchOrMouseCount",
+          _("Started touch count"),
+          _("The number of touches (including the mouse) that have just "
+            "started on this frame. The touch identifiers can be "
+            "accessed using StartedTouchOrMouseId()."),
+          _("Multitouch"),
+          "res/conditions/touch.png")
+      .AddCodeOnlyParameter("currentScene", "");
 
   extension
-      .AddExpression("SourisX",
-                     _("Cursor X position"),
-                     _("Cursor X position"),
-                     _("Mouse cursor"),
-                     "res/actions/mouse.png")
+      .AddExpression(
+          "StartedTouchOrMouseId",
+          _("Started touch identifier"),
+          _("The identifier of the touch or mouse that has just started on "
+            "this frame. The number of touches can be "
+            "accessed using StartedTouchOrMouseCount()."),
+          _("Multitouch"),
+          "res/conditions/touch.png")
       .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("layer", _("Layer"), "", true)
-      .SetDefaultValue("\"\"")
-      .AddParameter("camera", _("Camera"), "", true)
-      .SetDefaultValue("0")
-      .SetHidden();
+      .AddParameter("expression", _("Touch index"));
 
   extension
-      .AddExpression("MouseY",
-                     _("Cursor Y position"),
-                     _("Cursor Y position"),
-                     _("Mouse cursor"),
-                     "res/actions/mouse.png")
+      .AddCondition("HasTouchEnded",
+                    _("A touch has ended"),
+                    _("Check if a touch has ended or a mouse left button has "
+                      "been released."),
+                    _("The touch with identifier _PARAM1_ has ended"),
+                    _("Multitouch"),
+                    "res/conditions/touch24.png",
+                    "res/conditions/touch.png")
       .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("layer", _("Layer"), "", true)
-      .SetDefaultValue("\"\"")
-      .AddParameter("camera", _("Camera"), "", true)
-      .SetDefaultValue("0");
-
-  extension
-      .AddExpression("SourisY",
-                     _("Cursor Y position"),
-                     _("Cursor Y position"),
-                     _("Mouse cursor"),
-                     "res/actions/mouse.png")
-      .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("layer", _("Layer"), "", true)
-      .SetDefaultValue("\"\"")
-      .AddParameter("camera", _("Camera"), "", true)
-      .SetDefaultValue("0")
-      .SetHidden();
+      .AddParameter("expression", _("Touch identifier"));
 
   extension
       .AddExpression("MouseWheelDelta",
                      _("Mouse wheel: Displacement"),
                      _("Mouse wheel displacement"),
-                     _("Mouse cursor"),
+                     _("Mouse and touch"),
                      "res/actions/mouse.png")
       .AddCodeOnlyParameter("currentScene", "");
-
-  extension
-      .AddExpression("TouchX",
-                     _("Touch X position"),
-                     _("Touch X position"),
-                     _("Multitouch"),
-                     "res/conditions/touch.png")
-      .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("expression", _("Touch identifier"))
-      .AddParameter("layer", _("Layer"), "", true)
-      .SetDefaultValue("\"\"")
-      .AddParameter("camera", _("Camera"), "", true)
-      .SetDefaultValue("0");
-
-  extension
-      .AddExpression("TouchY",
-                     _("Touch Y position"),
-                     _("Touch Y position"),
-                     _("Multitouch"),
-                     "res/conditions/touch.png")
-      .AddCodeOnlyParameter("currentScene", "")
-      .AddParameter("expression", _("Touch identifier"))
-      .AddParameter("layer", _("Layer"), "", true)
-      .SetDefaultValue("\"\"")
-      .AddParameter("camera", _("Camera"), "", true)
-      .SetDefaultValue("0");
 
   extension
       .AddExpression("LastTouchId",
@@ -368,7 +494,8 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
                      _("Identifier of the last touch"),
                      _("Multitouch"),
                      "res/conditions/touch.png")
-      .AddCodeOnlyParameter("currentScene", "");
+      .AddCodeOnlyParameter("currentScene", "")
+      .SetHidden();
 
   extension
       .AddExpression("LastEndedTouchId",
@@ -376,9 +503,8 @@ void GD_CORE_API BuiltinExtensionsImplementer::ImplementsMouseExtension(
                      _("Identifier of the last ended touch"),
                      _("Multitouch"),
                      "res/conditions/touch.png")
-      .AddCodeOnlyParameter("currentScene", "");
-
-#endif
+      .AddCodeOnlyParameter("currentScene", "")
+      .SetHidden();
 }
 
 }  // namespace gd

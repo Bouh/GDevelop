@@ -5,119 +5,94 @@ Copyright (c) 2011-2016 Florian Rival (Florian.Rival@gmail.com)
 This project is released under the MIT License.
 */
 
-#include "GDCpp/Extensions/ExtensionBase.h"
-
+#include "GDCore/Extensions/PlatformExtension.h"
+#include "GDCore/Tools/Localization.h"
 #include "TextEntryObject.h"
 
+// Deprecated extension - so no translation markers and the object is hidden in the editor.
 void DeclareTextEntryObjectExtension(gd::PlatformExtension& extension) {
-  extension.SetExtensionInformation(
-      "TextEntryObject",
-      _("Text entry object"),
-      _("This Extension enables the use of an object that captures text "
-        "entered with a keyboard by a player."),
-      "Florian Rival",
-      "Open source (MIT License)")
-      .SetExtensionHelpPath("/objects/text_entry");
+  extension
+      .SetExtensionInformation(
+          "TextEntryObject",
+          "Text entry object",
+          "Deprecated object that can be used to capture the text "
+            "entered with a keyboard by a player.",
+          "Florian Rival",
+          "Open source (MIT License)")
+      .SetShortDescription("Deprecated. Invisible object capturing keyboard text input into a string.")
+      .SetCategory("User interface")
+      .SetExtensionHelpPath("/objects/text_entry")
+      .MarkAsDeprecatedSince("5.6.270");
 
-  gd::ObjectMetadata& obj = extension.AddObject<TextEntryObject>(
-      "TextEntry",
-      _("Text entry"),
-      _("Invisible object used to get the text entered with the keyboard"),
-      "CppPlatform/Extensions/textentry.png");
-
-#if defined(GD_IDE_ONLY)
-  obj.SetIncludeFile("TextEntryObject/TextEntryObject.h");
+  gd::ObjectMetadata& obj =
+      extension
+          .AddObject<TextEntryObject>("TextEntry",
+                                      "Text entry",
+                                      "Invisible object used to get the text "
+                                        "entered with the keyboard.",
+                                      "CppPlatform/Extensions/textentry.png")
+          .SetCategory("User interface")
+          .SetHidden(); // Deprecated
 
   obj.AddAction("String",
-                _("Text in memory"),
-                _("Modify text in memory of the object"),
-                _("the text in memory"),
+                "Text in memory",
+                "Modify text in memory of the object",
+                "the text in memory",
                 "",
                 "CppPlatform/Extensions/textentry24.png",
                 "CppPlatform/Extensions/textentryicon.png")
 
-      .AddParameter("object", _("Object"), "TextEntry")
-      .UseStandardOperatorParameters("string")
+      .AddParameter("object", "Object", "TextEntry")
+      .UseStandardOperatorParameters(
+          "string",
+          gd::ParameterOptions::MakeNewOptions().SetDescription("Text"))
       .SetFunctionName("SetString")
-      .SetGetter("GetString")
-      .SetIncludeFile("TextEntryObject/TextEntryObject.h");
+      .SetGetter("GetString");
 
   obj.AddCondition("String",
-                   _("Text in memory"),
-                   _("Test the text of a Text Entry object."),
-                   _("the text"),
+                   "Text in memory",
+                   "Test the text of a Text Entry object.",
+                   "the text",
                    "",
                    "CppPlatform/Extensions/textentry24.png",
                    "CppPlatform/Extensions/textentryicon.png")
 
-      .AddParameter("object", _("Object"), "TextEntry")
-      .UseStandardRelationalOperatorParameters("string")
-      .SetFunctionName("GetString")
-      .SetIncludeFile("TextEntryObject/TextEntryObject.h");
+      .AddParameter("object", "Object", "TextEntry")
+      .UseStandardRelationalOperatorParameters(
+          "string",
+          gd::ParameterOptions::MakeNewOptions().SetDescription("Text to compare to"))
+      .SetFunctionName("GetString");
 
   obj.AddAction(
          "Activate",
-         _("De/activate capturing text input"),
-         _("Activate or deactivate the capture of text entered with keyboard."),
-         _("Activate capture by _PARAM0_ of the text entered with keyboard: "
-           "_PARAM1_"),
-         _("Setup"),
+         "De/activate capturing text input",
+         "Activate or deactivate the capture of text entered with keyboard.",
+         "Activate capture by _PARAM0_ of the text entered with keyboard: "
+           "_PARAM1_",
+         "Setup",
          "CppPlatform/Extensions/textentry24.png",
          "CppPlatform/Extensions/textentryicon.png")
 
-      .AddParameter("object", _("Object"), "TextEntry")
-      .AddParameter("yesorno", _("Activate"))
-      .SetFunctionName("Activate")
-      .SetIncludeFile("TextObject/TextObject.h");
+      .AddParameter("object", "Object", "TextEntry")
+      .AddParameter("yesorno", "Activate")
+      .SetFunctionName("Activate");
 
   obj.AddCondition("Activated",
-                   _("Text input"),
-                   _("Test if the object captured text entered with keyboard."),
-                   _("_PARAM0_ capture the text entered with keyboard"),
-                   _("Setup"),
+                   "Text input",
+                   "Test if the object captured text entered with keyboard.",
+                   "_PARAM0_ capture the text entered with keyboard",
+                   "Setup",
                    "CppPlatform/Extensions/textentry24.png",
                    "CppPlatform/Extensions/textentryicon.png")
 
-      .AddParameter("object", _("Object"), "TextEntry")
-      .SetFunctionName("IsActivated")
-      .SetIncludeFile("TextObject/TextObject.h");
+      .AddParameter("object", "Object", "TextEntry")
+      .SetFunctionName("IsActivated");
 
   obj.AddStrExpression("String",
-                       _("Text entered with keyboard"),
-                       _("Text entered with keyboard"),
-                       _("Text entered with keyboard"),
+                       "Text entered with keyboard",
+                       "Text entered with keyboard",
+                       "Text entered with keyboard",
                        "res/texteicon.png")
-      .AddParameter("object", _("Object"), "TextEntry")
-      .SetFunctionName("GetString")
-      .SetIncludeFile("TextObject/TextObject.h");
-#endif
+      .AddParameter("object", "Object", "TextEntry")
+      .SetFunctionName("GetString");
 }
-
-/**
- * \brief This class declares information about the extension.
- */
-class Extension : public ExtensionBase {
- public:
-  /**
-   * Constructor of an extension declares everything the extension contains:
-   * objects, actions, conditions and expressions.
-   */
-  Extension() {
-    DeclareTextEntryObjectExtension(*this);
-    AddRuntimeObject<TextEntryObject, RuntimeTextEntryObject>(
-        GetObjectMetadata("TextEntryObject::TextEntry"),
-        "RuntimeTextEntryObject");
-
-    GD_COMPLETE_EXTENSION_COMPILATION_INFORMATION();
-  };
-};
-
-#if !defined(EMSCRIPTEN)
-/**
- * Used by GDevelop to create the extension class
- * -- Do not need to be modified. --
- */
-extern "C" ExtensionBase* GD_EXTENSION_API CreateGDExtension() {
-  return new Extension;
-}
-#endif

@@ -1,7 +1,8 @@
 // @flow
-
 import { initializeZipJs } from './Zip.js';
-import path from 'path';
+import { downloadUrlsToBlobs, type ItemResult } from './BlobDownloader';
+import path from 'path-browserify';
+import { shortenString } from './StringHelpers.js';
 
 export type BlobFileDescriptor = {|
   filePath: string,
@@ -43,40 +44,46 @@ function eachCallback<T>(
   callNextCallback();
 }
 
-export const downloadUrlsToBlobs = async ({
+export const downloadUrlFilesToBlobFiles = async ({
   urlFiles,
   onProgress,
 }: {|
   urlFiles: Array<UrlFileDescriptor>,
   onProgress: (count: number, total: number) => void,
 |}): Promise<Array<BlobFileDescriptor>> => {
-  let count = 0;
-  return Promise.all(
-    urlFiles
-      .filter(({ url }) => url.indexOf('.h') === -1) // TODO
-      .map(({ url, filePath }) => {
-        return fetch(url)
-          .then(response => {
-            if (!response.ok) {
-              console.error(`Error while downloading "${url}"`, response);
-              throw new Error(
-                `Error while downloading "${url}" (status: ${response.status})`
-              );
-            }
-            return response.blob();
-          })
-          .then(blob => {
-            count++;
-            onProgress(count, urlFiles.length);
-            return {
-              filePath,
-              blob,
-            };
-          });
-      })
-  ).then((downloadedBlobs: Array<BlobFileDescriptor>) => {
-    console.info('All download done');
-    return downloadedBlobs;
+  const downloadedBlobs: Array<
+    ItemResult<UrlFileDescriptor>
+    // $FlowFixMe[incompatible-type]
+  > = await downloadUrlsToBlobs({
+    urlContainers: urlFiles.filter(({ url }) => url.indexOf('.h') === -1), // Should be useless now, still keep it by safety.
+    onProgress,
+  });
+
+  const erroredUrls = downloadedBlobs.filter(downloadedBlob => {
+    return !!downloadedBlob.error || !downloadedBlob.blob;
+  });
+  if (erroredUrls.length) {
+    const errorMessages = erroredUrls
+      .map(({ error }) =>
+        error ? error.message : 'Unknown error during download.'
+      )
+      .filter(Boolean)
+      .join(',\n');
+
+    throw new Error(
+      `Could not download ${erroredUrls.length} files:\n ${shortenString(
+        errorMessages,
+        300
+      )}`
+    );
+  }
+
+  return downloadedBlobs.map(({ item, blob }) => {
+    return {
+      // $FlowFixMe[incompatible-type] - any non existing blob is discarded before.
+      blob,
+      filePath: item.filePath,
+    };
   });
 };
 
@@ -89,11 +96,13 @@ export const archiveFiles = async ({
   blobFiles,
   basePath,
   onProgress,
+  sizeLimit,
 }: {|
   textFiles: Array<TextFileDescriptor>,
   blobFiles: Array<BlobFileDescriptor>,
   basePath: string,
   onProgress: (count: number, total: number) => void,
+  sizeLimit?: number,
 |}): Promise<Blob> => {
   const zipJs: ZipJs = await initializeZipJs();
 
@@ -102,6 +111,7 @@ export const archiveFiles = async ({
 
   return new Promise((resolve, reject) => {
     zipJs.createWriter(
+      // $FlowFixMe[invalid-constructor]
       new zipJs.BlobWriter('application/zip'),
       function(zipWriter) {
         eachCallback(
@@ -112,6 +122,7 @@ export const archiveFiles = async ({
 
             zipWriter.add(
               relativeFilePath,
+              // $FlowFixMe[invalid-constructor]
               new zipJs.BlobReader(blob),
               () => {
                 zippedFilesCount++;
@@ -132,6 +143,7 @@ export const archiveFiles = async ({
 
                 zipWriter.add(
                   relativeFilePath,
+                  // $FlowFixMe[invalid-constructor]
                   new zipJs.TextReader(text),
                   () => {
                     zippedFilesCount++;
@@ -145,12 +157,102 @@ export const archiveFiles = async ({
               },
               () => {
                 zipWriter.close((blob: Blob) => {
+                  const fileSize = blob.size;
+                  if (sizeLimit && fileSize > sizeLimit) {
+                    const roundFileSizeInMb = Math.round(
+                      fileSize / (1000 * 1000)
+                    );
+                    reject(
+                      new Error(
+                        `Archive is of size ${roundFileSizeInMb} MB, which is above the limit allowed of ${sizeLimit /
+                          (1000 * 1000)} MB.`
+                      )
+                    );
+                  }
                   resolve(blob);
                 });
               }
             );
           }
         );
+      },
+      error => {
+        console.error('Error while making zip:', error);
+        reject(error);
+      }
+    );
+  });
+};
+
+export const listArchiveFiles = async ({
+  archiveBlob,
+  onProgress,
+  sizeLimit,
+}: {|
+  archiveBlob: Blob,
+  onProgress: (count: number, total: number) => void,
+  sizeLimit?: number,
+|}): Promise<any> => {
+  const zipJs: ZipJs = await initializeZipJs();
+
+  return new Promise((resolve, reject) => {
+    zipJs.createReader(
+      // $FlowFixMe[invalid-constructor]
+      new zipJs.BlobReader(archiveBlob),
+      function(zipReader) {
+        zipReader.getEntries(entries => {
+          const enumeratedEntries = entries.map(entry => entry.filename);
+          zipReader.close(() => {
+            resolve(enumeratedEntries);
+          });
+        });
+      },
+      error => {
+        console.error('Error while making zip:', error);
+        reject(error);
+      }
+    );
+  });
+};
+
+export const getFileBlob = async ({
+  archiveBlob,
+  filePath,
+  contentType,
+  onProgress,
+  sizeLimit,
+}: {|
+  archiveBlob: Blob,
+  filePath: string,
+  contentType: string,
+  onProgress: (count: number, total: number) => void,
+  sizeLimit?: number,
+|}): Promise<Blob> => {
+  const zipJs: ZipJs = await initializeZipJs();
+
+  return new Promise((resolve, reject) => {
+    zipJs.createReader(
+      // $FlowFixMe[invalid-constructor]
+      new zipJs.BlobReader(archiveBlob),
+      function(zipReader) {
+        zipReader.getEntries(entries => {
+          const entry = entries.find(entry => entry.filename === filePath);
+          if (!entry) {
+            const error = `The archive doesn't contain: ${filePath}`;
+            console.error(error);
+            reject(error);
+            return;
+          }
+          entry.getData(
+            // $FlowFixMe[invalid-constructor]
+            new zipJs.BlobWriter(contentType),
+            result => {
+              zipReader.close(() => {
+                resolve(result);
+              });
+            }
+          );
+        });
       },
       error => {
         console.error('Error while making zip:', error);

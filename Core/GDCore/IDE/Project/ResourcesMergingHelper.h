@@ -3,8 +3,7 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef RESOURCESMERGINGHELPER_H
-#define RESOURCESMERGINGHELPER_H
+#pragma once
 
 #include <map>
 #include <memory>
@@ -28,11 +27,11 @@ namespace gd {
  * \ingroup IDE
  */
 class GD_CORE_API ResourcesMergingHelper : public ArbitraryResourceWorker {
- public:
-  ResourcesMergingHelper(gd::AbstractFileSystem& fileSystem)
-      : ArbitraryResourceWorker(),
-        preserveDirectoriesStructure(false),
-        preserveAbsoluteFilenames(false),
+public:
+  ResourcesMergingHelper(gd::ResourcesContainer &resourcesManager,
+                         gd::AbstractFileSystem &fileSystem)
+      : ArbitraryResourceWorker(resourcesManager),
+        preserveDirectoriesStructure(false), preserveAbsoluteFilenames(false),
         fs(fileSystem){};
   virtual ~ResourcesMergingHelper(){};
 
@@ -59,24 +58,39 @@ class GD_CORE_API ResourcesMergingHelper : public ArbitraryResourceWorker {
   };
 
   /**
+   * \brief Set if the absolute filenames of original files must be used for
+   * any resource.
+   */
+  void SetShouldUseOriginalAbsoluteFilenames(
+      bool shouldUseOriginalAbsoluteFilenames_ = true) {
+    shouldUseOriginalAbsoluteFilenames = shouldUseOriginalAbsoluteFilenames_;
+  };
+
+  /**
    * \brief Return a map containing the resources old absolute filename as key,
    * and the resources new filenames as value. The new filenames are relative to
    * the Base Directory.
    */
   std::map<gd::String, gd::String>& GetAllResourcesOldAndNewFilename() {
-    return oldFilenames;
+    return newFilenames;
   };
 
   /**
    * Resources merging helper collects all resources filenames and update these
    * filenames.
    */
-  virtual void ExposeFile(gd::String& resource);
+  void ExposeFile(gd::String& resource) override;
 
  protected:
   void SetNewFilename(gd::String oldFilename, gd::String newFilename);
 
+  /**
+   * Original file names that can be accessed by their new name.
+   */
   std::map<gd::String, gd::String> oldFilenames;
+  /**
+   * New file names that can be accessed by their original name.
+   */
   std::map<gd::String, gd::String> newFilenames;
   gd::String baseDirectory;
   bool preserveDirectoriesStructure;  ///< If set to true, the directory
@@ -87,10 +101,13 @@ class GD_CORE_API ResourcesMergingHelper : public ArbitraryResourceWorker {
                                    ///< absolute (C:\MyFile.png  will not be
                                    ///< transformed into a relative filename
                                    ///< (MyFile.png).
+  /**
+   * Set to true if the absolute filenames of original files must be used for
+   * any resource.
+   */
+  bool shouldUseOriginalAbsoluteFilenames = false;
   gd::AbstractFileSystem&
       fs;  ///< The gd::AbstractFileSystem used to manipulate files.
 };
 
 }  // namespace gd
-
-#endif  // RESOURCESMERGINGHELPER_H

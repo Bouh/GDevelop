@@ -23,12 +23,17 @@ namespace gd {
  * \brief Perform a search over a project or a layout, searching for layout,
  * global or object variables.
  *
- * \todo Refactor this class using ArbitraryEventsWorker
+ * \todo Rework this class to return the shapes (maybe even types?) of the
+ * variables (in particular for structures and arrays), so we can use this
+ * for better autocompletions in the variables dialogs in the IDE.
  *
  * \ingroup IDE
  */
 class EventsVariablesFinder {
  public:
+  EventsVariablesFinder(){};
+  virtual ~EventsVariablesFinder(){};
+
   /**
    * Construct a list containing the name of all global variables used in the
    * project.
@@ -58,65 +63,39 @@ class EventsVariablesFinder {
    *
    * \param project The project
    * \param layout The layout to use.
-   * \param  object The object to be scanned
+   * \param  objectName The name of the object to be scanned
    * \return A std::set containing the names of all object variables used.
    */
   static std::set<gd::String> FindAllObjectVariables(
       const gd::Platform& platform,
       const gd::Project& project,
       const gd::Layout& layout,
-      const gd::Object& object);
+      const gd::String& objectName);
 
  private:
-  /**
-   * Construct a list of the value of the arguments for parameters of type @
-   * parameterType
-   *
-   * \param project The project used
-   * \param project The layout used
-   * \param instructions The instructions to be analyzed
-   * \param instructionsAreConditions True if the instructions are conditions.
-   * \param parameterType The parameters type to be analyzed
-   * \param objectName If not empty, parameters will be taken into account only
-   * if the last object parameter is filled with this value.
-   *
-   * \return A std::set filled with the values used for all parameters of the
-   * specified type
-   */
-  static std::set<gd::String> FindArgumentsInInstructions(
-      const gd::Platform& platform,
-      const gd::Project& project,
-      const gd::Layout& layout,
-      const gd::InstructionsList& instructions,
-      bool instructionsAreConditions,
-      const gd::String& parameterType,
-      const gd::String& objectName = "");
 
   /**
    * Construct a list of the value of the arguments for parameters of type @
-   * parameterType
+   * parameterType. It searches in events dependencies.
    *
+   * \param results A std::set to fill with the values used for all parameters of the
+   * specified type
+   * \param platform The platform of the project
    * \param project The project used
-   * \param project The layout used
+   * \param layout The layout used
    * \param events The events to be analyzed
    * \param parameterType The parameters type to be analyzed
    * \param objectName If not empty, parameters will be taken into account
    * only if the last object parameter is filled with
    * this value.
-   *
-   * \return A std::set filled with the values used for all parameters of the
-   * specified type
    */
-  static std::set<gd::String> FindArgumentsInEvents(
+  static void FindArgumentsInEventsAndDependencies(
+      std::set<gd::String>& results,
       const gd::Platform& platform,
       const gd::Project& project,
       const gd::Layout& layout,
-      const gd::EventsList& events,
       const gd::String& parameterType,
       const gd::String& objectName = "");
-
-  EventsVariablesFinder(){};
-  virtual ~EventsVariablesFinder(){};
 };
 
 }  // namespace gd

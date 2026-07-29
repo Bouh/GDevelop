@@ -9,12 +9,14 @@
 #include <map>
 #include <memory>
 #include <vector>
-#include "GDCore/String.h"
 
+#include "GDCore/Extensions/Metadata/InstructionOrExpressionGroupMetadata.h"
+#include "GDCore/String.h"
 namespace gd {
 class InstructionsMetadataHolder;
 class Project;
 class Object;
+class ObjectConfiguration;
 class Behavior;
 class BehaviorMetadata;
 class ObjectMetadata;
@@ -25,7 +27,7 @@ class LayoutEditorCanvas;
 class ProjectExporter;
 }  // namespace gd
 
-typedef std::function<std::unique_ptr<gd::Object>(gd::String name)>
+typedef std::function<std::unique_ptr<gd::ObjectConfiguration>()>
     CreateFunPtr;
 
 #undef CreateEvent
@@ -52,7 +54,6 @@ class GD_CORE_API Platform {
    */
   virtual gd::String GetFullName() const { return "Unnamed platform"; }
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Must return a text describing the platform in a few words.
    */
@@ -67,7 +68,6 @@ class GD_CORE_API Platform {
    * \brief Must return a filename to a 32*32 image file for the platform.
    */
   virtual gd::String GetIcon() const { return ""; }
-#endif
 
   /** \name Extensions management
    * Member functions used to manage the extensions
@@ -123,32 +123,33 @@ class GD_CORE_API Platform {
    * anymore.
    */
   virtual void RemoveExtension(const gd::String& name);
+
+  /**
+   * \brief Get the metadata (icon, etc...) of a group used for instructions or
+   * expressions.
+   */
+  const InstructionOrExpressionGroupMetadata& GetInstructionOrExpressionGroupMetadata(
+      const gd::String& name) const {
+    auto it = instructionOrExpressionGroupMetadata.find(name);
+    if (it == instructionOrExpressionGroupMetadata.end())
+      return badInstructionOrExpressionGroupMetadata;
+
+    return it->second;
+  }
   ///@}
 
   /** \name Factory method
-   * Member functions used to create the platforms objects
+   * Member functions used to create the platform objects.
+   * TODO: This could be moved to gd::MetadataProvider.
    */
   ///@{
 
   /**
    * \brief Create an object of given type with the specified name.
    */
-  std::unique_ptr<gd::Object> CreateObject(gd::String type,
-                                           const gd::String& name) const;
+  std::unique_ptr<gd::ObjectConfiguration> CreateObjectConfiguration(
+      gd::String type) const;
 
-  /**
-   * \brief Get the class handling the behavior with the given type, or
-   * `nullptr` if no behavior with the given type is found.
-   */
-  gd::Behavior* GetBehavior(const gd::String& type) const;
-
-  /**
-   * \brief Get the class handling the behavior shared data with the given type,
-   * or `nullptr` if no behavior with the given type is found.
-   */
-  gd::BehaviorsSharedData* GetBehaviorSharedDatas(const gd::String& type) const;
-
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Create an event of given type
    */
@@ -157,23 +158,22 @@ class GD_CORE_API Platform {
   ///@}
 
   /**
-   * \brief Called when the IDE is about to shut down: Take this opportunity for
-   * erasing for example any temporary file.
+   * \brief Activate or disable the logs on the standard output when
+   * loading an extension.
    */
-  virtual void OnIDEClosed(){};
-
-  /**
-   * \brief Called when the IDE is initialized and ready to be used.
-   */
-  virtual void OnIDEInitialized(){};
-
-#endif
+  void EnableExtensionLoadingLogs(bool enable) {
+    enableExtensionLoadingLogs = enable;
+  };
 
  private:
   std::vector<std::shared_ptr<PlatformExtension>>
       extensionsLoaded;  ///< Extensions of the platform
   std::map<gd::String, CreateFunPtr>
       creationFunctionTable;  ///< Creation functions for objects
+  std::map<gd::String, InstructionOrExpressionGroupMetadata>
+      instructionOrExpressionGroupMetadata;
+  static InstructionOrExpressionGroupMetadata badInstructionOrExpressionGroupMetadata;
+  bool enableExtensionLoadingLogs;
 };
 
 }  // namespace gd

@@ -1,16 +1,19 @@
 // @flow
 import * as React from 'react';
-import ObjectGroupsList from '.';
-import { ObjectGroupEditorDialog } from '../ObjectGroupEditor/ObjectGroupEditorDialog';
+import ObjectGroupsList, { type ObjectGroupsListInterface } from '.';
+import ObjectGroupEditorDialog from '../ObjectGroupEditor/ObjectGroupEditorDialog';
 import { type GroupWithContext } from '../ObjectsList/EnumerateObjects';
+import { type UnsavedChanges } from '../MainFrame/UnsavedChangesContext';
+import { ProjectScopedContainersAccessor } from '../InstructionOrExpression/EventsScope';
 
 type Props = {|
-  project: ?gdProject,
-  globalObjectsContainer: gdObjectsContainer,
+  project: gdProject,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
+  globalObjectsContainer: gdObjectsContainer | null,
   objectsContainer: gdObjectsContainer,
-  globalObjectGroups: gdObjectGroupsContainer,
+  globalObjectGroups: gdObjectGroupsContainer | null,
   objectGroups: gdObjectGroupsContainer,
-  canRenameGroup: (newName: string) => boolean,
+  getValidatedObjectOrGroupName: (newName: string, global: boolean) => string,
   onDeleteGroup: (
     groupWithScope: GroupWithContext,
     done: (boolean) => void
@@ -22,62 +25,97 @@ type Props = {|
   ) => void,
   onGroupsUpdated?: () => void,
   canSetAsGlobalGroup?: boolean,
-|};
-
-type State = {|
-  editedGroup: ?gdObjectGroup,
+  unsavedChanges?: ?UnsavedChanges,
 |};
 
 /**
  * Helper showing the list of groups and embedding the editor to edit a group.
  */
-export default class ObjectGroupsListWithObjectGroupEditor extends React.Component<
-  Props,
-  State
-> {
-  state = {
-    editedGroup: null,
-  };
+const ObjectGroupsListWithObjectGroupEditor = ({
+  project,
+  projectScopedContainersAccessor,
+  globalObjectsContainer,
+  objectsContainer,
+  globalObjectGroups,
+  objectGroups,
+  getValidatedObjectOrGroupName,
+  onDeleteGroup,
+  onRenameGroup,
+  onGroupsUpdated,
+  canSetAsGlobalGroup,
+  unsavedChanges,
+}: Props): React.Node => {
+  const [editedGroup, setEditedGroup] = React.useState<gdObjectGroup | null>(
+    null
+  );
+  const [
+    selectedObjectGroup,
+    setSelectedObjectGroup,
+  ] = React.useState<gdObjectGroup | null>(null);
+  const [isCreatingNewGroup, setCreatingNewGroup] = React.useState<boolean>(
+    false
+  );
+  const objectGroupsListInterface = React.useRef<ObjectGroupsListInterface | null>(
+    null
+  );
 
-  editGroup = (editedGroup: ?gdObjectGroup) => this.setState({ editedGroup });
-
-  render() {
-    const {
-      project,
-      objectsContainer,
-      globalObjectsContainer,
-      objectGroups,
-      globalObjectGroups,
-    } = this.props;
-
-    return (
-      <React.Fragment>
-        <ObjectGroupsList
-          globalObjectGroups={globalObjectGroups}
-          objectGroups={objectGroups}
-          onEditGroup={this.editGroup}
-          onDeleteGroup={this.props.onDeleteGroup}
-          onRenameGroup={this.props.onRenameGroup}
-          canRenameGroup={this.props.canRenameGroup}
-          onGroupAdded={this.props.onGroupsUpdated}
-          onGroupRemoved={this.props.onGroupsUpdated}
-          onGroupRenamed={this.props.onGroupsUpdated}
-          canSetAsGlobalGroup={this.props.canSetAsGlobalGroup}
-        />
+  return (
+    <React.Fragment>
+      <ObjectGroupsList
+        ref={objectGroupsListInterface}
+        globalObjectGroups={globalObjectGroups}
+        projectScopedContainersAccessor={projectScopedContainersAccessor}
+        objectGroups={objectGroups}
+        onCreateGroup={() => setCreatingNewGroup(true)}
+        onEditGroup={setEditedGroup}
+        onDeleteGroup={onDeleteGroup}
+        onRenameGroup={onRenameGroup}
+        getValidatedObjectOrGroupName={getValidatedObjectOrGroupName}
+        onGroupRemoved={onGroupsUpdated}
+        onGroupRenamed={onGroupsUpdated}
+        canSetAsGlobalGroup={canSetAsGlobalGroup}
+        unsavedChanges={unsavedChanges}
+        isListLocked={false}
+        selectedObjectGroup={selectedObjectGroup}
+        onSelectObjectGroup={setSelectedObjectGroup}
+      />
+      {(editedGroup || isCreatingNewGroup) && (
         <ObjectGroupEditorDialog
           project={project}
-          key={globalObjectsContainer.ptr + ';' + objectsContainer.ptr}
-          open={!!this.state.editedGroup}
-          group={this.state.editedGroup}
+          projectScopedContainersAccessor={projectScopedContainersAccessor}
+          key={
+            (globalObjectsContainer ? globalObjectsContainer.ptr : '') +
+            ';' +
+            objectsContainer.ptr
+          }
+          group={editedGroup}
           globalObjectsContainer={globalObjectsContainer}
           objectsContainer={objectsContainer}
-          onCancel={() => this.editGroup(null)}
-          onApply={() => {
-            if (this.props.onGroupsUpdated) this.props.onGroupsUpdated();
-            this.editGroup(null);
+          initialInstances={null}
+          bypassedObjectGroupsContainer={objectGroups}
+          onCancel={() => {
+            setEditedGroup(null);
+            setCreatingNewGroup(false);
           }}
+          onApply={() => {
+            if (onGroupsUpdated) onGroupsUpdated();
+            setEditedGroup(null);
+          }}
+          onObjectGroupAdded={(objectGroup: gdObjectGroup) => {
+            if (objectGroupsListInterface.current) {
+              objectGroupsListInterface.current.scrollToObjectGroup(
+                objectGroup
+              );
+            }
+          }}
+          initialTab={'objects'}
+          isVariableListLocked={false}
+          isObjectListLocked={false}
+          getValidatedObjectOrGroupName={getValidatedObjectOrGroupName}
         />
-      </React.Fragment>
-    );
-  }
-}
+      )}
+    </React.Fragment>
+  );
+};
+
+export default ObjectGroupsListWithObjectGroupEditor;

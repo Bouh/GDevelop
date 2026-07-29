@@ -1,10 +1,17 @@
 // @flow
-import {
-  type ResourceSource,
-  type ChooseResourceFunction,
-} from '../../ResourcesList/ResourceSource.flow';
-import { type ResourceExternalEditor } from '../../ResourcesList/ResourceExternalEditor.flow';
-import { type EventsScope } from '../EventsScope.flow';
+import { type ResourceManagementProps } from '../../ResourcesList/ResourceSource';
+import { type EventsScope } from '../../InstructionOrExpression/EventsScope';
+import { type MessageDescriptor } from '../../Utils/i18n/MessageDescriptor.flow';
+import { type ProjectScopedContainersAccessor } from '../../InstructionOrExpression/EventsScope';
+import { type ParameterInlineRendererProps } from './ParameterInlineRenderer.flow';
+import { type VariableDialogOpeningProps } from '../../VariablesList/VariablesEditorDialog';
+
+export type ParameterRenderingServiceType = {
+  components: any,
+  getParameterComponent: (type: string) => any,
+  getUserFriendlyTypeName: (rawType: string) => ?MessageDescriptor,
+  renderInlineParameter: (props: ParameterInlineRendererProps) => React.Node,
+};
 
 type CommonProps = {|
   // The parameter
@@ -17,16 +24,17 @@ type CommonProps = {|
   scope: EventsScope,
   globalObjectsContainer: gdObjectsContainer,
   objectsContainer: gdObjectsContainer,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
   isInline?: boolean,
-  resourceSources?: Array<ResourceSource>,
-  onChooseResource?: ChooseResourceFunction,
-  resourceExternalEditors?: Array<ResourceExternalEditor>,
+  onRequestClose?: () => void,
+  onApply?: () => void,
+  resourceManagementProps?: ResourceManagementProps,
 
   // Pass the ParameterRenderingService to allow to render nested parameters
-  parameterRenderingService?: {
-    components: any,
-    getParameterComponent: (type: string) => any,
-  },
+  parameterRenderingService?: ParameterRenderingServiceType,
+
+  // Other
+  id?: string,
 |};
 
 export type ExpressionParameters = {|
@@ -48,15 +56,33 @@ export type ParameterFieldProps = {|
 
   // The index of the parameter in the instruction or expression.
   parameterIndex?: number,
+  onInstructionTypeChanged?: () => void,
+  editEventsFunctionParameter?: (VariableDialogOpeningProps => void) | null,
+  openEventsBasedEntityPropertyEditorDialog?:
+    | (VariableDialogOpeningProps => void)
+    | null,
+|};
+
+export type FieldFocusFunction = (
+  ?{|
+    selectAll?: boolean,
+    caretPosition?: 'end' | number | null,
+  |}
+) => void;
+
+export type ParameterFieldInterface = {|
+  focus: FieldFocusFunction,
 |};
 
 export const getParameterValueOrDefault = (
   value: string,
   parameterMetadata: ?gdParameterMetadata
-) => {
+): string => {
+  if (value) return value;
+
   const defaultValue =
     parameterMetadata && parameterMetadata.isOptional()
       ? parameterMetadata.getDefaultValue()
       : '';
-  return value ? value : defaultValue;
+  return defaultValue;
 };

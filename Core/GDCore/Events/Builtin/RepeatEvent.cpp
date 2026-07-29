@@ -5,10 +5,8 @@
  */
 
 #include "RepeatEvent.h"
-#include "GDCore/Events/CodeGeneration/EventsCodeGenerationContext.h"
-#include "GDCore/Events/CodeGeneration/EventsCodeGenerator.h"
-#include "GDCore/Events/CodeGeneration/ExpressionsCodeGeneration.h"
 #include "GDCore/Events/Serialization.h"
+#include "GDCore/Serialization/Serializer.h"
 #include "GDCore/Serialization/SerializerElement.h"
 
 using namespace std;
@@ -18,7 +16,20 @@ namespace gd {
 RepeatEvent::RepeatEvent()
     : BaseEvent(),
       repeatNumberExpression(""),
+      variables(gd::VariablesContainer::SourceType::Local),
       repeatNumberExpressionSelected(false) {}
+
+gd::InstructionsList* RepeatEvent::GetInstructionList(const gd::String& label) {
+  if (label == BaseEvent::conditionsLabel) return &conditions;
+  if (label == BaseEvent::actionsLabel) return &actions;
+  return nullptr;
+}
+const gd::InstructionsList* RepeatEvent::GetInstructionList(
+    const gd::String& label) const {
+  if (label == BaseEvent::conditionsLabel) return &conditions;
+  if (label == BaseEvent::actionsLabel) return &actions;
+  return nullptr;
+}
 
 vector<gd::InstructionsList*> RepeatEvent::GetAllConditionsVectors() {
   vector<gd::InstructionsList*> allConditions;
@@ -34,11 +45,15 @@ vector<gd::InstructionsList*> RepeatEvent::GetAllActionsVectors() {
   return allActions;
 }
 
-vector<gd::Expression*> RepeatEvent::GetAllExpressions() {
-  vector<gd::Expression*> allExpressions;
-  allExpressions.push_back(&repeatNumberExpression);
+vector<pair<gd::Expression*, gd::ParameterMetadata> >
+    RepeatEvent::GetAllExpressionsWithMetadata() {
+  vector<pair<gd::Expression*, gd::ParameterMetadata> >
+      allExpressionsWithMetadata;
+  auto metadata = gd::ParameterMetadata().SetType("number");
+  allExpressionsWithMetadata.push_back(
+      std::make_pair(&repeatNumberExpression, metadata));
 
-  return allExpressions;
+  return allExpressionsWithMetadata;
 }
 
 vector<const gd::InstructionsList*> RepeatEvent::GetAllConditionsVectors()
@@ -56,22 +71,35 @@ vector<const gd::InstructionsList*> RepeatEvent::GetAllActionsVectors() const {
   return allActions;
 }
 
-vector<const gd::Expression*> RepeatEvent::GetAllExpressions() const {
-  vector<const gd::Expression*> allExpressions;
-  allExpressions.push_back(&repeatNumberExpression);
+vector<pair<const gd::Expression*, const gd::ParameterMetadata> >
+    RepeatEvent::GetAllExpressionsWithMetadata() const {
+  vector<pair<const gd::Expression*, const gd::ParameterMetadata> >
+      allExpressionsWithMetadata;
+  auto metadata = gd::ParameterMetadata().SetType("number");
+  allExpressionsWithMetadata.push_back(
+      std::make_pair(&repeatNumberExpression, metadata));
 
-  return allExpressions;
+  return allExpressionsWithMetadata;
 }
 
 void RepeatEvent::SerializeTo(SerializerElement& element) const {
+  const bool canonical = gd::Serializer::IsCanonicalMode();
   element.AddChild("repeatExpression")
       .SetValue(repeatNumberExpression.GetPlainString());
   gd::EventsListSerialization::SerializeInstructionsTo(
       conditions, element.AddChild("conditions"));
   gd::EventsListSerialization::SerializeInstructionsTo(
       actions, element.AddChild("actions"));
-  gd::EventsListSerialization::SerializeEventsTo(events,
-                                                 element.AddChild("events"));
+
+  if (canonical || !events.IsEmpty())
+    gd::EventsListSerialization::SerializeEventsTo(events,
+                                                  element.AddChild("events"));
+  if (canonical || HasVariables()) {
+    variables.SerializeTo(element.AddChild("variables"));
+  }
+  if (canonical || !loopIndexVariableName.empty()) {
+    element.AddChild("loopIndexVariable").SetStringValue(loopIndexVariableName);
+  }
 }
 
 void RepeatEvent::UnserializeFrom(gd::Project& project,
@@ -84,8 +112,22 @@ void RepeatEvent::UnserializeFrom(gd::Project& project,
       project, conditions, element.GetChild("conditions", 0, "Conditions"));
   gd::EventsListSerialization::UnserializeInstructionsFrom(
       project, actions, element.GetChild("actions", 0, "Actions"));
-  gd::EventsListSerialization::UnserializeEventsFrom(
-      project, events, element.GetChild("events", 0, "Events"));
+
+  events.Clear();
+  if (element.HasChild("events", "Events")) {
+    gd::EventsListSerialization::UnserializeEventsFrom(
+        project, events, element.GetChild("events", 0, "Events"));
+  }
+
+  variables.Clear();
+  if (element.HasChild("variables")) {
+    variables.UnserializeFrom(element.GetChild("variables"));
+  }
+
+  loopIndexVariableName =
+      element.HasChild("loopIndexVariable")
+          ? element.GetChild("loopIndexVariable").GetStringValue()
+          : "";
 }
 
 }  // namespace gd

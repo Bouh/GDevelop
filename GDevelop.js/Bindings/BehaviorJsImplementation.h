@@ -15,15 +15,13 @@ using namespace gd;
 class BehaviorJsImplementation : public gd::Behavior {
  public:
   BehaviorJsImplementation(){};
-  virtual BehaviorJsImplementation* Clone() const override;
+  virtual std::unique_ptr<gd::Behavior> Clone() const override;
 
   virtual std::map<gd::String, gd::PropertyDescriptor> GetProperties(
-      const gd::SerializerElement& behaviorContent,
-      gd::Project& project) const override;
+      const gd::SerializerElement& behaviorContent) const override;
   virtual bool UpdateProperty(gd::SerializerElement& behaviorContent,
                               const gd::String& name,
-                              const gd::String& value,
-                              gd::Project& project) override;
+                              const gd::String& value) override;
   virtual void InitializeContent(
       gd::SerializerElement& behaviorContent) override;
 

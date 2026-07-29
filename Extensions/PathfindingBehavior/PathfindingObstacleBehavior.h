@@ -5,10 +5,11 @@ Copyright (c) 2010-2016 Florian Rival (Florian.Rival@gmail.com)
 This project is released under the MIT License.
 */
 
-#ifndef PATHFINDINGOBSTACLEBEHAVIOR_H
-#define PATHFINDINGOBSTACLEBEHAVIOR_H
+#pragma once
+
 #include <map>
-#include "GDCpp/Runtime/Project/Behavior.h"
+
+#include "GDCore/Project/Behavior.h"
 namespace gd {
 class SerializerElement;
 class PropertyDescriptor;
@@ -20,28 +21,22 @@ class Layout;
  * \brief Behavior that mark object as being obstacles for objects using
  * pathfinding behavior.
  */
-class GD_EXTENSION_API PathfindingObstacleBehavior : public Behavior {
+class GD_EXTENSION_API PathfindingObstacleBehavior : public gd::Behavior {
  public:
   PathfindingObstacleBehavior(){};
   virtual ~PathfindingObstacleBehavior(){};
-  virtual Behavior* Clone() const override {
-    return new PathfindingObstacleBehavior(*this);
+  virtual std::unique_ptr<gd::Behavior> Clone() const override {
+    return gd::make_unique<PathfindingObstacleBehavior>(*this);
   }
 
-#if defined(GD_IDE_ONLY)
   virtual std::map<gd::String, gd::PropertyDescriptor> GetProperties(
-      const gd::SerializerElement& behaviorContent,
-      gd::Project& project) const override;
+      const gd::SerializerElement& behaviorContent) const override;
   virtual bool UpdateProperty(gd::SerializerElement& behaviorContent,
                               const gd::String& name,
-                              const gd::String& value,
-                              gd::Project& project) override;
-#endif
+                              const gd::String& value) override;
 
   virtual void InitializeContent(
       gd::SerializerElement& behaviorContent) override;
 
  private:
 };
-
-#endif  // PATHFINDINGOBSTACLEBEHAVIOR_H

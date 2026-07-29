@@ -4,19 +4,11 @@
  * reserved. This project is released under the MIT License.
  */
 
-#ifndef BEHAVIORSSHAREDDATA_H
-#define BEHAVIORSSHAREDDATA_H
+#pragma once
 
-#include <map>
-#include <memory>
 #include "GDCore/String.h"
-class BehaviorsRuntimeSharedData;
-namespace gd {
-class SerializerElement;
-class PropertyDescriptor;
-class Project;
-class Layout;
-}  // namespace gd
+#include "GDCore/Project/BehaviorConfigurationContainer.h"
+#include "GDCore/Project/MemoryTrackedRegistry.h"
 
 namespace gd {
 
@@ -29,65 +21,24 @@ namespace gd {
  *
  * \ingroup GameEngine
  */
-class GD_CORE_API BehaviorsSharedData {
+class GD_CORE_API BehaviorsSharedData: public BehaviorConfigurationContainer {
  public:
-  BehaviorsSharedData(){};
-  virtual ~BehaviorsSharedData();
-  virtual gd::BehaviorsSharedData* Clone() const {
-    return new BehaviorsSharedData(*this);
+  BehaviorsSharedData(): BehaviorConfigurationContainer() {};
+  BehaviorsSharedData(const gd::String& name_, const gd::String& type_)
+      : BehaviorConfigurationContainer(name_, type_) {};
+  BehaviorsSharedData(const BehaviorsSharedData& other)
+      : BehaviorConfigurationContainer(other) {};
+  BehaviorsSharedData& operator=(const BehaviorsSharedData& other) {
+    if (this != &other) {
+      BehaviorConfigurationContainer::operator=(other);
+    }
+    return *this;
   }
-
-  /**
-   * \brief Return the name identifying the type of the behavior
-   */
-  gd::String GetTypeName() { return type; }
-
-  /**
-   * \brief Change name identifying the type of the behavior.
-   */
-  void SetTypeName(const gd::String& type_) { type = type_; };
-
-#if defined(GD_IDE_ONLY)
-  /**
-   * \brief Called when the IDE wants to know about the properties of the shared
-   data.
-   *
-   * Usage example:
-   \code
-      std::map<gd::String, gd::PropertyDescriptor> properties;
-      properties[_("Initial speed")].SetValue(gd::String::From(initialSpeed));
-
-      return properties;
-   \endcode
-   *
-   * \return a std::map with properties names as key.
-   * \see gd::PropertyDescriptor
-   */
-  virtual std::map<gd::String, gd::PropertyDescriptor> GetProperties(
-      const gd::SerializerElement& behaviorSharedDataContent,
-      gd::Project& project) const;
-
-  /**
-   * \brief Called when the IDE wants to update a property of the shared data
-   *
-   * \return false if the new value cannot be set
-   * \see gd::InitialInstance
-   */
-  virtual bool UpdateProperty(gd::SerializerElement& behaviorSharedDataContent,
-                              const gd::String& name,
-                              const gd::String& value,
-                              gd::Project& project) {
-    return false;
-  };
-#endif
-
-  virtual void InitializeContent(
-      gd::SerializerElement& behaviorSharedDataContent){};
+  virtual ~BehaviorsSharedData();
+  virtual BehaviorsSharedData* Clone() const { return new BehaviorsSharedData(*this); }
 
  private:
-  gd::String type;  ///< The type indicate of which type is the behavior.
+  gd::MemoryTracked _memoryTracked{this, "BehaviorsSharedData"};
 };
 
 }  // namespace gd
-
-#endif  // BEHAVIORSSHAREDDATA_H

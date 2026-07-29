@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8"/>
+    <link rel="manifest" href="manifest.webmanifest">
 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -35,10 +36,6 @@
 
     (function() {
         //Initialization
-        gdjs.registerObjects();
-        gdjs.registerBehaviors();
-        gdjs.registerGlobalCallbacks();
-
         var game = new gdjs.RuntimeGame(gdjs.projectData, {}/*GDJS_ADDITIONAL_SPEC*/);
 
         //Create a renderer

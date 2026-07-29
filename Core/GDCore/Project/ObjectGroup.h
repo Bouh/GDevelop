@@ -8,7 +8,9 @@
 #define GDCORE_OBJECTGROUP_H
 #include <utility>
 #include <vector>
+
 #include "GDCore/String.h"
+
 namespace gd {
 class SerializerElement;
 }
@@ -18,8 +20,8 @@ namespace gd {
 /**
  * \brief Represents an object group.
  *
- * Objects groups do not really contains objects : They are just used in events,
- * so as to create events which can be applied to several objects.
+ * Objects groups do not really contains objects: they are just used in events,
+ * to create events which can be applied to several objects.
  *
  * \ingroup PlatformDefinition
  */

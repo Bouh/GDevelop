@@ -1,6 +1,7 @@
-import React, { Component } from 'react';
+// @flow
+import * as React from 'react';
 import IconButton from '../IconButton';
-import Close from '@material-ui/icons/Close';
+import Cross from '../CustomSvgIcons/Cross';
 import { MosaicWindowContext, MosaicContext } from 'react-mosaic-component';
 
 const styles = {
@@ -15,25 +16,21 @@ const styles = {
   },
 };
 
-export default class CloseButton extends Component {
-  render() {
-    return (
-      <MosaicContext.Consumer>
-        {({ mosaicActions }) => (
-          <MosaicWindowContext.Consumer>
-            {({ mosaicWindowActions }) => (
-              <IconButton
-                onClick={() => {
-                  mosaicActions.remove(mosaicWindowActions.getPath());
-                }}
-                style={styles.container}
-              >
-                <Close htmlColor="white" style={styles.icon} />
-              </IconButton>
-            )}
-          </MosaicWindowContext.Consumer>
-        )}
-      </MosaicContext.Consumer>
-    );
-  }
+type Props = {||};
+
+export default function CloseButton(props: Props): React.Node {
+  const { mosaicActions } = React.useContext(MosaicContext);
+  const { mosaicWindowActions } = React.useContext(MosaicWindowContext);
+
+  return (
+    // $FlowFixMe[incompatible-type]
+    <IconButton
+      onClick={() => {
+        mosaicActions.remove(mosaicWindowActions.getPath());
+      }}
+      style={styles.container}
+    >
+      <Cross htmlColor="inherit" style={styles.icon} />
+    </IconButton>
+  );
 }

@@ -4,201 +4,164 @@
  * reserved. This project is released under the MIT License.
  */
 #include "GDCore/Project/Object.h"
+
+#include "GDCore/Extensions/Metadata/BehaviorMetadata.h"
+#include "GDCore/Extensions/Metadata/MetadataProvider.h"
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Project/Behavior.h"
+#include "GDCore/Project/CustomBehavior.h"
 #include "GDCore/Project/Layout.h"
 #include "GDCore/Project/Project.h"
-#include "GDCore/Serialization/SerializerElement.h"
-#if defined(GD_IDE_ONLY)
 #include "GDCore/Project/PropertyDescriptor.h"
-#endif
+#include "GDCore/Project/QuickCustomization.h"
+#include "GDCore/Serialization/SerializerElement.h"
+#include "GDCore/Tools/Log.h"
+#include "GDCore/Tools/UUID/UUID.h"
 
 namespace gd {
 
 Object::~Object() {}
 
-Object::Object(const gd::String& name_) : name(name_) {}
+Object::Object(const gd::String& name_,
+               const gd::String& type_,
+               std::unique_ptr<gd::ObjectConfiguration> configuration_)
+    : name(name_),
+      configuration(std::move(configuration_)),
+      objectVariables(gd::VariablesContainer::SourceType::Object) {
+  SetType(type_);
+}
+
+Object::Object(const gd::String& name_,
+               const gd::String& type_,
+               gd::ObjectConfiguration* configuration_)
+    : name(name_),
+      configuration(configuration_),
+      objectVariables(gd::VariablesContainer::SourceType::Object) {
+  SetType(type_);
+}
 
 void Object::Init(const gd::Object& object) {
-  name = object.name;
-  type = object.type;
-  objectVariables = object.objectVariables;
-  tags = object.tags;
+  CopyWithoutConfiguration(object);
+  configuration = object.configuration->Clone();
+}
 
-  behaviors.clear();
-  for (auto& it : object.behaviors) {
-    behaviors[it.first] = gd::make_unique<gd::BehaviorContent>(*it.second);
-  }
+void Object::CopyWithoutConfiguration(const gd::Object& object) {
+  persistentUuid = object.persistentUuid;
+  name = object.name;
+  assetStoreId = object.assetStoreId;
+  objectVariables = object.objectVariables;
+  effectsContainer = object.effectsContainer;
+  behaviors = object.behaviors;
+  resourcesPreloading = object.resourcesPreloading;
+}
+
+gd::ObjectConfiguration& Object::GetConfiguration() { return *configuration; }
+
+const gd::ObjectConfiguration& Object::GetConfiguration() const {
+  return *configuration;
 }
 
 std::vector<gd::String> Object::GetAllBehaviorNames() const {
-  std::vector<gd::String> allNameIdentifiers;
-
-  for (auto& it : behaviors) allNameIdentifiers.push_back(it.first);
-
-  return allNameIdentifiers;
+  return behaviors.GetAllBehaviorNames();
 }
 
-void Object::RemoveBehavior(const gd::String& name) { behaviors.erase(name); }
+void Object::RemoveBehavior(const gd::String& name) { behaviors.RemoveBehavior(name); }
 
 bool Object::RenameBehavior(const gd::String& name, const gd::String& newName) {
-  if (behaviors.find(name) == behaviors.end() ||
-      behaviors.find(newName) != behaviors.end())
-    return false;
-
-  std::unique_ptr<BehaviorContent> aut =
-      std::move(behaviors.find(name)->second);
-  behaviors.erase(name);
-  behaviors[newName] = std::move(aut);
-  behaviors[newName]->SetName(newName);
-
-  return true;
+  return behaviors.RenameBehavior(name, newName);
 }
 
-gd::BehaviorContent& Object::GetBehavior(const gd::String& name) {
-  return *behaviors.find(name)->second;
+gd::Behavior& Object::GetBehavior(const gd::String& name) {
+  return behaviors.GetBehavior(name);
 }
 
-const gd::BehaviorContent& Object::GetBehavior(const gd::String& name) const {
-  return *behaviors.find(name)->second;
+const gd::Behavior& Object::GetBehavior(const gd::String& name) const {
+  return behaviors.GetBehavior(name);
 }
 
 bool Object::HasBehaviorNamed(const gd::String& name) const {
-  return behaviors.find(name) != behaviors.end();
+  return behaviors.HasBehaviorNamed(name);
 }
 
-gd::BehaviorContent& Object::AddBehavior(
-    const gd::BehaviorContent& behaviorContent) {
-  const gd::String& behaviorName = behaviorContent.GetName();
-  auto newBehaviorContent =
-      gd::make_unique<gd::BehaviorContent>(behaviorContent);
-  behaviors[behaviorName] = std::move(newBehaviorContent);
-  return *behaviors[behaviorName];
+gd::Behavior* Object::AddNewBehavior(const gd::Project& project,
+                                     const gd::String& type,
+                                     const gd::String& name) {
+  return behaviors.AddNewBehavior(project, type, name);
 }
-
-#if defined(GD_IDE_ONLY)
-std::map<gd::String, gd::PropertyDescriptor> Object::GetProperties(
-    gd::Project& project) const {
-  std::map<gd::String, gd::PropertyDescriptor> nothing;
-  return nothing;
-}
-
-gd::BehaviorContent* Object::AddNewBehavior(gd::Project& project,
-                                            const gd::String& type,
-                                            const gd::String& name) {
-  gd::Behavior* behavior = project.GetCurrentPlatform().GetBehavior(type);
-
-  if (behavior) {
-    auto behaviorContent = gd::make_unique<gd::BehaviorContent>(name, type);
-    behavior->InitializeContent(behaviorContent->GetContent());
-    behaviors[name] = std::move(behaviorContent);
-    return behaviors[name].get();
-  } else {
-    return nullptr;
-  }
-}
-
-std::map<gd::String, gd::PropertyDescriptor>
-Object::GetInitialInstanceProperties(const gd::InitialInstance& instance,
-                                     gd::Project& project,
-                                     gd::Layout& layout) {
-  std::map<gd::String, gd::PropertyDescriptor> nothing;
-  return nothing;
-}
-#endif
 
 void Object::UnserializeFrom(gd::Project& project,
                              const SerializerElement& element) {
-  type = element.GetStringAttribute("type");
+  persistentUuid = element.GetStringAttribute("persistentUuid");
+
+  SetType(element.GetStringAttribute("type"));
+  assetStoreId = element.GetStringAttribute("assetStoreId");
   name = element.GetStringAttribute("name", name, "nom");
-  tags = element.GetStringAttribute("tags");
+  resourcesPreloading = element.GetStringAttribute("resourcesPreloading", "with-scene");
 
   objectVariables.UnserializeFrom(
       element.GetChild("variables", 0, "Variables"));
-  behaviors.clear();
+  // The "mixed values" marker is an editor-only, display state used when
+  // showing the variables of several objects at once. It must never be kept
+  // on the variables of an object - clean it up in case it was wrongly
+  // persisted in the project by a previous version of the editor.
+  objectVariables.ClearMixedValues();
+
+  if (element.HasChild("effects")) {
+    const SerializerElement& effectsElement = element.GetChild("effects");
+    effectsContainer.UnserializeFrom(effectsElement);
+  }
 
   // Compatibility with GD <= 3.3
   if (element.HasChild("Automatism")) {
     for (std::size_t i = 0; i < element.GetChildrenCount("Automatism"); ++i) {
-      SerializerElement& behaviorElement = element.GetChild("Automatism", i);
+      SerializerElement &behaviorElement = element.GetChild("Automatism", i);
 
       gd::String type = behaviorElement.GetStringAttribute("type", "", "Type")
                             .FindAndReplace("Automatism", "Behavior");
       gd::String name = behaviorElement.GetStringAttribute("name", "", "Name");
 
-      auto behaviorContent = gd::make_unique<gd::BehaviorContent>(name, type);
-      behaviorContent->UnserializeFrom(behaviorElement);
-      behaviors[name] = std::move(behaviorContent);
+      auto behavior = gd::Object::AddNewBehavior(project, type, name);
+      behavior->UnserializeFrom(behaviorElement);
     }
   }
   // End of compatibility code
   else {
-    SerializerElement& behaviorsElement =
+    SerializerElement &behaviorsElement =
         element.GetChild("behaviors", 0, "automatisms");
-    behaviorsElement.ConsiderAsArrayOf("behavior", "automatism");
-    for (std::size_t i = 0; i < behaviorsElement.GetChildrenCount(); ++i) {
-      SerializerElement& behaviorElement = behaviorsElement.GetChild(i);
-
-      gd::String type =
-          behaviorElement.GetStringAttribute("type").FindAndReplace(
-              "Automatism", "Behavior");  // Compatibility with GD <= 4
-      gd::String name = behaviorElement.GetStringAttribute("name");
-
-      auto behaviorContent = gd::make_unique<gd::BehaviorContent>(name, type);
-      // Compatibility with GD <= 4.0.98
-      // If there is only one child called "content" (in addition to "type" and
-      // "name"), it's the content of a JavaScript behavior. Move the content
-      // out of the "content" object (to put it directly at the root of the
-      // behavior element).
-      if (behaviorElement.HasChild("content") &&
-          behaviorElement.GetAllChildren().size() == 3) {
-        SerializerElement& contentElement = behaviorElement.GetChild("content");
-
-        // Physics2 Behavior was using "type" for the type of the body. The name
-        // conflicts with the behavior "type". Rename it.
-        if (contentElement.HasChild("type")) {
-          contentElement.AddChild("bodyType")
-              .SetValue(contentElement.GetChild("type").GetStringValue());
-          contentElement.RemoveChild("type");
-        }
-
-        behaviorContent->UnserializeFrom(contentElement);
-      }
-      // end of compatibility code
-      else {
-        behaviorContent->UnserializeFrom(behaviorElement);
-      }
-      behaviors[name] = std::move(behaviorContent);
-    }
+    behaviors.UnserializeFrom(project, behaviorsElement);
   }
 
-  DoUnserializeFrom(project, element);
+  configuration->UnserializeFrom(project, element);
 }
 
-#if defined(GD_IDE_ONLY)
 void Object::SerializeTo(SerializerElement& element) const {
+  if (!persistentUuid.empty())
+    element.SetStringAttribute("persistentUuid", persistentUuid);
+
   element.SetAttribute("name", GetName());
+  element.SetAttribute("assetStoreId", GetAssetStoreId());
   element.SetAttribute("type", GetType());
-  element.SetAttribute("tags", GetTags());
-  objectVariables.SerializeTo(element.AddChild("variables"));
-
-  SerializerElement& behaviorsElement = element.AddChild("behaviors");
-  behaviorsElement.ConsiderAsArrayOf("behavior");
-  std::vector<gd::String> allBehaviors = GetAllBehaviorNames();
-  for (std::size_t i = 0; i < allBehaviors.size(); ++i) {
-    const gd::BehaviorContent& behaviorContent = GetBehavior(allBehaviors[i]);
-    SerializerElement& behaviorElement = behaviorsElement.AddChild("behavior");
-
-    behaviorContent.SerializeTo(behaviorElement);
-    behaviorElement.RemoveChild("type");  // The content can contain type or
-                                          // name properties, remove them.
-    behaviorElement.RemoveChild("name");
-    behaviorElement.SetAttribute("type", behaviorContent.GetTypeName());
-    behaviorElement.SetAttribute("name", behaviorContent.GetName());
+  if (GetResourcesPreloading() != "with-scene") {
+    element.SetAttribute("resourcesPreloading", GetResourcesPreloading());
   }
-
-  DoSerializeTo(element);
+  objectVariables.SerializeTo(element.AddChild("variables"));
+  effectsContainer.SerializeTo(element.AddChild("effects"));
+  behaviors.SerializeTo(element.AddChild("behaviors"));
+  configuration->SerializeTo(element);
 }
-#endif
+
+Object& Object::ResetPersistentUuid() {
+  persistentUuid = UUID::MakeUuid4();
+  objectVariables.ResetPersistentUuid();
+
+  return *this;
+}
+
+const gd::String& Object::GetPersistentUuid() const {
+  if (persistentUuid.empty()) {
+    persistentUuid = UUID::MakeUuid4();
+  }
+  return persistentUuid;
+}
 
 }  // namespace gd

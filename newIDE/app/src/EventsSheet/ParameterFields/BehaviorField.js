@@ -1,159 +1,197 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import * as React from 'react';
-import { type ParameterFieldProps } from './ParameterFieldCommons';
+import {
+  type ParameterFieldProps,
+  type FieldFocusFunction,
+  type ParameterFieldInterface,
+} from './ParameterFieldCommons';
 import { getLastObjectParameterValue } from './ParameterMetadataTools';
-import SemiControlledAutoComplete from '../../UI/SemiControlledAutoComplete';
-const gd = global.gd;
+import SemiControlledAutoComplete, {
+  type SemiControlledAutoCompleteInterface,
+} from '../../UI/SemiControlledAutoComplete';
+import { ProjectScopedContainersAccessor } from '../../InstructionOrExpression/EventsScope';
 
-type State = {|
-  errorText: ?string,
-|};
+const gd: libGDevelop = global.gd;
 
-export default class BehaviorField extends React.Component<
-  ParameterFieldProps,
-  State
-> {
-  state = { errorText: null };
-  _description: ?string;
-  _longDescription: ?string;
-  _behaviorTypeAllowed: ?string;
-  _behaviorNames: Array<string> = [];
-  _field: ?SemiControlledAutoComplete;
+export const getSelectableBehavior = (
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
+  objectOrGroupName: string,
+  allowedBehaviorType: string
+): Array<string> => {
+  const projectScopedContainers = projectScopedContainersAccessor.get();
+  const objectsContainersList = projectScopedContainers.getObjectsContainersList();
+  return allowedBehaviorType
+    ? objectsContainersList
+        .getBehaviorNamesInObjectOrGroup(
+          objectOrGroupName,
+          allowedBehaviorType,
+          true
+        )
+        .toJSArray()
+    : objectsContainersList
+        .getBehaviorsOfObject(objectOrGroupName, true)
+        .toJSArray()
+        .filter(
+          behaviorName =>
+            !objectsContainersList.isDefaultBehavior(
+              objectOrGroupName,
+              behaviorName,
+              true
+            )
+        );
+};
 
-  constructor(props: ParameterFieldProps) {
-    super(props);
+export default (React.forwardRef<ParameterFieldProps, ParameterFieldInterface>(
+  function BehaviorField(props: ParameterFieldProps, ref) {
+    const field = React.useRef<?SemiControlledAutoCompleteInterface>(null);
+    const focus: FieldFocusFunction = options => {
+      if (field.current) field.current.focus(options);
+    };
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
 
-    const { parameterMetadata } = this.props;
-    this._description = parameterMetadata
+    const { parameterMetadata } = props;
+
+    const [errorText, setErrorText] = React.useState<?string>(null);
+    const [behaviorNames, setBehaviorNames] = React.useState<Array<string>>([]);
+
+    const description = parameterMetadata
       ? parameterMetadata.getDescription()
       : undefined;
 
-    this._longDescription = parameterMetadata
+    const longDescription = parameterMetadata
       ? parameterMetadata.getLongDescription()
       : undefined;
 
-    this._behaviorTypeAllowed = parameterMetadata
+    const allowedBehaviorType = parameterMetadata
       ? parameterMetadata.getExtraInfo()
-      : undefined;
-  }
+      : '';
 
-  _updateBehaviorsList() {
-    const {
-      instructionMetadata,
-      instruction,
-      expressionMetadata,
-      expression,
-      parameterIndex,
-    } = this.props;
+    const updateBehaviorsList = React.useCallback(
+      () => {
+        const {
+          instructionMetadata,
+          instruction,
+          expressionMetadata,
+          expression,
+          parameterIndex,
+          projectScopedContainersAccessor,
+        } = props;
+        const objectName = getLastObjectParameterValue({
+          instructionMetadata,
+          instruction,
+          expressionMetadata,
+          expression,
+          parameterIndex,
+        });
+        if (!objectName) return;
 
-    const objectName = getLastObjectParameterValue({
-      instructionMetadata,
-      instruction,
-      expressionMetadata,
-      expression,
-      parameterIndex,
-    });
-    if (!objectName) return;
-
-    this._behaviorNames = gd
-      .getBehaviorsOfObject(
-        this.props.globalObjectsContainer,
-        this.props.objectsContainer,
-        objectName,
-        true
-      )
-      .toJSArray()
-      .filter(behaviorName => {
-        return (
-          !this._behaviorTypeAllowed ||
-          gd.getTypeOfBehavior(
-            this.props.globalObjectsContainer,
-            this.props.objectsContainer,
-            behaviorName
-          ) === this._behaviorTypeAllowed
+        const newBehaviorNames = getSelectableBehavior(
+          projectScopedContainersAccessor,
+          objectName,
+          allowedBehaviorType
         );
-      });
-  }
+        setBehaviorNames(newBehaviorNames);
+        if (
+          !allowedBehaviorType &&
+          !!props.value &&
+          newBehaviorNames.length === 0
+        ) {
+          // Force emptying the current value if there is no behavior.
+          // Useful when the object is changed to one without behaviors.
+          props.onChange('');
+        }
+      },
+      [props, allowedBehaviorType]
+    );
 
-  focus() {
-    if (this._field) this._field.focus();
-  }
+    const getError = (value?: string) => {
+      if (!value && !props.value) return null;
 
-  _getError = (value?: string) => {
-    if (!value && !this.props.value) return null;
+      const isValidChoice =
+        behaviorNames.filter(choice => props.value === choice).length !== 0;
 
-    const isValidChoice =
-      this._behaviorNames.filter(choice => this.props.value === choice)
-        .length !== 0;
+      if (!isValidChoice) return 'This behavior is not attached to the object';
 
-    if (!isValidChoice) return 'This behavior is not attached to the object';
+      return null;
+    };
 
-    return null;
-  };
+    const doValidation = (value?: string) => {
+      setErrorText(getError(value));
+    };
 
-  _doValidation = (value?: string) => {
-    this.setState({ errorText: this._getError(value) });
-  };
+    const forceChooseBehavior = React.useCallback(
+      () => {
+        // This is a bit hacky:
+        // force the behavior selection if there is only one selectable behavior
+        if (behaviorNames.length === 1) {
+          if (props.value !== behaviorNames[0]) {
+            props.onChange(behaviorNames[0]);
+          }
+        }
+      },
+      // Ensure that we re-run this function everytime the props change.
+      // This allows to recalculate the behaviorNames based on the new object selected
+      // (which is not in the props)
+      [behaviorNames, props]
+    );
 
-  _forceChooseBehavior = () => {
-    // This is a bit hacky:
-    // force the behavior selection if there is only one selectable behavior
-    if (this._behaviorNames.length === 1) {
-      if (this.props.value !== this._behaviorNames[0]) {
-        this.props.onChange(this._behaviorNames[0]);
-      }
-    }
-  };
+    React.useEffect(
+      () => {
+        forceChooseBehavior();
+      },
+      [forceChooseBehavior]
+    );
 
-  componentDidUpdate() {
-    this._forceChooseBehavior();
-  }
+    React.useEffect(
+      () => {
+        updateBehaviorsList();
+      },
+      [updateBehaviorsList]
+    );
 
-  componentDidMount() {
-    this._forceChooseBehavior();
-  }
-
-  render() {
-    this._updateBehaviorsList();
-
-    const noBehaviorErrorText =
-      this._behaviorTypeAllowed !== '' ? (
-        <Trans>
-          The behavior is not attached to this object. Please select another
-          object or add this behavior.
-        </Trans>
-      ) : (
-        <Trans>
-          This object has no behaviors: please add this behavior to the object
-          first.
-        </Trans>
-      );
+    const noBehaviorErrorText = allowedBehaviorType ? (
+      <Trans>
+        The behavior is not attached to this object. Please select another
+        object or add this behavior:{' '}
+        {gd.MetadataProvider.getBehaviorMetadata(
+          gd.JsPlatform.get(),
+          allowedBehaviorType
+        ).getFullName() || allowedBehaviorType}
+      </Trans>
+    ) : (
+      <Trans>
+        This object has no behaviors: please add a behavior to the object first.
+      </Trans>
+    );
 
     return (
       <SemiControlledAutoComplete
-        margin={this.props.isInline ? 'none' : 'dense'}
-        floatingLabelText={this._description}
-        helperMarkdownText={this._longDescription}
+        margin={props.isInline ? 'none' : 'dense'}
+        floatingLabelText={description}
+        helperMarkdownText={longDescription}
         fullWidth
-        errorText={
-          !this._behaviorNames.length
-            ? noBehaviorErrorText
-            : this.state.errorText
-        }
-        value={this.props.value}
-        onChange={this.props.onChange}
+        errorText={!behaviorNames.length ? noBehaviorErrorText : errorText}
+        value={props.value}
+        onChange={props.onChange}
+        onRequestClose={props.onRequestClose}
+        onApply={props.onApply}
         onBlur={event => {
-          this._doValidation(event.currentTarget.value);
+          doValidation(event.currentTarget.value);
         }}
-        dataSource={this._behaviorNames.map(behaviorName => ({
+        dataSource={behaviorNames.map(behaviorName => ({
           text: behaviorName,
           value: behaviorName,
         }))}
-        openOnFocus={!this.props.isInline}
-        disabled={this._behaviorNames.length <= 1}
-        ref={field => (this._field = field)}
+        openOnFocus={!props.isInline}
+        disabled={behaviorNames.length <= 1}
+        ref={field}
       />
     );
   }
-}
+): React.ComponentType<{
+  ...ParameterFieldProps,
+  +ref?: React.RefSetter<ParameterFieldInterface>,
+}>);

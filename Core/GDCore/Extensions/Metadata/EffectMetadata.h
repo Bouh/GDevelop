@@ -3,11 +3,13 @@
  * Copyright 2008-present Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef EFFECTMETADATA_H
-#define EFFECTMETADATA_H
+#pragma once
+
 #include <functional>
 #include <map>
 #include <memory>
+#include <algorithm>
+
 #include "GDCore/Project/PropertyDescriptor.h"
 #include "GDCore/String.h"
 
@@ -23,21 +25,25 @@ class GD_CORE_API EffectMetadata {
   /**
    * \brief Construct an effect metadata, with the given type
    */
-  EffectMetadata(const gd::String& type_);
+   EffectMetadata(const gd::String &type_)
+       : type(type_), isMarkedAsNotWorkingForObjects(false),
+         isMarkedAsOnlyWorkingFor2D(false), isMarkedAsOnlyWorkingFor3D(false),
+         isMarkedAsUnique(false) {}
 
-  /**
-   * \brief Default constructor, only used for initializing `badEffectMetadata`.
-   */
-  EffectMetadata() {}
+   /**
+    * \brief Default constructor, only used for initializing
+    * `badEffectMetadata`.
+    */
+   EffectMetadata() {}
 
-  virtual ~EffectMetadata(){};
+   virtual ~EffectMetadata(){};
 
-  /**
-   * \brief Set the name shown to the user.
-   */
-  EffectMetadata& SetFullName(const gd::String& fullname_) {
-    fullname = fullname_;
-    return *this;
+   /**
+    * \brief Set the name shown to the user.
+    */
+   EffectMetadata &SetFullName(const gd::String &fullname_) {
+     fullname = fullname_;
+     return *this;
   };
 
   /**
@@ -49,7 +55,8 @@ class GD_CORE_API EffectMetadata {
   };
 
   /**
-   * Set the help path of the effect, relative to the documentation root.
+   * Set the help path of the effect, relative to the GDevelop documentation
+   * root.
    */
   EffectMetadata& SetHelpPath(const gd::String& path) {
     helpPath = path;
@@ -58,6 +65,8 @@ class GD_CORE_API EffectMetadata {
 
   /**
    * \brief Clear any existing include file and add the specified include file.
+   * \deprecated Use `AddIncludeFile` instead as clearing the list is more
+   * error prone.
    */
   EffectMetadata& SetIncludeFile(const gd::String& includeFile);
 
@@ -81,12 +90,14 @@ class GD_CORE_API EffectMetadata {
   }
 
   /**
-   * \brief Get the help path of the effect, relative to the documentation root.
+   * \brief Get the help path of the effect, relative to the GDevelop
+   * documentation root.
    */
   const gd::String& GetHelpPath() const { return helpPath; }
 
   /**
-   * \brief Get the type of the effect (its internal name, like "BlackAndWhite").
+   * \brief Get the type of the effect (its internal name, like
+   * "BlackAndWhite").
    */
   const gd::String& GetType() const { return type; }
 
@@ -107,6 +118,66 @@ class GD_CORE_API EffectMetadata {
     return includeFiles;
   }
 
+  /**
+   * \brief Mark the effect as not working as an object effect.
+   */
+  EffectMetadata& MarkAsNotWorkingForObjects() {
+    isMarkedAsNotWorkingForObjects = true;
+    return *this;
+  }
+
+  /**
+   * \brief Mark the effect as only working for the 2D renderer.
+   */
+  EffectMetadata& MarkAsOnlyWorkingFor2D() {
+    isMarkedAsOnlyWorkingFor2D = true;
+    return *this;
+  }
+
+  /**
+   * \brief Mark the effect as only working for the 3D renderer.
+   */
+  EffectMetadata& MarkAsOnlyWorkingFor3D() {
+    isMarkedAsOnlyWorkingFor3D = true;
+    return *this;
+  }
+
+  /**
+   * \brief Mark the effect as only addable once.
+   */
+  EffectMetadata& MarkAsUnique() {
+    isMarkedAsUnique = true;
+    return *this;
+  }
+
+  /**
+   * \brief Check if the effect is marked as not working as an object effect.
+   */
+  bool IsMarkedAsNotWorkingForObjects() const {
+    return isMarkedAsNotWorkingForObjects;
+  };
+
+  /**
+   * \brief Check if the effect is marked as only working for the 2D renderer.
+   */
+  bool IsMarkedAsOnlyWorkingFor2D() const {
+    return isMarkedAsOnlyWorkingFor2D;
+  };
+
+  /**
+   * \brief Check if the effect is marked as only working for the 3D renderer.
+   */
+  bool IsMarkedAsOnlyWorkingFor3D() const {
+    return isMarkedAsOnlyWorkingFor3D;
+  };
+
+  /**
+   * \brief Check if the effect can only be added once.
+   */
+  bool IsMarkedAsUnique() const {
+    return isMarkedAsUnique;
+  };
+
  private:
   gd::String extensionNamespace;
   gd::String type;
@@ -114,8 +185,11 @@ class GD_CORE_API EffectMetadata {
   gd::String fullname;
   gd::String description;
   std::vector<gd::String> includeFiles;
+  bool isMarkedAsNotWorkingForObjects = false;
+  bool isMarkedAsOnlyWorkingFor2D = false;
+  bool isMarkedAsOnlyWorkingFor3D = false;
+  bool isMarkedAsUnique = false;
   std::map<gd::String, gd::PropertyDescriptor> properties;
 };
 
 }  // namespace gd
-#endif  // EFFECTMETADATA_H

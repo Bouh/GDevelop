@@ -4,29 +4,35 @@
  * reserved. This project is released under the MIT License.
  */
 
-#ifndef GDCORE_PROJECT_H
-#define GDCORE_PROJECT_H
+#pragma once
+
 #include <memory>
 #include <vector>
+
+#include "GDCore/Events/CodeGeneration/DiagnosticReport.h"
+#include "GDCore/Project/ExtensionProperties.h"
 #include "GDCore/Project/LoadingScreen.h"
 #include "GDCore/Project/ObjectGroupsContainer.h"
 #include "GDCore/Project/ObjectsContainer.h"
 #include "GDCore/Project/PlatformSpecificAssets.h"
-#include "GDCore/Project/ResourcesManager.h"
+#include "GDCore/Project/ResourcesContainer.h"
 #include "GDCore/Project/VariablesContainer.h"
+#include "GDCore/Project/Watermark.h"
+#include "GDCore/Project/MemoryTrackedRegistry.h"
 #include "GDCore/String.h"
 namespace gd {
 class Platform;
 class Layout;
 class ExternalEvents;
-class ResourcesManager;
+class ResourcesContainer;
 class ExternalLayout;
 class EventsFunctionsExtension;
+class EventsBasedObject;
+class EventsBasedBehavior;
 class Object;
+class ObjectConfiguration;
 class VariablesContainer;
 class ArbitraryResourceWorker;
-class SourceFile;
-class ImageManager;
 class Behavior;
 class BehaviorsSharedData;
 class BaseEvent;
@@ -42,7 +48,7 @@ namespace gd {
  *
  * \ingroup PlatformDefinition
  */
-class GD_CORE_API Project : public ObjectsContainer {
+class GD_CORE_API Project {
  public:
   Project();
   Project(const Project&);
@@ -55,14 +61,36 @@ class GD_CORE_API Project : public ObjectsContainer {
   ///@{
 
   /**
-   * \brief Change project name
+   * \brief Change the project name
    */
   void SetName(const gd::String& name_) { name = name_; };
 
   /**
-   * \brief Get project name
+   * \brief Get the project name
    */
   const gd::String& GetName() const { return name; }
+
+  /**
+   * \brief Get the categories/genres of the project.
+   */
+  const std::vector<gd::String>& GetCategories() const { return categories; };
+
+  /**
+   * \brief Get the categories of the project, to modify them (non-const).
+   */
+  std::vector<gd::String>& GetCategories() { return categories; };
+
+  /**
+   * \brief Change the project description
+   */
+  void SetDescription(const gd::String& description_) {
+    description = description_;
+  };
+
+  /**
+   * \brief Get the project description
+   */
+  const gd::String& GetDescription() const { return description; }
 
   /**
    * \brief Change the version of the project.
@@ -72,32 +100,104 @@ class GD_CORE_API Project : public ObjectsContainer {
   void SetVersion(const gd::String& version_) { version = version_; };
 
   /**
-   * \brief Get project version.
+   * \brief Get the project version.
    */
   const gd::String& GetVersion() const { return version; }
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Change the author of the project.
    */
   void SetAuthor(const gd::String& author_) { author = author_; };
 
   /**
-   * \brief Get project author name.
+   * \brief Get the project author name.
    */
   const gd::String& GetAuthor() const { return author; }
 
   /**
-   * \brief Change project package name.
+   * \brief Get the author ids of the project.
+   */
+  const std::vector<gd::String>& GetAuthorIds() const { return authorIds; };
+
+  /**
+   * \brief Get the author ids of the project, to modify them (non-const).
+   */
+  std::vector<gd::String>& GetAuthorIds() { return authorIds; };
+
+  /**
+   * \brief Get the author usernames of the project.
+   */
+  const std::vector<gd::String>& GetAuthorUsernames() const {
+    return authorUsernames;
+  };
+
+  /**
+   * \brief Get the author usernames of the project, to modify them (non-const).
+   */
+  std::vector<gd::String>& GetAuthorUsernames() { return authorUsernames; };
+
+  /**
+   * Define the project as playable with a keyboard.
+   * \param enable True to define the project as playable with a keyboard.
+   */
+  void SetPlayableWithKeyboard(bool playable = true) {
+    isPlayableWithKeyboard = playable;
+  }
+
+  /**
+   * Check if the project is defined as playable with a keyboard.
+   */
+  bool IsPlayableWithKeyboard() const { return isPlayableWithKeyboard; }
+
+  /**
+   * Define the project as playable with a gamepad.
+   * \param enable True to define the project as playable with a gamepad.
+   */
+  void SetPlayableWithGamepad(bool playable = true) {
+    isPlayableWithGamepad = playable;
+  }
+
+  /**
+   * Check if the project is defined as playable with a gamepad.
+   */
+  bool IsPlayableWithGamepad() const { return isPlayableWithGamepad; }
+
+  /**
+   * Define the project as playable on a mobile.
+   * \param enable True to define the project as playable on a mobile.
+   */
+  void SetPlayableWithMobile(bool playable = true) {
+    isPlayableWithMobile = playable;
+  }
+
+  /**
+   * Check if the project is defined as playable on a mobile.
+   */
+  bool IsPlayableWithMobile() const { return isPlayableWithMobile; }
+
+  /**
+   * \brief Change the project package name.
    */
   void SetPackageName(const gd::String& packageName_) {
     packageName = packageName_;
   };
 
   /**
-   * \brief Get project package name.
+   * \brief Get the project package name.
    */
   const gd::String& GetPackageName() const { return packageName; }
+
+  /**
+   * \brief Change the slug of the template from which the project is created.
+   */
+  void SetTemplateSlug(const gd::String& templateSlug_) {
+    templateSlug = templateSlug_;
+  };
+
+  /**
+   * \brief Get the slug of the template from which the project is created.
+   */
+  const gd::String& GetTemplateSlug() const { return templateSlug; }
 
   /**
    * \brief Change the project orientation (in particular when exported with
@@ -109,34 +209,20 @@ class GD_CORE_API Project : public ObjectsContainer {
   };
 
   /**
-   * \brief Get project orientation ("default", "landscape", "portrait").
+   * \brief Get the project orientation ("default", "landscape", "portrait").
    */
   const gd::String& GetOrientation() const { return orientation; }
 
   /**
-   * \brief Change the project AdMob application ID (needed
-   * to use the AdMob extension). This has no effect on desktop
-   * and web browsers.
-   */
-  void SetAdMobAppId(const gd::String& adMobAppId_) {
-    adMobAppId = adMobAppId_;
-  };
-
-  /**
-   * \brief Get the project AdMob application ID.
-   */
-  const gd::String& GetAdMobAppId() const { return adMobAppId; }
-
-  /**
    * Called when project file has changed.
    */
-  void SetProjectFile(const gd::String& file) { gameFile = file; }
+  void SetProjectFile(const gd::String& file) { projectFile = file; }
 
   /**
    * Return project file
    * \see gd::Project::SetProjectFile
    */
-  const gd::String& GetProjectFile() const { return gameFile; }
+  const gd::String& GetProjectFile() const { return projectFile; }
 
   /**
    * Set that the project should be saved as a folder project.
@@ -191,7 +277,16 @@ class GD_CORE_API Project : public ObjectsContainer {
    * \brief Return a reference to loading screen setup for the project
    */
   const gd::LoadingScreen& GetLoadingScreen() const { return loadingScreen; }
-#endif
+
+  /**
+   * \brief Return a reference to watermark setup for the project
+   */
+  gd::Watermark& GetWatermark() { return watermark; }
+
+  /**
+   * \brief Return a reference to watermark setup for the project
+   */
+  const gd::Watermark& GetWatermark() const { return watermark; }
 
   /**
    * Change game's main window default width.
@@ -290,20 +385,113 @@ class GD_CORE_API Project : public ObjectsContainer {
   void SetScaleMode(const gd::String& scaleMode_) { scaleMode = scaleMode_; }
 
   /**
-   * Return a reference to the vector containing the names of extensions used by
-   * the project.
+   * Return true if pixels rounding option is enabled.
    */
-  const std::vector<gd::String>& GetUsedExtensions() const {
-    return extensionsUsed;
+  bool GetPixelsRounding() const { return pixelsRounding; }
+
+  /**
+   * Set pixels rounding option to true or false.
+   */
+  void SetPixelsRounding(bool enable) { pixelsRounding = enable; }
+
+  /**
+   * Return the antialiasing mode used by the game ("none" or "MSAA").
+   */
+  const gd::String& GetAntialiasingMode() const { return antialiasingMode; }
+
+  /**
+   * Set the antialiasing mode used by the game ("none" or "MSAA").
+   */
+  void SetAntialiasingMode(const gd::String& antialiasingMode_) {
+    antialiasingMode = antialiasingMode_;
+  }
+
+  /**
+   * Return true if antialising is enabled on mobiles.
+   */
+  bool IsAntialisingEnabledOnMobile() const {
+    return isAntialisingEnabledOnMobile;
+  }
+
+  /**
+   * Set whether antialising is enabled on mobiles or not.
+   */
+  void SetAntialisingEnabledOnMobile(bool enable) {
+    isAntialisingEnabledOnMobile = enable;
+  }
+
+  /**
+   * \brief Return if the project should set 0 as Z-order for objects created
+   * from events (which is deprecated) - instead of the highest Z order that was
+   * found on each layer when the scene started.
+   */
+  bool GetUseDeprecatedZeroAsDefaultZOrder() const {
+    return useDeprecatedZeroAsDefaultZOrder;
+  }
+
+  /**
+   * \brief Set if the project should set 0 as Z-order for objects created from
+   * events (which is deprecated) - instead of the highest Z order that was
+   * found on each layer when the scene started.
+   */
+  void SetUseDeprecatedZeroAsDefaultZOrder(bool enable) {
+    useDeprecatedZeroAsDefaultZOrder = enable;
+  }
+
+  /**
+   * \brief Check if the project should use "0" as the default value for
+   * unset string variables (deprecated behavior from before 5.6.267).
+   */
+  bool GetUseDeprecatedZeroAsDefaultStringVariable() const {
+    return useDeprecatedZeroAsDefaultStringVariable;
+  }
+
+  /**
+   * \brief Set if the project should use "0" as the default value for
+   * unset string variables (deprecated behavior from before 5.6.267).
+   */
+  void SetUseDeprecatedZeroAsDefaultStringVariable(bool enable) {
+    useDeprecatedZeroAsDefaultStringVariable = enable;
+  }
+
+  /**
+   * \brief Change the project UUID.
+   */
+  void SetProjectUuid(const gd::String& projectUuid_) {
+    projectUuid = projectUuid_;
   };
 
   /**
-   * Return a reference to the vector containing the names of extensions used by
-   * the project.
+   * \brief Get the project UUID, useful when using the game on online services
+   * that would require a unique identifier.
    */
-  std::vector<gd::String>& GetUsedExtensions() { return extensionsUsed; };
+  const gd::String& GetProjectUuid() const { return projectUuid; }
 
-#if defined(GD_IDE_ONLY)
+  /**
+   * \brief Create a new project UUID.
+   */
+  void ResetProjectUuid();
+
+  /**
+   * \brief Get the properties set by extensions.
+   *
+   * Each extension can store arbitrary values indexed by a property name, which
+   * are useful to store project wide settings (AdMob id, etc...).
+   */
+  gd::ExtensionProperties& GetExtensionProperties() {
+    return extensionProperties;
+  };
+
+  /**
+   * \brief Get the properties set by extensions.
+   *
+   * Each extension can store arbitrary values indexed by a property name, which
+   * are useful to store project wide settings (AdMob id, etc...).
+   */
+  const gd::ExtensionProperties& GetExtensionProperties() const {
+    return extensionProperties;
+  };
+
   /**
    * Return the list of platforms used by the project.
    */
@@ -334,7 +522,20 @@ class GD_CORE_API Project : public ObjectsContainer {
    * current platform won't be changed.
    */
   void SetCurrentPlatform(const gd::String& platformName);
-#endif
+
+  /**
+   * Check if the effects are shown.
+   */
+  bool AreEffectsHiddenInEditor() const { return areEffectsHiddenInEditor; }
+
+  /**
+   * Define the project as playable on a mobile.
+   * \param enable True When false effects are not shown and a default light is
+   * used for 3D layers.
+   */
+  void SetEffectsHiddenInEditor(bool enable = true) {
+    areEffectsHiddenInEditor = enable;
+  }
 
   ///@}
 
@@ -346,52 +547,14 @@ class GD_CORE_API Project : public ObjectsContainer {
   /**
    * Create an object of the given type with the specified name.
    *
-   * \note A project can use more than one platform. In this case, the first
-   * platform supporting the object is used, unless \a platformName argument is
-   * not empty.<br> It is assumed that each platform provides an equivalent
-   * object.
-   *
    * \param type The type of the object
    * \param name The name of the object
-   * \param platformName The name of the platform to be used. If empty, the
-   * first platform supporting the object is used.
    */
   std::unique_ptr<gd::Object> CreateObject(const gd::String& type,
-                                           const gd::String& name,
-                                           const gd::String& platformName = "");
+                                           const gd::String& name) const;
 
-  /**
-   * Get the behavior of the given type.
-   *
-   * \note A project can use more than one platform. In this case, the first
-   * platform supporting the behavior is used, unless \a platformName argument
-   * is not empty.
-   * It is assumed that each platform provides an equivalent
-   * behavior.
-   *
-   * \param type The type of the behavior
-   * \param platformName The name of the platform to be used. If empty, the
-   * first platform supporting the object is used.
-   */
-  gd::Behavior* GetBehavior(const gd::String& type,
-                            const gd::String& platformName = "");
+  void EnsureObjectDefaultBehaviors(gd::Object& object) const;
 
-  /**
-   * Get the behavior shared data of the given type.
-   *
-   * \note A project can use more than one platform. In this case, the first
-   * platform supporting the behavior shared data is used, unless \a
-   * platformName argument is not empty.
-   * It is assumed that each platform provides equivalent behavior shared data.
-   *
-   * \param type The type of behavior
-   * \param platformName The name of the platform to be used. If empty, the
-   * first platform supporting the object is used.
-   */
-  gd::BehaviorsSharedData* GetBehaviorSharedDatas(
-      const gd::String& type, const gd::String& platformName = "");
-
-#if defined(GD_IDE_ONLY)
   /**
    * Create an event of the given type.
    *
@@ -407,7 +570,6 @@ class GD_CORE_API Project : public ObjectsContainer {
   std::shared_ptr<gd::BaseEvent> CreateEvent(
       const gd::String& type, const gd::String& platformName = "");
   ///@}
-#endif
 
   /** \name Layouts management
    * Members functions related to layout management.
@@ -445,14 +607,17 @@ class GD_CORE_API Project : public ObjectsContainer {
    */
   std::size_t GetLayoutPosition(const gd::String& name) const;
 
-#if defined(GD_IDE_ONLY)
+  /**
+   * Change the position of the specified layout.
+   */
+  void MoveLayout(std::size_t oldIndex, std::size_t newIndex);
+
   /**
    * \brief Swap the specified layouts.
    *
    * Do nothing if indexes are not correct.
    */
   void SwapLayouts(std::size_t first, std::size_t second);
-#endif
 
   /**
    * \brief Return the number of layouts.
@@ -460,22 +625,27 @@ class GD_CORE_API Project : public ObjectsContainer {
   std::size_t GetLayoutsCount() const;
 
   /**
-   * \brief \brief Adds a new empty layout called "name" at the specified
+   * \brief Add a new empty layout called "name" at the specified
    * position in the layout list.
    */
   gd::Layout& InsertNewLayout(const gd::String& name, std::size_t position);
 
   /**
-   * \brief \brief Adds a new layout constructed from the layout passed as
-   * parameter. \note No pointer or reference must be kept on the layout passed
-   * as parameter. \param layout The layout that must be copied and inserted
-   * into the project \param position Insertion position. Even if the position
+   * \brief Add a new layout constructed from the layout passed as
+   * parameter.
+   * \param layout The layout that must be copied and inserted
+   * into the project
+   * \param position Insertion position. Even if the position
    * is invalid, the layout must be inserted at the end of the layout list.
+   *
+   * \note No pointer or reference must be kept on the layout passed
+   * as parameter.
+   *
    */
   gd::Layout& InsertLayout(const Layout& layout, std::size_t position);
 
   /**
-   * Must delete layout named "name".
+   * \brief Delete layout named "name".
    */
   void RemoveLayout(const gd::String& name);
 
@@ -486,26 +656,12 @@ class GD_CORE_API Project : public ObjectsContainer {
    */
   void UnserializeFrom(const SerializerElement& element);
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Serialize the project.
    *
    * "Dirty" flag is set to false when serialization is done.
    */
   void SerializeTo(SerializerElement& element) const;
-
-  /**
-   * \brief Return true if the project is marked as being modified (The IDE or
-   * application using the project should ask to save the project if the project
-   * is closed).
-   */
-  bool IsDirty() { return dirty; }
-
-  /**
-   * \brief Mark the project as being modified (The IDE or application
-   * using the project should ask to save the project if the project is closed).
-   */
-  void SetDirty(bool enable = true) { dirty = enable; }
 
   /**
    * Get the major version of GDevelop used to save the project.
@@ -521,13 +677,16 @@ class GD_CORE_API Project : public ObjectsContainer {
    * Get the minor version of GDevelop used to save the project.
    */
   unsigned int GetLastSaveGDBuildVersion() { return gdBuildVersion; };
-#endif
 
-/** \name External events management
- * Members functions related to external events management.
- */
-///@{
-#if defined(GD_IDE_ONLY)
+  /**
+   * Get the version of GDevelop used to create the project.
+   */
+  const gd::String& GetInitialGDVersion() const { return initialGDVersion; };
+
+  /** \name External events management
+   * Members functions related to external events management.
+   */
+  ///@{
   /**
    * Return true if external events called "name" exists.
    */
@@ -562,6 +721,11 @@ class GD_CORE_API Project : public ObjectsContainer {
   std::size_t GetExternalEventsPosition(const gd::String& name) const;
 
   /**
+   * Change the position of the specified external events.
+   */
+  void MoveExternalEvents(std::size_t oldIndex, std::size_t newIndex);
+
+  /**
    * \brief Swap the specified external events.
    *
    * Do nothing if indexes are not correct.
@@ -592,10 +756,9 @@ class GD_CORE_API Project : public ObjectsContainer {
                                        std::size_t position);
 
   /**
-   * Must delete external events named "name".
+   * \brief Delete external events named "name".
    */
   void RemoveExternalEvents(const gd::String& name);
-#endif
   ///@}
 
   /** \name External layout management
@@ -636,14 +799,17 @@ class GD_CORE_API Project : public ObjectsContainer {
    */
   std::size_t GetExternalLayoutPosition(const gd::String& name) const;
 
-#if defined(GD_IDE_ONLY)
+  /**
+   * Change the position of the specified external layout.
+   */
+  void MoveExternalLayout(std::size_t oldIndex, std::size_t newIndex);
+
   /**
    * \brief Swap the specified external layouts.
    *
    * Do nothing if indexes are not correct.
    */
   void SwapExternalLayouts(std::size_t first, std::size_t second);
-#endif
 
   /**
    * Return the number of external layout.
@@ -673,7 +839,7 @@ class GD_CORE_API Project : public ObjectsContainer {
                                            std::size_t position);
 
   /**
-   * Must delete external layout named "name".
+   * \brief Delete external layout named "name".
    */
   void RemoveExternalLayout(const gd::String& name);
 
@@ -687,46 +853,62 @@ class GD_CORE_API Project : public ObjectsContainer {
    */
   const gd::String& GetFirstLayout() { return firstLayout; }
 
-///@}
-
-/** \name Events functions extensions management
- */
-///@{
-#if defined(GD_IDE_ONLY)
   /**
-   * Return true if events functions extension called "name" exists.
+   * Set the layout used by the IDE to start all previews.
+   * An empty string means there is no preview override.
+   */
+  void SetPreviewLayout(const gd::String& name) { previewLayout = name; }
+
+  /**
+   * Get the layout used by the IDE to start all previews.
+   * Returns an empty string if there is no preview override.
+   */
+  const gd::String& GetPreviewLayout() const { return previewLayout; }
+
+  ///@}
+
+  /** \name Events functions extensions management
+   */
+  ///@{
+  /**
+   * \brief  Check if events functions extension called "name" exists.
    */
   bool HasEventsFunctionsExtensionNamed(const gd::String& name) const;
 
   /**
-   * Return a reference to the events functions extension called "name".
+   * \brief Return a reference to the events functions extension called "name".
    */
   EventsFunctionsExtension& GetEventsFunctionsExtension(const gd::String& name);
 
   /**
-   * Return a reference to the events functions extension called "name".
+   * \brief Return a reference to the events functions extension called "name".
    */
   const EventsFunctionsExtension& GetEventsFunctionsExtension(
       const gd::String& name) const;
 
   /**
-   * Return a reference to the events functions extension at position "index" in
-   * the list
+   * \brief Return a reference to the events functions extension at position
+   * "index" in the list
    */
   EventsFunctionsExtension& GetEventsFunctionsExtension(std::size_t index);
 
   /**
-   * Return a reference to the events functions extension at position "index" in
-   * the list
+   * \brief Return a reference to the events functions extension at position
+   * "index" in the list
    */
   const EventsFunctionsExtension& GetEventsFunctionsExtension(
       std::size_t index) const;
 
   /**
-   * Return the position of the events functions extension called "name" in the
-   * list
+   * \brief Return the position of the events functions extension called "name"
+   * in the list.
    */
   std::size_t GetEventsFunctionsExtensionPosition(const gd::String& name) const;
+
+  /**
+   * Change the position of the specified events function extension.
+   */
+  void MoveEventsFunctionsExtension(std::size_t oldIndex, std::size_t newIndex);
 
   /**
    * \brief Swap the specified events functions extensions.
@@ -736,7 +918,7 @@ class GD_CORE_API Project : public ObjectsContainer {
   void SwapEventsFunctionsExtensions(std::size_t first, std::size_t second);
 
   /**
-   * Return the number of events functions extension.
+   * \brief Returns the number of events functions extension.
    */
   std::size_t GetEventsFunctionsExtensionsCount() const;
 
@@ -759,10 +941,57 @@ class GD_CORE_API Project : public ObjectsContainer {
       std::size_t position);
 
   /**
-   * Must delete the events functions extension named "name".
+   * \brief Unserialize and insert in the project the extensions.
+   *
+   * Unserialization is done in two passe to allow dependencies between extensions.
+   *
+   * \note If an extension with the same name already exists, it will be overwritten.
+   */
+  void UnserializeAndInsertExtensionsFrom(
+      const gd::SerializerElement& eventsFunctionsExtensionsElement);
+
+  /**
+   * \brief Delete the events functions extension named "name".
    */
   void RemoveEventsFunctionsExtension(const gd::String& name);
-#endif
+
+  /**
+   * \brief Remove all the events functions extensions.
+   */
+  void ClearEventsFunctionsExtensions();
+
+  /**
+   * \brief  Check if events based object with a given type exists.
+   */
+  bool HasEventsBasedObject(const gd::String& type) const;
+
+  /**
+   * \brief Return the events based object with a given type.
+   */
+  gd::EventsBasedObject& GetEventsBasedObject(const gd::String& type);
+
+  /**
+   * \brief Return the events based object with a given type.
+   */
+  const gd::EventsBasedObject& GetEventsBasedObject(
+      const gd::String& type) const;
+
+  /**
+   * \brief  Check if events based behavior with a given type exists.
+   */
+  bool HasEventsBasedBehavior(const gd::String& type) const;
+
+  /**
+   * \brief Return the events based behavior with a given type.
+   */
+  gd::EventsBasedBehavior& GetEventsBasedBehavior(const gd::String& type);
+
+  /**
+   * \brief Return the events based behavior with a given type.
+   */
+  const gd::EventsBasedBehavior& GetEventsBasedBehavior(
+      const gd::String& type) const;
+
   ///@}
 
   /** \name Resources management
@@ -770,51 +999,50 @@ class GD_CORE_API Project : public ObjectsContainer {
    */
   ///@{
   /**
-   * \brief Provide access to the ResourceManager member containing the list of
+   * \brief Provide access to the ResourcesContainer member containing the list of
    * the resources.
    */
-  const ResourcesManager& GetResourcesManager() const {
-    return resourcesManager;
+  const ResourcesContainer& GetResourcesManager() const {
+    return resourcesContainer;
   }
 
   /**
-   * \brief Provide access to the ResourceManager member containing the list of
+   * \brief Provide access to the ResourcesContainer member containing the list of
    * the resources.
    */
-  ResourcesManager& GetResourcesManager() { return resourcesManager; }
+  ResourcesContainer& GetResourcesManager() { return resourcesContainer; }
 
   /**
-   * \brief Provide access to the ImageManager allowing to load SFML or OpenGL
-   * textures for the IDE ( or at runtime for the GD C++ Platform ).
+   * Set when the scenes must preload their resources: `at-startup` (default),
+   * `never`.
    */
-  const std::shared_ptr<gd::ImageManager>& GetImageManager() const {
-    return imageManager;
+  void SetSceneResourcesPreloading(gd::String sceneResourcesPreloading_) {
+    sceneResourcesPreloading = sceneResourcesPreloading_;
   }
 
   /**
-   * \brief Provide access to the ImageManager allowing to load SFML or OpenGL
-   * textures for the IDE ( or at runtime for the GD C++ Platform ).
+   * Get when the scenes must preload their resources: `at-startup` (default),
+   * `never`.
    */
-  std::shared_ptr<gd::ImageManager>& GetImageManager() { return imageManager; }
-
-  /**
-   * \brief Provide access to the ImageManager allowing to load SFML or OpenGL
-   * textures for the IDE ( or at runtime for the GD C++ Platform ).
-   */
-  void SetImageManager(std::shared_ptr<gd::ImageManager> imageManager_) {
-    imageManager = imageManager_;
+  const gd::String& GetSceneResourcesPreloading() const {
+    return sceneResourcesPreloading;
   }
 
   /**
-   * \brief Called ( e.g. during compilation ) so as to inventory internal
-   * resources, sometimes update their filename or any other work or resources.
-   *
-   * See WholeProjectRefactorer for the same thing for events.
-   *
-   * \see WholeProjectRefactorer
-   * \see ArbitraryResourceWorker
+   * Set when the scenes must unload their resources: `at-scene-exit`, `never`
+   * (default).
    */
-  void ExposeResources(gd::ArbitraryResourceWorker& worker);
+  void SetSceneResourcesUnloading(gd::String sceneResourcesUnloading_) {
+    sceneResourcesUnloading = sceneResourcesUnloading_;
+  }
+
+  /**
+   * Get when the scenes must unload their resources: `at-scene-exit`, `never`
+   * (default).
+   */
+  const gd::String& GetSceneResourcesUnloading() const {
+    return sceneResourcesUnloading;
+  }
   ///@}
 
   /** \name Variable management
@@ -838,89 +1066,40 @@ class GD_CORE_API Project : public ObjectsContainer {
 
   ///@}
 
-  /** \name Other
+  /** \name Global objects
+   */
+  ///@{
+  /**
+   * \brief return the objects of the project.
+   */
+  gd::ObjectsContainer& GetObjects() { return objectsContainer; }
+
+  /**
+   * \brief Return the objects of the project.
+   */
+  const gd::ObjectsContainer& GetObjects() const { return objectsContainer; }
+  ///@}
+
+  /** \name Identifier names
    */
   ///@{
 
   /**
-   * Return true if \a objectName can be used as name for an object.
-   *
-   * Default implementation check if objectName is only composed of a-z,A-Z,0-9
-   * or _ characters an if does not conflict with an expression.
+   * Return true if \a name is valid (can be used safely for an object,
+   * behavior, events function name, etc...).
    */
-  static bool ValidateObjectName(const gd::String& objectName);
+  static bool IsNameSafe(const gd::String& name);
 
   /**
-   * Return a message that will be displayed when an invalid object name has
-   * been entered.
-   *
-   * \note This message will be displayed by the IDE into a tooltip.
+   * Return a name, based on the one passed in parameter, that can be safely
+   * used for an object, behavior, events function name, etc...
    */
-  static gd::String GetBadObjectNameWarning();
+  static gd::String GetSafeName(const gd::String& name);
+  ///@}
 
-///@}
-
-/** \name External source files
- * To manage external C++ or Javascript source files used by the game
- */
-///@{
-#if defined(GD_IDE_ONLY)
-  /**
-   * \brief Return true if the game activated the use of external source files.
-   */
-  bool UseExternalSourceFiles() const { return useExternalSourceFiles; }
-
-  /**
-   * \brief Return a const reference to the vector containing all the source
-   * files used by the game.
-   */
-  const std::vector<std::unique_ptr<gd::SourceFile> >& GetAllSourceFiles()
-      const {
-    return externalSourceFiles;
+  gd::WholeProjectDiagnosticReport& GetWholeProjectDiagnosticReport() {
+    return wholeProjectDiagnosticReport;
   }
-
-  /**
-   * \brief Return true if the source file with the specified name is used by
-   * the game. \param name The filename of the source file. \param language
-   * Optional. If specified, check that the source file that exists is in this
-   * language.
-   */
-  bool HasSourceFile(gd::String name, gd::String language = "") const;
-
-  /**
-   * Return a reference to the external source file with the given name.
-   */
-  SourceFile& GetSourceFile(const gd::String& name);
-
-  /**
-   * Return a reference to the external source file with the given name.
-   */
-  const SourceFile& GetSourceFile(const gd::String& name) const;
-
-  /**
-   * Remove the specified source file.
-   */
-  void RemoveSourceFile(const gd::String& name);
-
-  /**
-   * Add a new source file the specified position in the external source files
-   * list.
-   */
-  gd::SourceFile& InsertNewSourceFile(const gd::String& name,
-                                      const gd::String& language,
-                                      std::size_t position = -1);
-#endif
-///@}
-
-// TODO: Put this in private part
-#if defined(GD_IDE_ONLY)
-  std::vector<gd::String> imagesChanged;  ///< Images that have been changed and
-                                          ///< which have to be reloaded
-  gd::String winExecutableFilename;       ///< Windows executable name
-  gd::String winExecutableIconFile;       ///< Icon for Windows executable
-  gd::String linuxExecutableFilename;     ///< Linux executable name
-  gd::String macExecutableFilename;       ///< Mac executable name
-#endif
 
  private:
   /**
@@ -929,66 +1108,112 @@ class GD_CORE_API Project : public ObjectsContainer {
    */
   void Init(const gd::Project& project);
 
-  gd::String name;            ///< Game name
-  gd::String version;         ///< Game version number (used for some exports)
-  unsigned int windowWidth;   ///< Window default width
-  unsigned int windowHeight;  ///< Window default height
-  int maxFPS;                 ///< Maximum Frame Per Seconds, -1 for unlimited
-  unsigned int minFPS;  ///< Minimum Frame Per Seconds ( slow down game if FPS
-                        ///< are below this number )
-  bool verticalSync;    ///< If true, must activate vertical synchronization.
+  /**
+   * Create an object configuration of the given type.
+   *
+   * \param type The type of the object
+   */
+  std::unique_ptr<gd::ObjectConfiguration> CreateObjectConfiguration(
+      const gd::String& type) const;
+
+  gd::MemoryTracked _memoryTracked{this, "Project"};
+
+  gd::String name;         ///< Game name
+  gd::String description;  ///< Game description
+  gd::String version;      ///< Game version number (used for some exports)
+  unsigned int windowWidth = 0;   ///< Window default width
+  unsigned int windowHeight = 0;  ///< Window default height
+  int maxFPS = 0;           ///< Maximum Frame Per Seconds, -1 for unlimited
+  unsigned int minFPS = 0;  ///< Minimum Frame Per Seconds ( slow down game if
+                            ///< FPS are below this number )
+  bool verticalSync =
+      false;  ///< If true, must activate vertical synchronization.
   gd::String scaleMode;
-  bool adaptGameResolutionAtRuntime;  ///< Should the game resolution be adapted
-                                      ///< to the window size at runtime
+  bool pixelsRounding = false;  ///< If true, the rendering should stop pixel
+                                ///< interpolation of rendered objects.
+  bool adaptGameResolutionAtRuntime =
+      true;  ///< Should the game resolution be adapted
+             ///< to the window size at runtime
   gd::String
       sizeOnStartupMode;  ///< How to adapt the game size to the screen. Can be
                           ///< "adaptWidth", "adaptHeight" or empty
+  gd::String antialiasingMode;
+  bool isAntialisingEnabledOnMobile = false;
+  gd::String projectUuid;  ///< UUID useful to identify the game in online
+                           ///< services or database that would require it.
+  bool useDeprecatedZeroAsDefaultZOrder =
+      false;  ///< If true, objects created from
+              ///< events will have 0 as Z order,
+              ///< instead of the highest Z order
+              ///< found on the layer at the scene
+              ///< startup.
+  bool useDeprecatedZeroAsDefaultStringVariable =
+      false;  ///< If true, string variables with
+              ///< no stored value default to "0"
+              ///< at runtime (behavior before
+              ///< 5.6.267).
   std::vector<std::unique_ptr<gd::Layout> > scenes;  ///< List of all scenes
   gd::VariablesContainer variables;  ///< Initial global variables
+  gd::ObjectsContainer objectsContainer;
   std::vector<std::unique_ptr<gd::ExternalLayout> >
       externalLayouts;  ///< List of all externals layouts
-#if defined(GD_IDE_ONLY)
   std::vector<std::unique_ptr<gd::EventsFunctionsExtension> >
       eventsFunctionsExtensions;
-#endif
-  gd::ResourcesManager
-      resourcesManager;  ///< Contains all resources used by the project
-  std::shared_ptr<gd::ImageManager>
-      imageManager;  ///< Image manager is accessed thanks to a (smart) ptr as
-                     ///< it can be shared with GD C++ Platform projects.
-  std::vector<gd::String> extensionsUsed;  ///< List of extensions used
+  gd::ResourcesContainer
+      resourcesContainer;  ///< Contains all resources used by the project
   std::vector<gd::Platform*>
       platforms;  ///< Pointers to the platforms this project supports.
   gd::String firstLayout;
-#if defined(GD_IDE_ONLY)
-  bool useExternalSourceFiles;  ///< True if game used external source files.
-  std::vector<std::unique_ptr<gd::SourceFile> >
-      externalSourceFiles;  ///< List of external source files used.
-  gd::String author;        ///< Game author name
-  gd::String packageName;   ///< Game package name
+  gd::String previewLayout;  ///< Editor-only: layout used by the IDE to start
+                             ///< all previews. Empty if not set.
+  gd::String author;        ///< Game author name, for publishing purpose.
+  std::vector<gd::String>
+      authorIds;  ///< Game author ids, from GDevelop users DB.
+  std::vector<gd::String>
+      authorUsernames;  ///< Game author usernames, from GDevelop users DB.
+  std::vector<gd::String> categories;  ///< Game categories
+  bool isPlayableWithKeyboard =
+      false;  ///< The project is playable with a keyboard.
+  bool isPlayableWithGamepad =
+      false;  ///< The project is playable with a gamepad.
+  bool isPlayableWithMobile = false;  ///< The project is playable on a mobile.
+  gd::String packageName;             ///< Game package name
+  gd::String templateSlug;  ///< The slug of the template from which the game is
+                            ///< created.
   gd::String orientation;   ///< Lock game orientation (on mobile devices).
                             ///< "default", "landscape" or "portrait".
-  gd::String adMobAppId;    ///< AdMob application ID.
-  bool
-      folderProject;  ///< True if folder project, false if single file project.
-  gd::String gameFile;                    ///< File of the game
-  gd::String latestCompilationDirectory;  ///< File of the game
-  gd::Platform*
-      currentPlatform;  ///< The platform being used to edit the project.
+  bool folderProject =
+      false;  ///< True if folder project, false if single file project.
+  gd::String
+      projectFile;  ///< Path to the project file - when editing a local file.
+  gd::String latestCompilationDirectory;
+  gd::Platform* currentPlatform =
+      nullptr;  ///< The platform being used to edit the project.
   gd::PlatformSpecificAssets platformSpecificAssets;
   gd::LoadingScreen loadingScreen;
+  gd::Watermark watermark;
   std::vector<std::unique_ptr<gd::ExternalEvents> >
-      externalEvents;                   ///< List of all externals events
-  mutable unsigned int gdMajorVersion;  ///< The GD major version used the last
-                                        ///< time the project was saved.
-  mutable unsigned int gdMinorVersion;  ///< The GD minor version used the last
-                                        ///< time the project was saved.
-  mutable unsigned int gdBuildVersion;  ///< The GD build version used the last
-                                        ///< time the project was saved.
-  mutable bool dirty;  ///< True to flag the project as being modified.
-#endif
+      externalEvents;  ///< List of all externals events
+  ExtensionProperties
+      extensionProperties;  ///< The properties of the extensions.
+  gd::WholeProjectDiagnosticReport wholeProjectDiagnosticReport;
+  gd::String sceneResourcesPreloading;  ///< `at-startup` or `never`
+                                        ///< (default: `at-startup`).
+  gd::String sceneResourcesUnloading;   ///< `at-scene-exit` or `never`
+                                        ///< (default: `never`).
+  mutable unsigned int gdMajorVersion =
+      0;  ///< The GD major version used the last
+          ///< time the project was saved.
+  mutable unsigned int gdMinorVersion =
+      0;  ///< The GD minor version used the last
+          ///< time the project was saved.
+  mutable unsigned int gdBuildVersion =
+      0;  ///< The GD build version used the last
+          ///< time the project was saved.
+  gd::String initialGDVersion; ///< The GD version used to create the project.
+  bool areEffectsHiddenInEditor =
+      false; ///< When false effects are not shown and a default light is used
+             ///< for 3D layers.
 };
 
 }  // namespace gd
-
-#endif  // GDCORE_PROJECT_H

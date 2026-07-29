@@ -1,14 +1,10 @@
 // @flow
-import React from 'react';
+import * as React from 'react';
+import { dataObjectToProps } from '../../../../Utils/HTMLDataset';
 import { mapVector } from '../../../../Utils/MapFor';
+import useForceUpdate from '../../../../Utils/UseForceUpdate';
 
-const styles = {
-  container: {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-  },
-};
+const circleRadius = 7;
 
 const pointKindIdentifiers = {
   NORMAL: 1,
@@ -17,12 +13,31 @@ const pointKindIdentifiers = {
 };
 type PointKind = 1 | 2 | 3;
 
+const getPointName = (kind: PointKind, point: gdPoint): string =>
+  kind === pointKindIdentifiers.ORIGIN
+    ? 'Origin'
+    : kind === pointKindIdentifiers.CENTER
+    ? 'Center'
+    : point.getName();
+
+const roundPointToHalfPixel = (point: gdPoint) => {
+  point.setX(Math.round(point.getX() * 2) / 2);
+  point.setY(Math.round(point.getY() * 2) / 2);
+};
+
 type Props = {|
   pointsContainer: gdSprite, // Could potentially be generalized to other things than Sprite in the future.
   imageWidth: number,
   imageHeight: number,
+  imageOffsetTop: number,
+  imageOffsetLeft: number,
   imageZoomFactor: number,
   onPointsUpdated: () => void,
+  highlightedPointName: ?string,
+  selectedPointName: ?string,
+  onClickPoint: string => void,
+  forcedCursor: string | null,
+  deactivateControls?: boolean,
 |};
 
 type State = {|
@@ -30,34 +45,91 @@ type State = {|
   draggedPointKind: ?PointKind,
 |};
 
-export default class PointsPreview extends React.Component<Props, State> {
-  _container: ?any;
-  state = {
+const PointsPreview = (props: Props): React.MixedElement => {
+  const svgRef = React.useRef<React.ElementRef<'svg'> | null>(null);
+  const [state, setState] = React.useState<State>({
     draggedPoint: null,
     draggedPointKind: null,
-  };
+  });
 
-  _onStartDragPoint = (draggedPoint: gdPoint, draggedPointKind: PointKind) => {
-    if (this.state.draggedPoint) return;
+  const {
+    pointsContainer,
+    imageWidth,
+    imageHeight,
+    imageOffsetTop,
+    imageOffsetLeft,
+    imageZoomFactor,
+    highlightedPointName,
+    selectedPointName,
+    onClickPoint,
+    onPointsUpdated,
+    forcedCursor,
+    deactivateControls,
+  } = props;
 
-    this.setState({
-      draggedPoint,
-      draggedPointKind,
-    });
-  };
-
-  _onEndDragPoint = () => {
-    const draggingWasDone = !!this.state.draggedPoint;
-    this.setState(
-      {
+  if (deactivateControls) {
+    if (state.draggedPoint || state.draggedPointKind) {
+      setState({
         draggedPoint: null,
         draggedPointKind: null,
-      },
-      () => {
-        if (draggingWasDone) this.props.onPointsUpdated();
+      });
+    }
+  }
+
+  const forceUpdate = useForceUpdate();
+
+  /**
+   * @returns The cursor position in the frame basis.
+   */
+  const getCursorOnFrame = React.useCallback((event: any):
+    | [number, number]
+    | null => {
+    if (!svgRef.current) return null;
+
+    // $FlowFixMe[incompatible-type] Flow doesn't have SVG typings yet (@facebook/flow#4551)
+    // $FlowFixMe[prop-missing]
+    const pointOnScreen = svgRef.current.createSVGPoint();
+    pointOnScreen.x = event.clientX;
+    pointOnScreen.y = event.clientY;
+    // $FlowFixMe[incompatible-type] Flow doesn't have SVG typings yet (@facebook/flow#4551)
+    // $FlowFixMe[prop-missing]
+    // $FlowFixMe[incompatible-use]
+    const screenToSvgMatrix = svgRef.current.getScreenCTM().inverse();
+    const pointOnSvg = pointOnScreen.matrixTransform(screenToSvgMatrix);
+
+    return [pointOnSvg.x, pointOnSvg.y];
+  }, []);
+
+  const onStartDragPoint = React.useCallback(
+    (draggedPoint: gdPoint, draggedPointKind: PointKind) => {
+      if (state.draggedPoint) return;
+      setState({
+        draggedPoint,
+        draggedPointKind,
+      });
+    },
+    [state.draggedPoint]
+  );
+
+  const onEndDragPoint = React.useCallback(
+    () => {
+      if (state.draggedPoint) {
+        roundPointToHalfPixel(state.draggedPoint);
+        onPointsUpdated();
+        // Select point at the end of the drag
+        if (state.draggedPointKind && state.draggedPoint) {
+          onClickPoint(
+            getPointName(state.draggedPointKind, state.draggedPoint)
+          );
+        }
       }
-    );
-  };
+      setState({
+        draggedPoint: null,
+        draggedPointKind: null,
+      });
+    },
+    [state.draggedPoint, state.draggedPointKind, onPointsUpdated, onClickPoint]
+  );
 
   /**
    * Move a point with the mouse. A similar dragging implementation is done in
@@ -65,101 +137,200 @@ export default class PointsPreview extends React.Component<Props, State> {
    *
    * TODO: This could be optimized by avoiding the forceUpdate (not sure if worth it though).
    */
-  _onMouseMove = (event: any) => {
-    const { draggedPoint, draggedPointKind } = this.state;
-    if (!draggedPoint || !this._container) return;
+  const onPointerMove = React.useCallback(
+    (event: any) => {
+      /** The cursor position in the frame basis. */
+      const cursorOnFrame = getCursorOnFrame(event);
+      if (!cursorOnFrame) {
+        return;
+      }
+      const { draggedPoint, draggedPointKind } = state;
+      if (!draggedPoint || !draggedPointKind) return;
 
-    const containerBoundingRect = this._container.getBoundingClientRect();
-    const xOnContainer = event.clientX - containerBoundingRect.left;
-    const yOnContainer = event.clientY - containerBoundingRect.top;
+      const cursorX = cursorOnFrame[0] / imageZoomFactor;
+      const cursorY = cursorOnFrame[1] / imageZoomFactor;
 
-    if (draggedPointKind === pointKindIdentifiers.CENTER) {
-      this.props.pointsContainer.setDefaultCenterPoint(false);
-    }
-    draggedPoint.setX(xOnContainer / this.props.imageZoomFactor);
-    draggedPoint.setY(yOnContainer / this.props.imageZoomFactor);
-    this.forceUpdate();
-  };
+      if (draggedPointKind === pointKindIdentifiers.CENTER) {
+        props.pointsContainer.setDefaultCenterPoint(false);
+      }
+      draggedPoint.setX(cursorX);
+      draggedPoint.setY(cursorY);
 
-  _renderPoint = (
-    name: string,
-    x: number,
-    y: number,
-    kind: PointKind,
-    point: gdPoint
-  ) => {
-    const imageSrc =
-      kind === pointKindIdentifiers.ORIGIN
-        ? 'res/originPoint.png'
-        : kind === pointKindIdentifiers.CENTER
-        ? 'res/centerPoint.png'
-        : 'res/point.png';
-    return (
-      <img
-        src={imageSrc}
-        style={{
-          position: 'absolute',
-          left: x,
-          top: y,
-          transform: 'translate(-6px, -5px)',
-          cursor: 'move',
-        }}
-        alt=""
-        key={name}
-        onPointerDown={() => {
-          this._onStartDragPoint(point, kind);
-        }}
-      />
-    );
-  };
-
-  render() {
-    const {
-      pointsContainer,
-      imageWidth,
-      imageHeight,
+      forceUpdate();
+    },
+    [
+      forceUpdate,
+      getCursorOnFrame,
       imageZoomFactor,
-    } = this.props;
-    const nonDefaultPoints = pointsContainer.getAllNonDefaultPoints();
-    const points = mapVector(nonDefaultPoints, (point, i) =>
-      this._renderPoint(
-        point.getName(),
-        point.getX() * imageZoomFactor,
-        point.getY() * imageZoomFactor,
-        pointKindIdentifiers.NORMAL,
-        point
-      )
-    );
+      props.pointsContainer,
+      state,
+    ]
+  );
 
-    const originPoint = pointsContainer.getOrigin();
-    const centerPoint = pointsContainer.getCenter();
-    const automaticCenterPosition = pointsContainer.isDefaultCenterPoint();
+  const renderPoint = React.useCallback(
+    ({
+      x,
+      y,
+      kind,
+      point,
+    }: {
+      x: number,
+      y: number,
+      kind: PointKind,
+      point: gdPoint,
+    }) => {
+      const pointName = getPointName(kind, point);
 
-    return (
-      <div
-        style={styles.container}
-        onPointerMove={this._onMouseMove}
-        onPointerUp={this._onEndDragPoint}
-        ref={container => (this._container = container)}
-      >
-        {points}
-        {this._renderPoint(
-          'Origin',
-          originPoint.getX() * imageZoomFactor,
-          originPoint.getY() * imageZoomFactor,
-          pointKindIdentifiers.ORIGIN,
-          originPoint
-        )}
-        {this._renderPoint(
-          'Center',
-          (!automaticCenterPosition ? centerPoint.getX() : imageWidth / 2) *
+      const pointStyle = { cursor: forcedCursor || 'move' };
+
+      return (
+        <React.Fragment key={`point-${pointName}`}>
+          <line
+            x1="0"
+            y1={-circleRadius}
+            x2="0"
+            y2={circleRadius}
+            style={{
+              stroke: 'white',
+              strokeWidth: 1,
+              transform: `translate(${x}px, ${y}px)`,
+            }}
+          />
+          <line
+            x1={-circleRadius}
+            y1="0"
+            x2={circleRadius}
+            y2="0"
+            style={{
+              stroke: 'white',
+              strokeWidth: 1,
+              transform: `translate(${x}px, ${y}px)`,
+            }}
+          />
+          <circle
+            onPointerDown={() => onStartDragPoint(point, kind)}
+            {...dataObjectToProps({ draggable: 'true' })}
+            fill={
+              pointName === highlightedPointName
+                ? 'rgba(0,0,0,0.75)'
+                : pointName === selectedPointName
+                ? 'rgba(107,175,255,0.6)'
+                : 'rgba(255,133,105,0.6)'
+            }
+            stroke={pointName === highlightedPointName ? 'white' : undefined}
+            strokeWidth={2}
+            cx={x}
+            cy={y}
+            r={circleRadius}
+            style={pointStyle}
+          />
+        </React.Fragment>
+      );
+    },
+    [forcedCursor, highlightedPointName, onStartDragPoint, selectedPointName]
+  );
+
+  const automaticCenterPosition = pointsContainer.isDefaultCenterPoint();
+
+  const renderPointOrCenterOrOrigin = React.useCallback(
+    (pointName: string) => {
+      if (pointName === 'Origin') {
+        const point = pointsContainer.getOrigin();
+        return renderPoint({
+          x: point.getX() * imageZoomFactor,
+          y: point.getY() * imageZoomFactor,
+          // $FlowFixMe[incompatible-type]
+          kind: pointKindIdentifiers.ORIGIN,
+          point,
+        });
+      }
+      if (pointName === 'Center') {
+        const point = pointsContainer.getCenter();
+        return renderPoint({
+          x:
+            (automaticCenterPosition ? imageWidth / 2 : point.getX()) *
             imageZoomFactor,
-          (!automaticCenterPosition ? centerPoint.getY() : imageHeight / 2) *
+          y:
+            (automaticCenterPosition ? imageHeight / 2 : point.getY()) *
             imageZoomFactor,
-          pointKindIdentifiers.CENTER,
-          centerPoint
+          // $FlowFixMe[incompatible-type]
+          kind: pointKindIdentifiers.CENTER,
+          point,
+        });
+      }
+      const point = pointsContainer.getPoint(pointName);
+      return renderPoint({
+        x: point.getX() * imageZoomFactor,
+        y: point.getY() * imageZoomFactor,
+        // $FlowFixMe[incompatible-type]
+        kind: pointKindIdentifiers.NORMAL,
+        point,
+      });
+    },
+    [
+      automaticCenterPosition,
+      imageHeight,
+      imageWidth,
+      imageZoomFactor,
+      pointsContainer,
+      renderPoint,
+    ]
+  );
+
+  const forcedCursorStyle = forcedCursor
+    ? {
+        cursor: forcedCursor,
+      }
+    : {};
+
+  const containerStyle = {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    ...forcedCursorStyle,
+  };
+
+  const svgStyle = {
+    position: 'absolute',
+    top: imageOffsetTop || 0,
+    left: imageOffsetLeft || 0,
+    width: imageWidth * imageZoomFactor,
+    height: imageHeight * imageZoomFactor,
+    overflow: 'visible',
+    ...forcedCursorStyle,
+  };
+
+  const nonDefaultPoints = pointsContainer.getAllNonDefaultPoints();
+  const backgroundPointNames = [
+    ...mapVector(nonDefaultPoints, (point, i) => point.getName()),
+    'Origin',
+    'Center',
+  ].filter(name => name !== selectedPointName && name !== highlightedPointName);
+
+  return (
+    <div
+      style={containerStyle}
+      onPointerMove={deactivateControls ? null : onPointerMove}
+      onPointerUp={deactivateControls ? null : onEndDragPoint}
+    >
+      <svg style={svgStyle} ref={svgRef}>
+        {/* Z index does not apply in SVG. To display selected and highlighted points
+        above the other points, they must be rendered after the other ones. */}
+        {backgroundPointNames.map(pointName =>
+          renderPointOrCenterOrOrigin(pointName)
         )}
-      </div>
-    );
-  }
-}
+        {highlightedPointName &&
+        selectedPointName &&
+        selectedPointName === highlightedPointName
+          ? null // Do no render selected point if it's highlighted.
+          : selectedPointName
+          ? renderPointOrCenterOrOrigin(selectedPointName)
+          : null}
+        {highlightedPointName &&
+          renderPointOrCenterOrOrigin(highlightedPointName)}
+      </svg>
+    </div>
+  );
+};
+
+export default PointsPreview;

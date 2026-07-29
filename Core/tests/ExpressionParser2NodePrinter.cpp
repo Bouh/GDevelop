@@ -18,14 +18,15 @@ TEST_CASE("ExpressionParser2NodePrinter", "[common][events]") {
   gd::Platform platform;
   SetupProjectWithDummyPlatform(project, platform);
   auto &layout1 = project.InsertNewLayout("Layout1", 0);
-  layout1.InsertNewObject(project, "MyExtension::Sprite", "MySpriteObject", 0);
+  layout1.GetObjects().InsertNewObject(project, "MyExtension::Sprite",
+                                                "MySpriteObject", 0);
 
-  gd::ExpressionParser2 parser(platform, project, layout1);
+  gd::ExpressionParser2 parser;
 
   auto testPrinter = [&parser](const gd::String &type,
                                const gd::String &expression,
                                const gd::String &expectedOutput = "") {
-    auto node = parser.ParseExpression(type, expression);
+    auto node = parser.ParseExpression(expression);
     REQUIRE(node != nullptr);
     gd::ExpressionParser2NodePrinter printer;
     node->Visit(printer);
@@ -90,6 +91,29 @@ TEST_CASE("ExpressionParser2NodePrinter", "[common][events]") {
     testPrinter("number", "- + - 000123.4", "-+-123.4");
   }
 
+  SECTION("Negative number literals round-trip") {
+    // A negative number literal is preserved as-is, with no extra space.
+    testPrinter("number", "-123");
+    testPrinter("number", "-3.14");
+    testPrinter("number", "-3.");
+    testPrinter("number", "-.5", "-0.5");
+    testPrinter("number", "-0");
+    testPrinter("number", "-007", "-7");
+  }
+
+  SECTION("Negative numbers inside expressions round-trip") {
+    // `1+-2` keeps the inner negative literal compact while the outer `+` is
+    // spaced like any other binary operator.
+    testPrinter("number", "1+-2", "1 + -2");
+    testPrinter("number", "1--2", "1 - -2");
+    testPrinter("number", "2*-3", "2 * -3");
+    testPrinter("number", "2/-3", "2 / -3");
+    testPrinter("number", "-1+2", "-1 + 2");
+    testPrinter("number", "-1*-2", "-1 * -2");
+    // No spaces are introduced between the leading `-` and the literal.
+    testPrinter("number", "  -123  ", "-123");
+  }
+
   SECTION("Valid unary operators with parenthesis") {
     testPrinter("number", "-(123)");
     testPrinter("number", "+((123))");
@@ -132,11 +156,11 @@ TEST_CASE("ExpressionParser2NodePrinter", "[common][events]") {
     testPrinter("number", "123 !!! 456", "123 ! !! 456");
   }
 
-  SECTION("Numbers and texts mismatchs") {
+  SECTION("Numbers and texts mismatches") {
     testPrinter("number", "123 + \"hello world\"");
     testPrinter("string", "\"hello world\" + 123");
   }
-  SECTION("Numbers and texts mismatchs with parenthesis") {
+  SECTION("Numbers and texts mismatches with parenthesis") {
     testPrinter("number", "((123)) + (\"hello world\")");
     testPrinter("string", "((\"hello world\") + (123))");
   }
@@ -174,6 +198,23 @@ TEST_CASE("ExpressionParser2NodePrinter", "[common][events]") {
     testPrinter("number",
                 "Idontexist(12, 34,   \"56\" + 2    ",
                 "Idontexist(12, 34, \"56\" + 2)");
+  }
+
+  SECTION("Valid function name") {
+    SECTION("Free function") {
+      testPrinter("number", "MyExtension::GetNumber");
+      testPrinter("number", "MyExtension::GetNumberWith2Params");
+      testPrinter("number", "MyExtension::UnknownFunc");
+      testPrinter("number", "UnknownFunc");
+    }
+    SECTION("Object function") {
+      testPrinter("number", "a.b");
+      testPrinter("number", "MySpriteObject.GetObjectNumber");
+      testPrinter("number", "MySpriteObject.MyOtherFunc");
+    }
+    SECTION("Behavior function") {
+      testPrinter("number", "MySpriteObject.MyBehavior::MyFunc");
+    }
   }
 
   SECTION("Valid variables") {

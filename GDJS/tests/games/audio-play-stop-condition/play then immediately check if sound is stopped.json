@@ -32,6 +32,8 @@
     "loadingScreen": {
       "showGDevelopSplash": true
     },
+    "authorIds": [],
+    "authorUsernames": [],
     "extensions": [
       {
         "name": "BuiltinObject"
@@ -170,6 +172,7 @@
           "underlined": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "string": "Scene1 - Audio Status",
           "font": "",
           "characterSize": 40,
@@ -432,6 +435,7 @@
           "underlined": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "string": "Scene2 - Audio status...",
           "font": "",
           "characterSize": 40,

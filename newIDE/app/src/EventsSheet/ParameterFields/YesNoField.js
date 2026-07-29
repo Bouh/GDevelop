@@ -1,69 +1,89 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import { type ParameterInlineRendererProps } from './ParameterInlineRenderer.flow';
-import React, { Component } from 'react';
-import RaisedButton from '../../UI/RaisedButton';
+import * as React from 'react';
 import { Line, Column } from '../../UI/Grid';
 import {
   type ParameterFieldProps,
+  type ParameterFieldInterface,
+  type FieldFocusFunction,
   getParameterValueOrDefault,
 } from './ParameterFieldCommons';
-import { focusButton } from '../../UI/Button';
 import Text from '../../UI/Text';
+import FormHelperText from '@material-ui/core/FormHelperText';
+import { MarkdownText } from '../../UI/MarkdownText';
+import TwoStatesButton, {
+  type TwoStatesButtonInterface,
+} from '../../UI/TwoStatesButton';
 
 const styles = {
-  button: {
-    margin: 5,
-  },
   description: {
-    display: 'inline-block',
     marginRight: 5,
   },
 };
 
-export default class YesNoField extends Component<ParameterFieldProps, void> {
-  _yesButton = React.createRef<RaisedButton>();
+export default (React.forwardRef<ParameterFieldProps, ParameterFieldInterface>(
+  function YesNoField(props: ParameterFieldProps, ref) {
+    const button = React.useRef<?TwoStatesButtonInterface>(null);
+    const focus: FieldFocusFunction = options => {
+      if (button.current) button.current.focusLeftButton();
+    };
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
 
-  focus() {
-    focusButton(this._yesButton);
-  }
-
-  render() {
-    const { parameterMetadata, value } = this.props;
+    const { parameterMetadata, value } = props;
     const description = parameterMetadata
       ? parameterMetadata.getDescription()
-      : undefined;
+      : null;
+    const longDescription = parameterMetadata
+      ? parameterMetadata.getLongDescription()
+      : null;
     const effectiveValue = getParameterValueOrDefault(value, parameterMetadata);
 
     return (
-      <Line>
-        <Text style={styles.description}>{description}</Text>
-        <Column noMargin>
-          <RaisedButton
-            style={styles.button}
-            label={<Trans>Yes</Trans>}
-            primary={effectiveValue === 'yes'}
-            onClick={() => this.props.onChange('yes')}
-            ref={this._yesButton}
+      <Column noMargin>
+        <Line alignItems="center" justifyContent="space-between">
+          {/* $FlowFixMe[incompatible-type] */}
+          <Text style={styles.description} displayInlineAsSpan>
+            {description}
+          </Text>
+          <TwoStatesButton
+            value={effectiveValue}
+            leftButton={{
+              label: <Trans>Yes</Trans>,
+              value: 'yes',
+              id: 'yes-button',
+            }}
+            rightButton={{
+              label: <Trans>No</Trans>,
+              value: 'no',
+              id: 'no-button',
+            }}
+            onChange={props.onChange}
+            ref={button}
           />
-        </Column>
-        <Column noMargin>
-          <RaisedButton
-            style={styles.button}
-            label={<Trans>No</Trans>}
-            primary={effectiveValue !== 'yes'}
-            onClick={() => this.props.onChange('no')}
-          />
-        </Column>
-      </Line>
+        </Line>
+        {longDescription ? (
+          <FormHelperText variant="filled" margin="dense">
+            <MarkdownText source={longDescription} />
+          </FormHelperText>
+        ) : null}
+      </Column>
     );
   }
-}
+): React.ComponentType<{
+  ...ParameterFieldProps,
+  +ref?: React.RefSetter<ParameterFieldInterface>,
+}>);
 
 export const renderInlineYesNo = ({
   value,
   parameterMetadata,
-}: ParameterInlineRendererProps) => {
+}: ParameterInlineRendererProps): React.Node => {
+  // This is duplicated in `EventsCodeGenerator::GenerateParameterCodes`,
+  // `AdvancedExtension.cpp` for GDJS and
+  // `InstructionSentenceFormatter::GetFormattedParameterValue`.
   if (getParameterValueOrDefault(value, parameterMetadata) === 'yes') {
     return <Trans>yes</Trans>;
   } else {

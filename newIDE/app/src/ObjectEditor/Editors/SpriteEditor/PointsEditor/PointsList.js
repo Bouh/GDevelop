@@ -1,212 +1,255 @@
-import React, { Component } from 'react';
+// @flow
+import * as React from 'react';
+import { Trans } from '@lingui/macro';
 import {
   Table,
   TableBody,
   TableHeader,
   TableHeaderColumn,
   TableRow,
-  TableRowColumn,
 } from '../../../../UI/Table';
-import { SortableContainer, SortableElement } from 'react-sortable-hoc';
 import newNameGenerator from '../../../../Utils/NewNameGenerator';
 import { mapVector } from '../../../../Utils/MapFor';
-import styles from './styles';
+import Window from '../../../../Utils/Window';
+import useForceUpdate from '../../../../Utils/UseForceUpdate';
+import { Column, Line, Spacer } from '../../../../UI/Grid';
+import RaisedButton from '../../../../UI/RaisedButton';
 import PointRow from './PointRow';
-import AddPointRow from './AddPointRow';
-const gd = global.gd;
+import styles from './styles';
+import Add from '../../../../UI/CustomSvgIcons/Add';
+const gd: libGDevelop = global.gd;
 
-const SortableAddPointRow = SortableElement(AddPointRow);
-const SortablePointRow = SortableElement(PointRow);
+type PointsListBodyProps = {|
+  pointsContainer: gdSprite,
+  onPointsUpdated: () => void,
+  onHoverPoint: (pointName: ?string) => void,
+  onSelectPoint: (pointName: string) => void,
+  onRenamedPoint: (oldName: string, newName: string) => void,
+  selectedPointName: ?string,
+  spriteSize: [number, number],
+|};
 
-class PointsListBody extends Component {
-  state = {
-    nameErrors: {},
+const PointsListBody = (props: PointsListBodyProps) => {
+  const [nameErrors, setNameErrors] = React.useState<{
+    [key: string]: boolean,
+  }>({});
+  const { pointsContainer, onHoverPoint } = props;
+  const forceUpdate = useForceUpdate();
+
+  const onPointsUpdated = () => {
+    forceUpdate();
+    props.onPointsUpdated();
   };
 
-  _onPointsUpdated() {
-    this.forceUpdate();
-    this.props.onPointsUpdated();
-  }
-
-  updateOriginPointX = newValue => {
-    this.props.pointsContainer.getOrigin().setX(newValue);
-    this._onPointsUpdated();
+  // $FlowFixMe[missing-local-annot]
+  const updateOriginPointX = newValue => {
+    pointsContainer.getOrigin().setX(newValue);
+    onPointsUpdated();
   };
 
-  updateOriginPointY = newValue => {
-    this.props.pointsContainer.getOrigin().setY(newValue);
-    this._onPointsUpdated();
+  // $FlowFixMe[missing-local-annot]
+  const updateOriginPointY = newValue => {
+    pointsContainer.getOrigin().setY(newValue);
+    onPointsUpdated();
   };
 
-  updateCenterPointX = newValue => {
-    this.props.pointsContainer.getCenter().setX(newValue);
-    this._onPointsUpdated();
+  // $FlowFixMe[missing-local-annot]
+  const updateCenterPointX = newValue => {
+    pointsContainer.getCenter().setX(newValue);
+    onPointsUpdated();
   };
 
-  updateCenterPointY = newValue => {
-    this.props.pointsContainer.getCenter().setY(newValue);
-    this._onPointsUpdated();
+  // $FlowFixMe[missing-local-annot]
+  const updateCenterPointY = newValue => {
+    pointsContainer.getCenter().setY(newValue);
+    onPointsUpdated();
   };
 
-  updatePointX = (point, newValue) => {
+  // $FlowFixMe[missing-local-annot]
+  const updatePointX = (point, newValue) => {
     point.setX(newValue);
-    this._onPointsUpdated();
+    onPointsUpdated();
   };
 
-  updatePointY = (point, newValue) => {
+  // $FlowFixMe[missing-local-annot]
+  const updatePointY = (point, newValue) => {
     point.setY(newValue);
-    this._onPointsUpdated();
+    onPointsUpdated();
   };
 
-  render() {
-    const { pointsContainer } = this.props;
+  const onPointerLeave = React.useCallback(() => onHoverPoint(null), [
+    onHoverPoint,
+  ]);
 
-    const nonDefaultPoints = pointsContainer.getAllNonDefaultPoints();
-    const pointsRows = mapVector(nonDefaultPoints, (point, i) => {
-      const pointName = point.getName();
+  const nonDefaultPoints = pointsContainer.getAllNonDefaultPoints();
+  const pointsRows = mapVector(nonDefaultPoints, (point, i) => {
+    const pointName = point.getName();
 
-      return (
-        <SortablePointRow
-          index={i}
-          disabled
-          key={'point-' + pointName}
-          pointX={point.getX()}
-          pointY={point.getY()}
-          onChangePointX={newValue => this.updatePointX(point, newValue)}
-          onChangePointY={newValue => this.updatePointY(point, newValue)}
-          pointName={pointName}
-          nameError={this.state.nameErrors[pointName]}
-          onBlur={event => {
-            const newName = event.target.value;
-            if (pointName === newName) return;
+    return (
+      <PointRow
+        key={`point-${point.ptr}`}
+        pointX={point.getX()}
+        pointY={point.getY()}
+        onChangePointX={newValue => updatePointX(point, newValue)}
+        onChangePointY={newValue => updatePointY(point, newValue)}
+        pointName={pointName}
+        selected={pointName === props.selectedPointName}
+        nameError={nameErrors[pointName]}
+        onChangePointName={(newName: string) => {
+          if (pointName === newName) return;
+          if (!newName) return;
 
-            let success = true;
-            if (pointsContainer.hasPoint(newName)) {
-              success = false;
-            } else {
-              point.setName(newName);
+          let success = true;
+          if (pointsContainer.hasPoint(newName)) {
+            success = false;
+          } else {
+            const oldName = point.getName();
+            point.setName(newName);
+            props.onRenamedPoint(oldName, newName);
+            if (props.selectedPointName === pointName) {
+              props.onSelectPoint(newName);
             }
+            onPointsUpdated();
+          }
 
-            this.setState({
-              nameErrors: {
-                ...this.state.nameErrors,
-                [pointName]: !success,
-              },
-            });
-          }}
-          onRemove={() => {
-            //eslint-disable-next-line
-            const answer = confirm(
-              "Are you sure you want to remove this point? This can't be undone."
-            );
-            if (!answer) return;
-
-            pointsContainer.delPoint(pointName);
-            this._onPointsUpdated();
-          }}
-        />
-      );
-    });
-
-    const originPoint = pointsContainer.getOrigin();
-    const centerPoint = pointsContainer.getCenter();
-
-    const originRow = (
-      <SortablePointRow
-        index={0}
-        key={'origin-point-row'}
-        pointName="Origin"
-        pointX={originPoint.getX()}
-        pointY={originPoint.getY()}
-        onChangePointX={this.updateOriginPointX}
-        onChangePointY={this.updateOriginPointY}
-        disabled
-      />
-    );
-    const centerRow = (
-      <SortablePointRow
-        index={1}
-        key={'center-point-row'}
-        pointName="Center"
-        isAutomatic={pointsContainer.isDefaultCenterPoint()}
-        pointX={centerPoint.getX()}
-        pointY={centerPoint.getY()}
-        onChangePointX={this.updateCenterPointX}
-        onChangePointY={this.updateCenterPointY}
-        disabled
-        onEdit={
-          pointsContainer.isDefaultCenterPoint()
-            ? () => {
-                pointsContainer.setDefaultCenterPoint(false);
-                this._onPointsUpdated();
-              }
-            : null
-        }
-        onRemove={
-          !pointsContainer.isDefaultCenterPoint()
-            ? () => {
-                pointsContainer.setDefaultCenterPoint(true);
-                this._onPointsUpdated();
-              }
-            : null
-        }
-      />
-    );
-
-    const addRow = (
-      <SortableAddPointRow
-        index={0}
-        key={'add-point-row'}
-        disabled
-        onAdd={() => {
-          const name = newNameGenerator('Point', name =>
-            pointsContainer.hasPoint(name)
+          setNameErrors(old => ({ ...old, [pointName]: !success }));
+        }}
+        onPointerEnter={props.onHoverPoint}
+        onPointerLeave={onPointerLeave}
+        onClick={props.onSelectPoint}
+        onRemove={() => {
+          const answer = Window.showConfirmDialog(
+            "Are you sure you want to remove this point? This can't be undone."
           );
-          const point = new gd.Point(name);
-          pointsContainer.addPoint(point);
-          point.delete();
-          this._onPointsUpdated();
+          if (!answer) return;
+
+          pointsContainer.delPoint(pointName);
+          onPointsUpdated();
         }}
       />
     );
+  });
 
-    return (
-      <TableBody>{[originRow, centerRow, ...pointsRows, addRow]}</TableBody>
-    );
-  }
-}
+  const originPoint = pointsContainer.getOrigin();
+  const centerPoint = pointsContainer.getCenter();
 
-const SortablePointsListBody = SortableContainer(PointsListBody);
-SortablePointsListBody.muiName = 'TableBody';
+  const originRow = (
+    <PointRow
+      key={'origin-point-row'}
+      pointName="Origin"
+      pointX={originPoint.getX()}
+      pointY={originPoint.getY()}
+      onChangePointX={updateOriginPointX}
+      onChangePointY={updateOriginPointY}
+      onPointerEnter={props.onHoverPoint}
+      onPointerLeave={onPointerLeave}
+      onClick={props.onSelectPoint}
+      selected={'Origin' === props.selectedPointName}
+    />
+  );
 
-export default class PointsList extends Component {
-  render() {
-    return (
+  const isDefaultCenterPoint = pointsContainer.isDefaultCenterPoint();
+  const centerRow = (
+    <PointRow
+      key={'center-point-row'}
+      pointName="Center"
+      isAutomatic={isDefaultCenterPoint}
+      pointX={
+        isDefaultCenterPoint ? props.spriteSize[0] / 2 : centerPoint.getX()
+      }
+      pointY={
+        isDefaultCenterPoint ? props.spriteSize[1] / 2 : centerPoint.getY()
+      }
+      onChangePointX={updateCenterPointX}
+      onChangePointY={updateCenterPointY}
+      onPointerEnter={props.onHoverPoint}
+      onPointerLeave={onPointerLeave}
+      onClick={props.onSelectPoint}
+      selected={'Center' === props.selectedPointName}
+      onEdit={
+        pointsContainer.isDefaultCenterPoint()
+          ? () => {
+              pointsContainer.setDefaultCenterPoint(false);
+              onPointsUpdated();
+            }
+          : null
+      }
+      onRemove={
+        !pointsContainer.isDefaultCenterPoint()
+          ? () => {
+              pointsContainer.setDefaultCenterPoint(true);
+              onPointsUpdated();
+            }
+          : null
+      }
+    />
+  );
+
+  return <TableBody>{[originRow, centerRow, ...pointsRows]}</TableBody>;
+};
+
+type PointsListProps = {|
+  pointsContainer: gdSprite,
+  onPointsUpdated: () => void,
+  onHoverPoint: (pointName: ?string) => void,
+  onSelectPoint: (pointName: ?string) => void,
+  onRenamedPoint: (oldName: string, newName: string) => void,
+  selectedPointName: ?string,
+  spriteSize: [number, number],
+|};
+
+const PointsList = (props: PointsListProps): React.Node => {
+  return (
+    <Column expand>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHeaderColumn style={styles.handleColumn} />
-            <TableHeaderColumn>Point name</TableHeaderColumn>
-            <TableHeaderColumn style={styles.coordinateColumn}>
-              X
+            {/* $FlowFixMe[incompatible-type] */}
+            <TableHeaderColumn style={styles.nameColumn}>
+              <Trans>Point name</Trans>
             </TableHeaderColumn>
-            <TableHeaderColumn style={styles.coordinateColumn}>
-              Y
+            {/* $FlowFixMe[incompatible-type] */}
+            <TableHeaderColumn style={styles.coordinateColumn} padding="none">
+              <Column>X</Column>
             </TableHeaderColumn>
-            <TableRowColumn style={styles.toolColumn} />
+            {/* $FlowFixMe[incompatible-type] */}
+            <TableHeaderColumn style={styles.coordinateColumn} padding="none">
+              <Column>Y</Column>
+            </TableHeaderColumn>
+            {/* $FlowFixMe[incompatible-type] */}
+            <TableHeaderColumn style={styles.toolColumn} />
           </TableRow>
         </TableHeader>
-        <SortablePointsListBody
-          pointsContainer={this.props.pointsContainer}
-          onPointsUpdated={this.props.onPointsUpdated}
-          onSortEnd={({ oldIndex, newIndex }) => {
-            // Reordering points is not supported for now
-          }}
-          helperClass="sortable-helper"
-          useDragHandle
-          lockToContainerEdges
+        <PointsListBody
+          pointsContainer={props.pointsContainer}
+          onHoverPoint={props.onHoverPoint}
+          onSelectPoint={props.onSelectPoint}
+          selectedPointName={props.selectedPointName}
+          onPointsUpdated={props.onPointsUpdated}
+          onRenamedPoint={props.onRenamedPoint}
+          spriteSize={props.spriteSize}
         />
       </Table>
-    );
-  }
-}
+      <Spacer />
+      <Line alignItems="center" justifyContent="center">
+        <RaisedButton
+          primary
+          icon={<Add />}
+          label={<Trans>Add a point</Trans>}
+          onClick={() => {
+            const name = newNameGenerator('Point', name =>
+              props.pointsContainer.hasPoint(name)
+            );
+            const point = new gd.Point(name);
+            props.pointsContainer.addPoint(point);
+            point.delete();
+            props.onSelectPoint(name);
+            props.onPointsUpdated();
+          }}
+        />
+      </Line>
+    </Column>
+  );
+};
+
+export default PointsList;

@@ -5,8 +5,9 @@
  */
 #ifndef GDCORE_POLYGON_H
 #define GDCORE_POLYGON_H
-#include <SFML/System/Vector2.hpp>
 #include <vector>
+
+#include "GDCore/Vector2.h"
 
 /**
  * \brief Represents a polygon. Usually used for collisions masks.
@@ -22,19 +23,19 @@ class GD_CORE_API Polygon2d {
   Polygon2d(){};
   virtual ~Polygon2d(){};
 
-  std::vector<sf::Vector2f> vertices;  ///< The vertices composing the polygon
-  mutable std::vector<sf::Vector2f>
+  std::vector<gd::Vector2f> vertices;  ///< The vertices composing the polygon
+  mutable std::vector<gd::Vector2f>
       edges;  ///< Edges. Can be computed from vertices using ComputeEdges()
 
   /**
    * \brief Get the vertices composing the polygon.
    */
-  std::vector<sf::Vector2f>& GetVertices() { return vertices; }
+  std::vector<gd::Vector2f>& GetVertices() { return vertices; }
 
   /**
    * \brief Get the vertices composing the polygon.
    */
-  const std::vector<sf::Vector2f>& GetVertices() const { return vertices; }
+  const std::vector<gd::Vector2f>& GetVertices() const { return vertices; }
 
   /**
    * \brief Moves each vertices from the given amount.
@@ -42,7 +43,7 @@ class GD_CORE_API Polygon2d {
    * \note Edges are updated, there is no need to call ComputeEdges after
    * calling Move.
    */
-  void Move(float x, float y);
+  void Move(double x, double y);
 
   /**
    * \brief Rotate the polygon.
@@ -52,7 +53,7 @@ class GD_CORE_API Polygon2d {
    * \warning edges vector is not updated, you have to call ComputeEdges if
    * needed.
    */
-  void Rotate(float angle);
+  void Rotate(double angle);
 
   /**
    * \brief Automatically fill edges vector using vertices.
@@ -68,7 +69,7 @@ class GD_CORE_API Polygon2d {
   /**
    * \brief Return the position of the center of the polygon
    */
-  sf::Vector2f ComputeCenter() const;
+  gd::Vector2f ComputeCenter() const;
 
   /** \name Tools
    * Tool functions
@@ -77,7 +78,7 @@ class GD_CORE_API Polygon2d {
   /**
    * \brief Create a rectangle
    */
-  static Polygon2d CreateRectangle(float width, float height);
+  static Polygon2d CreateRectangle(double width, double height);
   ///@}
 };
 

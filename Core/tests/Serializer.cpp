@@ -81,6 +81,30 @@ TEST_CASE("SerializerElement", "[common]") {
     REQUIRE(element.GetChild(2).GetDoubleValue() == 45.6);
   }
 
+  SECTION("Multiline strings") {
+    SerializerElement element;
+
+    // A single line is saved as a string.
+    element.SetMultilineStringValue("test");
+    REQUIRE(element.GetMultilineStringValue() == "test");
+    REQUIRE(element.GetStringValue() == "test");
+
+    // A string can be read.
+    element.SetStringValue("test of\nsomething\nsaved as a string");
+    REQUIRE(element.GetMultilineStringValue() == "test of\nsomething\nsaved as a string");
+
+    // A multi lines string is saved as an array.
+    element.SetMultilineStringValue("test\nwith\nmultiple lines.");
+    REQUIRE(element.ConsideredAsArray() == true);
+    REQUIRE(element.GetChildrenCount() == 3);
+    REQUIRE(element.GetMultilineStringValue() == "test\nwith\nmultiple lines.");
+
+    element.SetMultilineStringValue("test\n\nwith\n\nmultiple lines.\n");
+    REQUIRE(element.ConsideredAsArray() == true);
+    REQUIRE(element.GetChildrenCount() == 6);
+    REQUIRE(element.GetMultilineStringValue() == "test\n\nwith\n\nmultiple lines.\n");
+  }
+
   SECTION("(Deprecated) attributes") {
     SerializerElement element;
     element.AddChild("child1").SetStringValue("value123");
@@ -103,7 +127,7 @@ TEST_CASE("SerializerElement", "[common]") {
 
 TEST_CASE("Serializer", "[common]") {
   SECTION("JSON basics") {
-    gd::String originalJSON = "{\"ok\": true,\"hello\": \"world\"}";
+    gd::String originalJSON = "{\"ok\":true,\"hello\":\"world\"}";
     SerializerElement element = Serializer::FromJSON(originalJSON);
     REQUIRE(element.GetChild("ok").GetBoolValue() == true);
     REQUIRE(element.GetChild("hello").GetStringValue() == "world");
@@ -114,8 +138,8 @@ TEST_CASE("Serializer", "[common]") {
 
   SECTION("Quotes and special characters") {
     gd::String originalJSON =
-        "{\"\\\"hello\\\"\": \" \\\"quote\\\" \",\"caret-prop\": "
-        "1,\"special-\\b\\f\\n\\r\\t\\\"\": \"\\b\\f\\n\\r\\t\"}";
+        "{\"\\\"hello\\\"\":\" \\\"quote\\\" \",\"caret-prop\":"
+        "1,\"special-\\b\\f\\n\\r\\t\\\"\":\"\\b\\f\\n\\r\\t\"}";
     SerializerElement element = Serializer::FromJSON(originalJSON);
     REQUIRE(element.GetChild("caret-prop").GetBoolValue() == true);
     REQUIRE(element.GetChild("\"hello\"").GetStringValue() ==
@@ -129,8 +153,8 @@ TEST_CASE("Serializer", "[common]") {
 
   SECTION("UTF8 characters") {
     gd::String originalJSON =
-        u8"{\"Ich heiße GDevelop\": \"Gut!\",\"Bonjour à tout le monde\": "
-        u8"1,\"Hello 官话 world\": \"官话\"}";
+        u8"{\"Ich heiße GDevelop\":\"Gut!\",\"Bonjour à tout le monde\":"
+        u8"1,\"Hello 官话 world\":\"官话\"}";
     SerializerElement element = Serializer::FromJSON(originalJSON);
     REQUIRE(
         element.GetChild(u8"Bonjour à tout le monde").GetBoolValue() ==
@@ -159,9 +183,9 @@ TEST_CASE("Serializer", "[common]") {
     SECTION("Objects") {
       gd::String test1 = "{}";
       REQUIRE(unserializeAndSerializeToJSON(test1) == test1);
-      gd::String test2 = "{\"a\": 1}";
+      gd::String test2 = "{\"a\":1}";
       REQUIRE(unserializeAndSerializeToJSON(test2) == test2);
-      gd::String test3 = "{\"a\": 1,\"b\": {\"c\": 2}}";
+      gd::String test3 = "{\"a\":1,\"b\":{\"c\":2}}";
       REQUIRE(unserializeAndSerializeToJSON(test3) == test3);
     }
     SECTION("Arrays") {
@@ -172,18 +196,18 @@ TEST_CASE("Serializer", "[common]") {
     }
     SECTION("Mixed") {
       gd::String test1 =
-          "{\"hello\": {\"world\": [{},[],3,\"4\"],\"world2\": [-1,\"-2\","
-          "{\"-3\": [-4]}]}}";
+          "{\"hello\":{\"world\":[{},[],3,\"4\"],\"world2\":[-1,\"-2\","
+          "{\"-3\":[-4]}]}}";
       REQUIRE(unserializeAndSerializeToJSON(test1) == test1);
       gd::String test2 =
-          "{\"hello\": {\"world\": [{},[],3,4],\"world2\": [-1,\"-2\","
-          "{\"-3\": [-4]}]}}";
+          "{\"hello\":{\"world\":[{},[],3,4],\"world2\":[-1,\"-2\","
+          "{\"-3\":[-4]}]}}";
       REQUIRE(unserializeAndSerializeToJSON(test2) == test2);
     }
   }
 
   SECTION("(Deprecated) attributes") {
-    gd::String originalJSON = "{\"ok\": true,\"hello\": \"world\"}";
+    gd::String originalJSON = "{\"ok\":true,\"hello\":\"world\"}";
     SerializerElement element = Serializer::FromJSON(originalJSON);
     REQUIRE(element.GetChild("ok").GetBoolValue() == true);
     REQUIRE(element.GetChild("hello").GetStringValue() == "world");
@@ -201,6 +225,6 @@ TEST_CASE("Serializer", "[common]") {
     element.SetStringAttribute("hello", "world1");
 
     gd::String json = Serializer::ToJSON(element);
-    REQUIRE(json == "{\"hello\": \"world1\",\"ok\": true,\"hello2\": \"world2\"}");
+    REQUIRE(json == "{\"hello\":\"world1\",\"ok\":true,\"hello2\":\"world2\"}");
   }
 }

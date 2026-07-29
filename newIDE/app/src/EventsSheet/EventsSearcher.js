@@ -1,25 +1,27 @@
 // @flow
 import * as React from 'react';
-import { type SelectionState } from './SelectionHandler';
+import { type SelectionState, getSelectedEvents } from './SelectionHandler';
 import { mapFor } from '../Utils/MapFor';
 import uniqBy from 'lodash/uniqBy';
-const gd = global.gd;
+import type { SearchFilterParams } from '../Utils/Search';
+const gd: libGDevelop = global.gd;
 
 export type SearchInEventsInputs = {|
   searchInSelection: boolean,
   searchText: string,
-  matchCase: boolean,
-  searchInConditions: boolean,
-  searchInActions: boolean,
+  searchFilterParams: Required<
+    Omit<SearchFilterParams, 'includeStoreExtensions'>
+  >,
 |};
 
 export type ReplaceInEventsInputs = {|
   searchInSelection: boolean,
   searchText: string,
-  replaceText: ?string,
+  replaceText: string,
   matchCase: boolean,
   searchInConditions: boolean,
   searchInActions: boolean,
+  searchInEventStrings: boolean,
 |};
 
 type State = {|
@@ -28,25 +30,88 @@ type State = {|
 |};
 
 type Props = {|
-  globalObjectsContainer: gdProject,
-  objectsContainer: gdLayout,
+  globalObjectsContainer: gdObjectsContainer,
+  objectsContainer: gdObjectsContainer,
   events: gdEventsList,
   selection: SelectionState,
+  project: gdProject,
   children: (props: {|
     eventsSearchResultEvents: ?Array<gdBaseEvent>,
     searchFocusOffset: ?number,
     searchInEvents: (SearchInEventsInputs, cb: () => void) => void,
-    replaceInEvents: ReplaceInEventsInputs => void,
+    replaceInEvents: (
+      ReplaceInEventsInputs,
+      cb: () => void
+    ) => Array<gdBaseEvent>,
     goToNextSearchResult: () => ?gdBaseEvent,
     goToPreviousSearchResult: () => ?gdBaseEvent,
+    clearSearchResults: () => void,
   |}) => React.Node,
 |};
+
+const deduplicateEventSearchResults = (
+  eventsSearchResults: gdVectorEventsSearchResult
+) => {
+  const resultEventsWithDuplicates = mapFor(
+    0,
+    eventsSearchResults.size(),
+    eventIndex => {
+      const eventsSearchResult = eventsSearchResults.at(eventIndex);
+      return eventsSearchResult.isEventValid()
+        ? eventsSearchResult.getEvent()
+        : null;
+    }
+  ).filter(Boolean);
+
+  // Store a list of unique events, because browsing for results in the events
+  // tree is made event by event.
+  return uniqBy<gdBaseEvent>(resultEventsWithDuplicates, event => event.ptr);
+};
+
+/**
+ * Computes the positions of the first selected event and the search results
+ * in the flatten event tree and looks for the search result just after the
+ * first selected event.
+ */
+const getSearchInitialOffset = (
+  events: gdEventsList,
+  resultEvents: Array<gdBaseEvent>,
+  selection: SelectionState
+): number => {
+  const selectedEvents = getSelectedEvents(selection);
+  if (!selectedEvents.length) return 0;
+
+  const eventsToSearch = [selectedEvents[0], ...resultEvents];
+
+  const positionFinder = new gd.EventsPositionFinder();
+  eventsToSearch.forEach(event => positionFinder.addEventToSearch(event));
+  positionFinder.launch(events);
+  const [
+    selectedEventPosition,
+    ...searchResultsPositions
+  ] = positionFinder.getPositions().toJSArray();
+  positionFinder.delete();
+
+  // Search results are considered to be sorted by position
+  // (top to bottom in the flatten event tree)
+  for (
+    let searchResultIndex = 0;
+    searchResultIndex < searchResultsPositions.length;
+    searchResultIndex++
+  ) {
+    if (searchResultsPositions[searchResultIndex] >= selectedEventPosition) {
+      return searchResultIndex;
+    }
+  }
+  return 0;
+};
 
 /**
  * Component allowing to do search in events and pass the results
  * to its children components, as well as methods to browse the results.
  */
 export default class EventsSearcher extends React.Component<Props, State> {
+  // $FlowFixMe[missing-local-annot]
   state = {
     eventsSearchResults: null, // The list of results
     searchFocusOffset: null,
@@ -57,10 +122,10 @@ export default class EventsSearcher extends React.Component<Props, State> {
   _resultEvents: ?Array<gdBaseEvent> = null;
 
   componentWillUnmount() {
-    if (this.state.eventsSearchResults) this.state.eventsSearchResults.delete();
+    this.reset();
   }
 
-  reset() {
+  reset = () => {
     if (this.state.eventsSearchResults) this.state.eventsSearchResults.delete();
 
     this._resultEvents = null;
@@ -68,16 +133,20 @@ export default class EventsSearcher extends React.Component<Props, State> {
       eventsSearchResults: null,
       searchFocusOffset: null,
     });
-  }
+  };
 
-  _doReplaceInEvents = ({
-    searchInSelection,
-    searchText,
-    replaceText,
-    matchCase,
-    searchInConditions,
-    searchInActions,
-  }: ReplaceInEventsInputs) => {
+  _doReplaceInEvents = (
+    {
+      searchInSelection,
+      searchText,
+      replaceText,
+      matchCase,
+      searchInConditions,
+      searchInActions,
+      searchInEventStrings,
+    }: ReplaceInEventsInputs,
+    cb: () => void
+  ): Array<gdBaseEvent> => {
     const { globalObjectsContainer, objectsContainer, events } = this.props;
 
     if (searchInSelection) {
@@ -87,7 +156,7 @@ export default class EventsSearcher extends React.Component<Props, State> {
       console.error('Replace in selection is not implemented yet');
     }
 
-    gd.EventsRefactorer.replaceStringInEvents(
+    const modifiedEvents = gd.EventsRefactorer.replaceStringInEvents(
       globalObjectsContainer,
       objectsContainer,
       events,
@@ -95,21 +164,39 @@ export default class EventsSearcher extends React.Component<Props, State> {
       replaceText,
       matchCase,
       searchInConditions,
-      searchInActions
+      searchInActions,
+      searchInEventStrings
     );
+
+    if (this.state.eventsSearchResults) {
+      this.state.eventsSearchResults.delete();
+    }
+    this.setState(
+      {
+        eventsSearchResults: modifiedEvents.clone(),
+        searchFocusOffset: null,
+      },
+      () => {
+        this._updateListOfResultEvents();
+        cb();
+      }
+    );
+    return deduplicateEventSearchResults(modifiedEvents);
   };
 
   _doSearchInEvents = (
-    {
-      searchInSelection,
-      searchText,
+    { searchInSelection, searchText, searchFilterParams }: SearchInEventsInputs,
+    cb: () => void
+  ) => {
+    const {
       matchCase,
       searchInConditions,
       searchInActions,
-    }: SearchInEventsInputs,
-    cb: () => void
-  ) => {
-    const { globalObjectsContainer, objectsContainer, events } = this.props;
+      searchInEventStrings,
+      searchInInstructionNames,
+      searchInEventSentences,
+    } = searchFilterParams;
+    const { events } = this.props;
 
     if (searchInSelection) {
       // Search in selection is a bit tricky to implement as it requires to have a list
@@ -119,13 +206,15 @@ export default class EventsSearcher extends React.Component<Props, State> {
     }
 
     const newEventsSearchResults = gd.EventsRefactorer.searchInEvents(
-      globalObjectsContainer,
-      objectsContainer,
+      this.props.project.getCurrentPlatform(),
       events,
       searchText,
       matchCase,
       searchInConditions,
-      searchInActions
+      searchInActions,
+      searchInEventStrings,
+      searchInEventSentences,
+      searchInInstructionNames
     );
 
     if (this.state.eventsSearchResults) {
@@ -150,20 +239,7 @@ export default class EventsSearcher extends React.Component<Props, State> {
       return;
     }
 
-    const resultEventsWithDuplicates = mapFor(
-      0,
-      eventsSearchResults.size(),
-      i => {
-        const eventsSearchResult = eventsSearchResults.at(i);
-        return eventsSearchResult.isEventValid()
-          ? eventsSearchResult.getEvent()
-          : null;
-      }
-    ).filter(Boolean);
-
-    // Store a list of unique events, because browsing for results in the events
-    // tree is made event by event.
-    this._resultEvents = uniqBy(resultEventsWithDuplicates, event => event.ptr);
+    this._resultEvents = deduplicateEventSearchResults(eventsSearchResults);
   };
 
   _goToSearchResults = (step: number): ?gdBaseEvent => {
@@ -173,14 +249,21 @@ export default class EventsSearcher extends React.Component<Props, State> {
       return null;
     }
 
+    const { searchFocusOffset } = this.state;
+
     let newSearchFocusOffset =
-      this.state.searchFocusOffset === null
-        ? 0
-        : ((this.state.searchFocusOffset || 0) + step) %
-          this._resultEvents.length;
+      searchFocusOffset === null || searchFocusOffset === undefined
+        ? getSearchInitialOffset(
+            this.props.events,
+            this._resultEvents,
+            this.props.selection
+          )
+        : (searchFocusOffset + step) % this._resultEvents.length;
     if (newSearchFocusOffset < 0)
+      // $FlowFixMe[incompatible-use]
       newSearchFocusOffset += this._resultEvents.length;
 
+    // $FlowFixMe[incompatible-use]
     const event = this._resultEvents[newSearchFocusOffset];
     setTimeout(
       // Change the offset on next tick to give a chance to children to unfold events before focusing it.
@@ -198,7 +281,7 @@ export default class EventsSearcher extends React.Component<Props, State> {
     return this._goToSearchResults(+1);
   };
 
-  render() {
+  render(): any {
     return this.props.children({
       eventsSearchResultEvents: this._resultEvents,
       searchFocusOffset: this.state.searchFocusOffset,
@@ -206,6 +289,7 @@ export default class EventsSearcher extends React.Component<Props, State> {
       replaceInEvents: this._doReplaceInEvents,
       goToNextSearchResult: this._goToNextSearchResult,
       goToPreviousSearchResult: this._goToPreviousSearchResult,
+      clearSearchResults: this.reset,
     });
   }
 }

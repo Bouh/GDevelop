@@ -1,31 +1,61 @@
-import * as PIXI from 'pixi.js';
+// @flow
+import * as PIXI from 'pixi.js-legacy';
 import transformRect from '../Utils/TransformRect';
 import { rgbToHexNumber } from '../Utils/ColorTransformer';
+import Rectangle from '../Utils/Rectangle';
+
+type Props = {|
+  project: gdProject,
+  layout: gdLayout | null,
+  eventsBasedObjectVariant: gdEventsBasedObjectVariant | null,
+  toCanvasCoordinates: (x: number, y: number) => [number, number],
+|};
 
 export default class WindowBorder {
-  constructor({ project, layout, toCanvasCoordinates }) {
+  project: gdProject;
+  layout: gdLayout | null;
+  eventsBasedObjectVariant: gdEventsBasedObjectVariant | null;
+  toCanvasCoordinates: (x: number, y: number) => [number, number];
+  // $FlowFixMe[missing-local-annot]
+  pixiRectangle = (new PIXI.Graphics(): any);
+  windowRectangle: Rectangle = new Rectangle();
+
+  constructor({
+    project,
+    layout,
+    eventsBasedObjectVariant,
+    toCanvasCoordinates,
+  }: Props) {
     this.project = project;
     this.layout = layout;
+    this.eventsBasedObjectVariant = eventsBasedObjectVariant;
     this.toCanvasCoordinates = toCanvasCoordinates;
 
-    this.pixiRectangle = new PIXI.Graphics();
     this.pixiRectangle.hitArea = new PIXI.Rectangle(0, 0, 0, 0);
-    this.windowRectangle = {
-      x: 0,
-      y: 0,
-      width: this.project.getGameResolutionWidth(),
-      height: this.project.getGameResolutionHeight(),
-    };
   }
 
-  getPixiObject() {
+  getPixiObject(): any {
     return this.pixiRectangle;
   }
 
   render() {
-    this.windowRectangle.width = this.project.getGameResolutionWidth();
-    this.windowRectangle.height = this.project.getGameResolutionHeight();
+    const { layout, eventsBasedObjectVariant } = this;
 
+    this.windowRectangle.set(
+      eventsBasedObjectVariant
+        ? {
+            left: eventsBasedObjectVariant.getAreaMinX(),
+            top: eventsBasedObjectVariant.getAreaMinY(),
+            right: eventsBasedObjectVariant.getAreaMaxX(),
+            bottom: eventsBasedObjectVariant.getAreaMaxY(),
+          }
+        : {
+            left: 0,
+            top: 0,
+            right: this.project.getGameResolutionWidth(),
+            bottom: this.project.getGameResolutionHeight(),
+          }
+    );
     const displayedRectangle = transformRect(
       this.toCanvasCoordinates,
       this.windowRectangle
@@ -33,23 +63,37 @@ export default class WindowBorder {
 
     this.pixiRectangle.clear();
     this.pixiRectangle.beginFill(0x000000);
-    this.pixiRectangle.lineStyle(
-      1,
-      rgbToHexNumber(
-        128 + (this.layout.getBackgroundColorRed() % 256),
-        128 + (this.layout.getBackgroundColorBlue() % 256),
-        128 + (this.layout.getBackgroundColorGreen() % 256)
-      ),
-      1
-    );
+    if (layout) {
+      const backgroundRed = layout.getBackgroundColorRed();
+      const backgroundBlue = layout.getBackgroundColorBlue();
+      const backgroundGreen = layout.getBackgroundColorGreen();
+      const isDark =
+        Math.max(backgroundRed, backgroundBlue, backgroundGreen) < 128;
+      this.pixiRectangle.lineStyle(
+        1,
+        rgbToHexNumber(
+          ((isDark ? 255 : 0) + backgroundRed) / 2,
+          ((isDark ? 255 : 0) + backgroundBlue) / 2,
+          ((isDark ? 255 : 0) + backgroundGreen) / 2
+        ),
+        1
+      );
+    } else {
+      this.pixiRectangle.lineStyle(1, 0x888888, 1);
+    }
     this.pixiRectangle.alpha = 1;
-    this.pixiRectangle.fillAlpha = 0;
+    this.pixiRectangle.fill.alpha = 0;
     this.pixiRectangle.drawRect(
-      displayedRectangle.x,
-      displayedRectangle.y,
-      displayedRectangle.width,
-      displayedRectangle.height
+      displayedRectangle.left,
+      displayedRectangle.top,
+      displayedRectangle.width(),
+      displayedRectangle.height()
     );
+    if (eventsBasedObjectVariant) {
+      const origin = this.toCanvasCoordinates(0, 0);
+      this.pixiRectangle.drawRect(origin[0] - 8, origin[1] - 1, 16, 2);
+      this.pixiRectangle.drawRect(origin[0] - 1, origin[1] - 8, 2, 16);
+    }
     this.pixiRectangle.endFill();
   }
 }

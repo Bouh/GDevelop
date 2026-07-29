@@ -1,4 +1,5 @@
-import React from 'react';
+// @flow
+import * as React from 'react';
 
 const styles = {
   row: {
@@ -6,19 +7,49 @@ const styles = {
   },
   cell: {
     display: 'flex',
-    flex: 1,
     alignItems: 'center',
-    paddingLeft: 8,
-    paddingRight: 8,
+    paddingLeft: 4,
+    paddingRight: 4,
   },
 };
 
-export const TreeTable = props => <div>{props.children}</div>;
+type TreeTableRowProps = {|
+  id?: string,
+  children: React.Node,
+  /* Allow to specify a different alignment than the default (centered). */
+  alignItems?: ?'flex-start',
+|};
 
-export const TreeTableRow = props => (
-  <div style={{ ...styles.row, ...props.style }}>{props.children}</div>
-);
+export const TreeTableRow = (props: TreeTableRowProps): React.MixedElement => {
+  return (
+    <div
+      id={props.id}
+      style={{
+        ...styles.row,
+        alignItems: props.alignItems,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+};
 
-export const TreeTableCell = props => (
-  <div style={{ ...styles.cell, ...props.style }}>{props.children}</div>
+type TreeTableCellProps = {|
+  style?: Object,
+  expand?: boolean,
+  children?: React.Node,
+|};
+
+export const TreeTableCell = (
+  props: TreeTableCellProps
+): React.MixedElement => (
+  <div
+    style={{
+      ...styles.cell,
+      flex: props.expand ? 1 : undefined,
+      ...props.style,
+    }}
+  >
+    {props.children}
+  </div>
 );

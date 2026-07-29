@@ -1,16 +1,23 @@
 // @flow
 import { mapFor } from '../Utils/MapFor';
 import flatten from 'lodash/flatten';
-import { type SelectedTags, hasStringAllTags } from '../Utils/TagsHelper';
-const gd = global.gd;
+import { shouldHideExtension } from '../Version';
+
+const gd: libGDevelop = global.gd;
 
 export type EnumeratedObjectMetadata = {|
   extension: gdPlatformExtension,
   objectMetadata: gdObjectMetadata,
+  type: string,
   name: string,
   fullName: string,
   description: string,
   iconFilename: string,
+  category: string,
+  isRenderedIn3D: boolean,
+  assetStoreTag?: string,
+  isDependentWithParent?: boolean,
+  tags: Array<string>,
 |};
 
 export type ObjectWithContext = {|
@@ -26,9 +33,24 @@ export type GroupWithContext = {|
 export type ObjectWithContextList = Array<ObjectWithContext>;
 export type GroupWithContextList = Array<GroupWithContext>;
 
+export const isSameGroupWithContext = (
+  groupWithContext: ?GroupWithContext
+): ((other: ?GroupWithContext) => ?(false | boolean)) => (
+  other: ?GroupWithContext
+) => {
+  return (
+    groupWithContext &&
+    other &&
+    groupWithContext.global === other.global &&
+    groupWithContext.group === other.group
+  );
+};
+
 export const isSameObjectWithContext = (
   objectWithContext: ?ObjectWithContext
-) => (other: ?ObjectWithContext) => {
+): ((other: ?ObjectWithContext) => ?(false | boolean)) => (
+  other: ?ObjectWithContext
+) => {
   return (
     objectWithContext &&
     other &&
@@ -38,31 +60,67 @@ export const isSameObjectWithContext = (
 };
 
 export const enumerateObjects = (
-  project: gdProject,
+  globalObjectsContainer: gdObjectsContainer | null,
   objectsContainer: gdObjectsContainer,
-  type: ?string = undefined
-) => {
-  const filterObject = (object: gdObject): boolean => {
-    return (
-      !type ||
-      gd.getTypeOfObject(project, objectsContainer, object.getName(), false) ===
-        type
-    );
-  };
+  filters: ?{| type?: string, names?: Array<string> |}
+): {
+  allObjectsList: ObjectWithContextList,
+  containerObjectsList: ObjectWithContextList,
+  projectObjectsList: ObjectWithContextList,
+} => {
+  const typeFilter = (filters && filters.type) || null;
+  const namesFilter = (filters && filters.names) || null;
+  const filterObjectByType = typeFilter
+    ? (object: gdObject): boolean => {
+        // TODO Use ProjectScopedContainers to get the object type
+        return (
+          gd.getTypeOfObject(
+            globalObjectsContainer || objectsContainer,
+            objectsContainer,
+            object.getName(),
+            false
+          ) === typeFilter
+        );
+      }
+    : null;
 
-  const containerObjectsList: ObjectWithContextList = mapFor(
+  const filterObjectByName = namesFilter
+    ? (object: gdObject): boolean => {
+        return namesFilter.includes(object.getName());
+      }
+    : null;
+
+  let containerObjectsList: ObjectWithContextList = mapFor(
     0,
     objectsContainer.getObjectsCount(),
-    i => objectsContainer.getObjectAt(i)
+    i => {
+      const object = objectsContainer.getObjectAt(i);
+      if (filterObjectByType && !filterObjectByType(object)) {
+        return null;
+      }
+      if (filterObjectByName && !filterObjectByName(object)) {
+        return null;
+      }
+      return object;
+    }
   )
-    .filter(filterObject)
+    .filter(Boolean)
     .map((object: gdObject): ObjectWithContext => ({ object, global: false }));
 
   const projectObjectsList: ObjectWithContextList =
-    project === objectsContainer
+    globalObjectsContainer === objectsContainer || !globalObjectsContainer
       ? []
-      : mapFor(0, project.getObjectsCount(), i => project.getObjectAt(i))
-          .filter(filterObject)
+      : mapFor(0, globalObjectsContainer.getObjectsCount(), i => {
+          const object = globalObjectsContainer.getObjectAt(i);
+          if (filterObjectByType && !filterObjectByType(object)) {
+            return null;
+          }
+          if (filterObjectByName && !filterObjectByName(object)) {
+            return null;
+          }
+          return object;
+        })
+          .filter(Boolean)
           .map(
             (object: gdObject): ObjectWithContext => ({
               object,
@@ -82,7 +140,8 @@ export const enumerateObjects = (
 };
 
 export const enumerateObjectTypes = (
-  project: gdProject
+  project: gdProject,
+  eventsFunctionsExtension: gdEventsFunctionsExtension | null
 ): Array<EnumeratedObjectMetadata> => {
   const platform = project.getCurrentPlatform();
   const extensionsList = platform.getAllPlatformExtensions();
@@ -90,68 +149,77 @@ export const enumerateObjectTypes = (
   return flatten(
     mapFor(0, extensionsList.size(), i => {
       const extension = extensionsList.at(i);
+      if (shouldHideExtension(project, extension)) {
+        return [];
+      }
 
       return extension
         .getExtensionObjectsTypes()
         .toJSArray()
-        .map(objectType => extension.getObjectMetadata(objectType))
-        .map(objectMetadata => ({
-          extension,
-          objectMetadata,
-          name: objectMetadata.getName(),
-          fullName: objectMetadata.getFullName(),
-          description: objectMetadata.getDescription(),
-          iconFilename: objectMetadata.getIconFilename(),
-        }));
+        .map(objectType => {
+          const objectMetadata = extension.getObjectMetadata(objectType);
+          return {
+            extension,
+            objectMetadata,
+            type: objectType,
+            name: objectMetadata.getName(),
+            fullName: objectMetadata.getFullName(),
+            description: objectMetadata.getDescription(),
+            iconFilename: objectMetadata.getIconFilename(),
+            category: objectMetadata.getCategory() || 'General',
+            assetStoreTag: objectMetadata.getAssetStoreTag(),
+            isRenderedIn3D: objectMetadata.isRenderedIn3D(),
+            tags: extension.getTags().toJSArray(),
+          };
+        })
+        .filter(
+          ({ objectMetadata }) =>
+            !objectMetadata.isHidden() &&
+            (!objectMetadata.isPrivate() ||
+              (eventsFunctionsExtension &&
+                extension.getName() === eventsFunctionsExtension.getName()))
+        );
     })
   );
 };
 
 export type ObjectFilteringOptions = {|
   searchText: string,
-  selectedTags: SelectedTags,
+  hideExactMatches?: boolean,
 |};
 
 export const filterObjectsList = (
   list: ObjectWithContextList,
-  { searchText, selectedTags }: ObjectFilteringOptions
+  { searchText, hideExactMatches }: ObjectFilteringOptions
 ): ObjectWithContextList => {
-  if (!searchText && !selectedTags.length) return list;
+  if (!searchText) return list;
 
-  const lowercaseSearchText = searchText.toLowerCase();
+  return list.filter((objectWithContext: ObjectWithContext) => {
+    const objectName = objectWithContext.object.getName();
 
-  return list
-    .filter((objectWithContext: ObjectWithContext) => {
-      if (!selectedTags.length) return true;
+    if (hideExactMatches && searchText === objectName) return undefined;
 
-      const objectTags = objectWithContext.object.getTags();
-      return hasStringAllTags(objectTags, selectedTags);
-    })
-    .filter((objectWithContext: ObjectWithContext) => {
-      return (
-        objectWithContext.object
-          .getName()
-          .toLowerCase()
-          .indexOf(lowercaseSearchText) !== -1
-      );
-    });
+    return objectName.toLowerCase().indexOf(searchText.toLowerCase()) !== -1;
+  });
 };
+
+export type GroupFilteringOptions = {|
+  searchText: string,
+  hideExactMatches?: boolean,
+|};
 
 export const filterGroupsList = (
   list: GroupWithContextList,
-  searchText: string
+  { searchText, hideExactMatches }: GroupFilteringOptions
 ): GroupWithContextList => {
   if (!searchText) return list;
 
-  const lowercaseSearchText = searchText.toLowerCase();
-
   return list.filter((groupWithContext: GroupWithContext) => {
-    return (
-      groupWithContext.group
-        .getName()
-        .toLowerCase()
-        .indexOf(lowercaseSearchText) !== -1
-    );
+    const groupName = groupWithContext.group.getName();
+
+    if (hideExactMatches && groupName === searchText) return undefined;
+
+    return groupName.toLowerCase().indexOf(searchText.toLowerCase()) !== -1;
   });
 };
 
@@ -164,30 +232,73 @@ export const enumerateGroups = (
 };
 
 export const enumerateObjectsAndGroups = (
-  globalObjectsContainer: gdObjectsContainer,
-  objectsContainer: gdObjectsContainer,
-  type: ?string = undefined
-) => {
+  objectsContainersList: gdObjectsContainersList,
+  objectType: ?string = undefined,
+  requiredBehaviorTypes?: Array<string> = []
+):
+  | { allGroupsList: Array<empty>, allObjectsList: Array<empty> }
+  | {
+      allGroupsList: GroupWithContextList,
+      allObjectsList: ObjectWithContextList,
+    } => {
+  // The objects must never be kept in a state as they may be temporary copies.
+  // Search for "ProjectScopedContainers wrongly containing temporary objects containers or objects"
+  // in the codebase.
+  if (objectsContainersList.getObjectsContainersCount() === 0) {
+    console.error(
+      'Called enumerateObjectsAndGroups without any object container.'
+    );
+    return {
+      allObjectsList: [],
+      allGroupsList: [],
+    };
+  }
+  // TODO Use a loop instead of looking for 2 object containers.
+  if (objectsContainersList.getObjectsContainersCount() > 2) {
+    console.error(
+      'Called enumerateObjectsAndGroups with more than 2 object containers.'
+    );
+  }
+  const globalObjectsContainer =
+    objectsContainersList.getObjectsContainersCount() > 1
+      ? objectsContainersList.getObjectsContainer(0)
+      : null;
+  const objectsContainer = objectsContainersList.getObjectsContainer(
+    objectsContainersList.getObjectsContainersCount() - 1
+  );
+
   const filterObject = (object: gdObject): boolean => {
     return (
-      !type ||
-      gd.getTypeOfObject(
-        globalObjectsContainer,
-        objectsContainer,
-        object.getName(),
-        false
-      ) === type
+      (!objectType ||
+        objectsContainersList.getTypeOfObject(object.getName()) ===
+          objectType) &&
+      requiredBehaviorTypes.every(
+        requiredBehaviorType =>
+          objectsContainersList
+            .getBehaviorNamesInObjectOrGroup(
+              object.getName(),
+              requiredBehaviorType,
+              false
+            )
+            .size() > 0
+      )
     );
   };
   const filterGroup = (group: gdObjectGroup): boolean => {
     return (
-      !type ||
-      gd.getTypeOfObject(
-        globalObjectsContainer,
-        objectsContainer,
-        group.getName(),
-        true
-      ) === type
+      (!objectType ||
+        objectsContainersList.getTypeOfObject(group.getName()) ===
+          objectType) &&
+      requiredBehaviorTypes.every(
+        behaviorType =>
+          objectsContainersList
+            .getBehaviorNamesInObjectOrGroup(
+              group.getName(),
+              behaviorType,
+              true
+            )
+            .size() > 0
+      )
     );
   };
 
@@ -207,7 +318,7 @@ export const enumerateObjectsAndGroups = (
     .map(group => ({ group, global: false }));
 
   const projectObjectsList: ObjectWithContextList =
-    globalObjectsContainer === objectsContainer
+    globalObjectsContainer === objectsContainer || !globalObjectsContainer
       ? []
       : mapFor(0, globalObjectsContainer.getObjectsCount(), i =>
           globalObjectsContainer.getObjectAt(i)
@@ -215,11 +326,10 @@ export const enumerateObjectsAndGroups = (
           .filter(filterObject)
           .map(object => ({ object, global: true }));
 
-  const projectGroups = globalObjectsContainer.getObjectGroups();
   const projectGroupsList: GroupWithContextList =
-    globalObjectsContainer === objectsContainer
+    globalObjectsContainer === objectsContainer || !globalObjectsContainer
       ? []
-      : enumerateGroups(projectGroups)
+      : enumerateGroups(globalObjectsContainer.getObjectGroups())
           .filter(filterGroup)
           .map(group => ({ group, global: true }));
 
@@ -231,11 +341,7 @@ export const enumerateObjectsAndGroups = (
   );
 
   return {
-    containerObjectsList,
-    projectObjectsList,
     allObjectsList,
-    containerGroupsList,
-    projectGroupsList,
     allGroupsList,
   };
 };

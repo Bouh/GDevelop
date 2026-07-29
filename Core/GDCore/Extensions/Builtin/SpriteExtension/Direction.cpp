@@ -4,8 +4,10 @@
  * reserved. This project is released under the MIT License.
  */
 #include "GDCore/Extensions/Builtin/SpriteExtension/Direction.h"
+
 #include <iostream>
 #include <vector>
+
 #include "GDCore/CommonTools.h"
 #include "GDCore/Extensions/Builtin/SpriteExtension/Sprite.h"
 #include "GDCore/Serialization/SerializerElement.h"
@@ -21,13 +23,22 @@ Direction::~Direction(){};
 
 void Direction::SetLoop(bool loop_) { loop = loop_; }
 
-void Direction::SetTimeBetweenFrames(float time) { timeBetweenFrame = time; }
+void Direction::SetTimeBetweenFrames(double time) { timeBetweenFrame = time; }
 
 void Direction::AddSprite(const Sprite& sprite) { sprites.push_back(sprite); }
 
 const Sprite& Direction::GetSprite(std::size_t nb) const { return sprites[nb]; }
 
 Sprite& Direction::GetSprite(std::size_t nb) { return sprites[nb]; }
+
+const std::vector<gd::String>& Direction::GetSpriteNames() const {
+  static std::vector<gd::String> spriteNames;
+  spriteNames.clear();
+  for (std::size_t i = 0; i < sprites.size(); ++i) {
+    spriteNames.push_back(sprites[i].GetImageName());
+  }
+  return spriteNames;
+}
 
 void Direction::RemoveSprite(std::size_t index) {
   if (index < sprites.size()) sprites.erase(sprites.begin() + index);
@@ -75,11 +86,9 @@ void Direction::UnserializeFrom(const gd::SerializerElement& element) {
   SetTimeBetweenFrames(
       element.GetDoubleAttribute("timeBetweenFrames", 1, "tempsEntre"));
   SetLoop(element.GetBoolAttribute("looping", false, "boucle"));
-#if defined(GD_IDE_ONLY)
   SetMetadata(element.HasAttribute("metadata") || element.HasChild("metadata")
                   ? element.GetStringAttribute("metadata")
                   : "");
-#endif
 
   const gd::SerializerElement& spritesElement =
       element.GetChild("sprites", 0, "Sprites");
@@ -101,11 +110,11 @@ void Direction::UnserializeFrom(const gd::SerializerElement& element) {
             .GetBoolAttribute("automatic", true));
 
     if (spriteElement.HasChild("CustomCollisionMask"))
-      sprite.SetCollisionMaskAutomatic(
+      sprite.SetFullImageCollisionMask(
           !spriteElement.GetChild("CustomCollisionMask")
                .GetBoolAttribute("custom", false));
     else
-      sprite.SetCollisionMaskAutomatic(
+      sprite.SetFullImageCollisionMask(
           !spriteElement.GetBoolAttribute("hasCustomCollisionMask", false));
 
     std::vector<Polygon2d> mask;
@@ -123,7 +132,7 @@ void Direction::UnserializeFrom(const gd::SerializerElement& element) {
             polygonElement.GetChild(k);
 
         polygon.vertices.push_back(
-            sf::Vector2f(verticeElement.GetDoubleAttribute("x"),
+            gd::Vector2f(verticeElement.GetDoubleAttribute("x"),
                          verticeElement.GetDoubleAttribute("y")));
       }
 
@@ -135,7 +144,6 @@ void Direction::UnserializeFrom(const gd::SerializerElement& element) {
   }
 };
 
-#if defined(GD_IDE_ONLY)
 void SavePoint(const Point& point, gd::SerializerElement& element) {
   element.SetAttribute("name", point.GetName());
   element.SetAttribute("x", point.GetX());
@@ -165,7 +173,7 @@ void SaveSpritesDirection(const vector<Sprite>& sprites,
         .SetAttribute("automatic", sprites[i].IsDefaultCenterPoint());
 
     spriteElement.SetAttribute("hasCustomCollisionMask",
-                               !sprites[i].IsCollisionMaskAutomatic());
+                               !sprites[i].IsFullImageCollisionMask());
 
     gd::SerializerElement& collisionMaskElement =
         spriteElement.AddChild("customCollisionMask");
@@ -190,6 +198,5 @@ void Direction::SerializeTo(gd::SerializerElement& element) const {
   if (!GetMetadata().empty()) element.SetAttribute("metadata", GetMetadata());
   SaveSpritesDirection(sprites, element.AddChild("sprites"));
 }
-#endif
 
 }  // namespace gd

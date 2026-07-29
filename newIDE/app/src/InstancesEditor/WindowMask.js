@@ -1,44 +1,52 @@
-import * as PIXI from 'pixi.js';
+// @flow
+import * as PIXI from 'pixi.js-legacy';
 import transformRect from '../Utils/TransformRect';
+import ViewPosition from './ViewPosition';
+import { type InstancesEditorSettings } from './InstancesEditorSettings';
+import Rectangle from '../Utils/Rectangle';
 
-export default class WindowBorder {
-  constructor({ project, viewPosition, options }) {
+type Props = {|
+  project: gdProject,
+  instancesEditorSettings: InstancesEditorSettings,
+  viewPosition: ViewPosition,
+|};
+
+export default class WindowMask {
+  project: gdProject;
+  instancesEditorSettings: InstancesEditorSettings;
+  viewPosition: ViewPosition;
+  // $FlowFixMe[missing-local-annot]
+  pixiRectangle = (new PIXI.Graphics(): any);
+  windowRectangle: Rectangle = new Rectangle();
+
+  constructor({ project, viewPosition, instancesEditorSettings }: Props) {
     this.project = project;
     this.viewPosition = viewPosition;
-    this.options = options;
+    this.instancesEditorSettings = instancesEditorSettings;
 
-    this.pixiRectangle = new PIXI.Graphics();
     this.pixiRectangle.hitArea = new PIXI.Rectangle(0, 0, 0, 0);
-    this.windowRectangle = {
-      x: 0,
-      y: 0,
-      width: 0,
-      height: 0,
-    };
   }
 
-  setOptions(options) {
-    this.options = options;
+  setInstancesEditorSettings(instancesEditorSettings: InstancesEditorSettings) {
+    this.instancesEditorSettings = instancesEditorSettings;
   }
 
-  getPixiObject() {
+  getPixiObject(): any {
     return this.pixiRectangle;
   }
 
   render() {
-    const options = this.options;
-
-    if (!options.windowMask) {
+    if (!this.instancesEditorSettings.windowMask) {
       this.pixiRectangle.visible = false;
       return;
     }
 
-    const width = this.project.getGameResolutionWidth();
-    const height = this.project.getGameResolutionHeight();
-    this.windowRectangle.x = this.viewPosition.getViewX() - width / 2;
-    this.windowRectangle.y = this.viewPosition.getViewY() - height / 2;
-    this.windowRectangle.width = width;
-    this.windowRectangle.height = height;
+    this.windowRectangle.setThroughCenter({
+      centerX: this.viewPosition.getViewX(),
+      centerY: this.viewPosition.getViewY(),
+      width: this.project.getGameResolutionWidth(),
+      height: this.project.getGameResolutionHeight(),
+    });
 
     const displayedRectangle = transformRect(
       this.viewPosition.toCanvasCoordinates,
@@ -50,12 +58,12 @@ export default class WindowBorder {
     this.pixiRectangle.beginFill(0x000000);
     this.pixiRectangle.lineStyle(1, 0x000000, 1);
     this.pixiRectangle.alpha = 1;
-    this.pixiRectangle.fillAlpha = 0;
+    this.pixiRectangle.fill.alpha = 0;
     this.pixiRectangle.drawRect(
-      displayedRectangle.x,
-      displayedRectangle.y,
-      displayedRectangle.width,
-      displayedRectangle.height
+      displayedRectangle.left,
+      displayedRectangle.top,
+      displayedRectangle.width(),
+      displayedRectangle.height()
     );
     this.pixiRectangle.endFill();
   }

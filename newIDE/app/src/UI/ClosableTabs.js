@@ -1,39 +1,42 @@
 // @flow
-import React, { Component, useEffect, type Node, useRef } from 'react';
-import Close from '@material-ui/icons/Close';
+import { t } from '@lingui/macro';
+import { type I18n as I18nType } from '@lingui/core';
+import * as React from 'react';
 import ButtonBase from '@material-ui/core/ButtonBase';
-import ThemeConsumer from './Theme/ThemeConsumer';
-import ContextMenu from './Menu/ContextMenu';
+import ContextMenu, { type ContextMenuInterface } from './Menu/ContextMenu';
+import { useLongTouch } from '../Utils/UseLongTouch';
+import GDevelopThemeContext from './Theme/GDevelopThemeContext';
+import { dataObjectToProps, type HTMLDataset } from '../Utils/HTMLDataset';
+import Cross from './CustomSvgIcons/Cross';
+import useForceUpdate from '../Utils/UseForceUpdate';
+
+const WINDOW_NON_DRAGGABLE_PART_CLASS_NAME = 'title-bar-non-draggable-part';
 
 const styles = {
-  tabsContainerStyle: {
-    maxWidth: '100%',
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-  },
   tabContentContainer: {
     width: '100%',
     position: 'relative',
     textAlign: 'initial',
-    height: '100%',
+    minHeight: 0,
     display: 'flex',
     flex: 1,
   },
   tabLabel: {
-    maxWidth: 400,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    marginTop: 6,
-    marginBottom: 6,
-    marginLeft: 10,
-    marginRight: 10,
     fontSize: '15px', // Same as in Mosaic.css (for mosaic-window-title)
   },
+  tabIcon: {
+    marginLeft: 4,
+    marginRight: 4,
+    display: 'flex',
+  },
+  tabLabelAndIcon: {
+    display: 'flex',
+    alignItems: 'center',
+  },
   closeButton: {
-    marginTop: 7,
-    marginBottom: 7,
     marginRight: 5,
     marginLeft: 5,
   },
@@ -41,7 +44,8 @@ const styles = {
 
 type TabContentContainerProps = {|
   active: boolean,
-  children: Node,
+  removePointerEvents?: boolean,
+  children: React.Node,
 |};
 
 /**
@@ -53,18 +57,19 @@ type TabContentContainerProps = {|
  *
  * 2) shouldComponentUpdate is used to avoid updating the content of a tab that is not selected.
  */
-export class TabContentContainer extends Component<TabContentContainerProps> {
-  shouldComponentUpdate(nextProps: TabContentContainerProps) {
+export class TabContentContainer extends React.Component<TabContentContainerProps> {
+  shouldComponentUpdate(nextProps: TabContentContainerProps): any {
     return this.props.active || nextProps.active;
   }
 
-  render() {
+  render(): any {
     const { children, active } = this.props;
     return (
       <div
         style={{
           ...styles.tabContentContainer,
           ...(active ? undefined : { display: 'none' }),
+          pointerEvents: this.props.removePointerEvents ? 'none' : 'all',
         }}
       >
         {children}
@@ -75,142 +80,289 @@ export class TabContentContainer extends Component<TabContentContainerProps> {
 
 type ClosableTabsProps = {|
   hideLabels?: boolean,
-  children: Node,
+  renderTabs: ({| containerWidth: number |}) => React.Node,
 |};
 
-export class ClosableTabs extends Component<ClosableTabsProps> {
-  render() {
-    const { hideLabels, children } = this.props;
+export const ClosableTabs = ({
+  hideLabels,
+  renderTabs,
+}: ClosableTabsProps): React.MixedElement => {
+  const forceUpdate = useForceUpdate();
+  const containerRef = React.useRef<?HTMLDivElement>(null);
+  const tabItemContainerStyle = {
+    maxWidth: '100%', // Tabs should take all width
+    flex: 1,
+    display: hideLabels ? 'none' : 'flex',
+    flexWrap: 'nowrap', // Single line of tab...
+    overflowX: 'overlay', // ...scroll horizontally if needed
+    overflowY: 'hidden', // ...never scroll vertically (useful on Safari)
+    marginTop: 7, // Chosen to align with the size of controls in the titlebar.
+  };
 
-    return (
-      <ThemeConsumer>
-        {muiTheme => {
-          const tabItemContainerStyle = {
-            maxWidth: '100%', // Tabs should take all width
-            flexShrink: 0, // Tabs height should never be reduced
-            display: hideLabels ? 'none' : 'flex',
-            flexWrap: 'nowrap', // Single line of tab...
-            overflowX: 'auto', // ...scroll horizontally if needed
-            backgroundColor: muiTheme.closableTabs.backgroundColor,
-          };
+  const onScroll = React.useCallback((event: WheelEvent) => {
+    const divElement = containerRef.current;
+    if (divElement) {
+      divElement.scrollLeft += event.deltaY;
+    }
+  }, []);
 
-          return <div style={tabItemContainerStyle}>{children}</div>;
-        }}
-      </ThemeConsumer>
-    );
-  }
-}
+  const containerWidth = containerRef.current
+    ? containerRef.current.clientWidth
+    : null;
 
-type ClosableTabProps = {|
+  React.useLayoutEffect(
+    () => {
+      // Force a re-render the first time after we know the container width.
+      forceUpdate();
+    },
+    [forceUpdate]
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className="almost-invisible-scrollbar"
+      style={tabItemContainerStyle}
+      onWheel={onScroll}
+    >
+      {containerWidth !== null ? renderTabs({ containerWidth }) : null}
+    </div>
+  );
+};
+
+export type ClosableTabProps = {|
+  id?: string,
+  data?: HTMLDataset,
   active: boolean,
-  label: Node,
+  label: ?React.Node,
+  icon: ?React.Node,
+  renderCustomIcon?: ?(brightness: number) => React.Node,
   closable: boolean,
   onClose: () => void,
   onCloseOthers: () => void,
   onCloseAll: () => void,
+  onPopOut?: ?() => void,
+  popOutEnabled?: boolean,
   onClick: () => void,
   onActivated: () => void,
+  onHover: (boolean, options: {| isLabelTruncated: boolean |}) => void,
+  maxWidth: number,
 |};
 
 export function ClosableTab({
+  id,
+  data,
   active,
   onClose,
   onCloseOthers,
   onCloseAll,
+  onPopOut,
+  popOutEnabled = true,
   label,
+  icon,
+  renderCustomIcon,
   closable,
   onClick,
   onActivated,
-}: ClosableTabProps) {
-  useEffect(
+  onHover,
+  maxWidth,
+}: ClosableTabProps): React.Node {
+  React.useEffect(
     () => {
       if (active) {
         onActivated();
       }
     },
-    [active]
+    [active, onActivated]
   );
-  const contextMenu = useRef<ContextMenu>(null);
+  const contextMenu = React.useRef<?ContextMenuInterface>(null);
+  const spanLabelRef = React.useRef<?HTMLSpanElement>(null);
+  const [isLabelTruncated, setIsLabelTruncated] = React.useState(false);
 
+  React.useEffect(
+    () => {
+      if (maxWidth && spanLabelRef.current) {
+        setIsLabelTruncated(
+          spanLabelRef.current.scrollWidth > spanLabelRef.current.clientWidth
+        );
+      }
+      // Update when maxWidth changes.
+    },
+    [maxWidth]
+  );
+
+  // $FlowFixMe[missing-local-annot]
   const openContextMenu = event => {
+    event.preventDefault();
     event.stopPropagation();
     if (contextMenu.current) {
       contextMenu.current.open(event.clientX, event.clientY);
     }
   };
 
-  return (
-    <ThemeConsumer>
-      {muiTheme => {
-        const textColor = !active
-          ? muiTheme.closableTabs.textColor
-          : muiTheme.closableTabs.selectedTextColor;
+  const closeOnMiddleClick = React.useCallback(
+    // $FlowFixMe[missing-local-annot]
+    event => {
+      if (event.nativeEvent && event.nativeEvent.button === 1) {
+        onClose();
+      }
+    },
+    [onClose]
+  );
 
-        return (
-          <React.Fragment>
-            <span
-              style={{
-                flexShrink: 0, // Tabs are never resized to fit in flex container
-                position: 'relative',
-                display: 'inline-block',
-                backgroundColor: !active
-                  ? muiTheme.closableTabs.backgroundColor
-                  : muiTheme.closableTabs.selectedBackgroundColor,
-              }}
-            >
-              <ButtonBase
-                onClick={onClick}
-                onContextMenu={openContextMenu}
-                focusRipple
+  // Allow a long press to show the context menu
+  const { contextMenuProps: longTouchForContextMenuProps } = useLongTouch(
+    React.useCallback(
+      event => {
+        if (contextMenu.current) {
+          contextMenu.current.open(event.clientX, event.clientY);
+        }
+      },
+      [contextMenu]
+    )
+  );
+
+  const gdevelopTheme = React.useContext(GDevelopThemeContext);
+  const textColor = active
+    ? gdevelopTheme.closableTabs.selectedTextColor
+    : gdevelopTheme.closableTabs.textColor;
+
+  const brightness =
+    gdevelopTheme.palette.type === 'dark'
+      ? active
+        ? 0.978
+        : 0.776
+      : active
+      ? 0.022
+      : 0.224;
+
+  const labelMaxWidth = Math.max(
+    0.1, // No negative max-width, which would actually not enforce any max width.
+    (maxWidth || 320) -
+    20 /* Close button */ -
+    32 /* Icon */ -
+      9 /* Extra margins */
+  );
+
+  return (
+    <React.Fragment>
+      <span
+        id={id}
+        style={{
+          flexShrink: 0, // Tabs are never resized to fit in flex container
+          position: 'relative',
+          display: 'inline-block',
+          marginRight: 2,
+          // Leave some space when scrolled into view to let the user understand
+          // that there are more tabs.
+          scrollMarginRight: 20,
+          scrollMarginLeft: 20,
+          // Style:
+          borderTopRightRadius: 8,
+          borderTopLeftRadius: 8,
+          borderTop: '1px solid black',
+          borderRight: '1px solid black',
+          borderLeft: '1px solid black',
+          borderBottom: 'none',
+          borderColor: active
+            ? gdevelopTheme.closableTabs.selectedBorderColor
+            : gdevelopTheme.closableTabs.backgroundColor,
+          backgroundColor: !active
+            ? gdevelopTheme.closableTabs.backgroundColor
+            : gdevelopTheme.closableTabs.selectedBackgroundColor,
+        }}
+        // A tab lives in the top bar, which has the ability to drag the app window.
+        // Ensure the tab does not have this ability, as it can be dragged itself.
+        className={WINDOW_NON_DRAGGABLE_PART_CLASS_NAME}
+        onMouseEnter={() => onHover(true, { isLabelTruncated })}
+        onMouseLeave={() => onHover(false, { isLabelTruncated })}
+      >
+        <ButtonBase
+          onClick={onClick}
+          onAuxClick={closable ? closeOnMiddleClick : undefined}
+          onContextMenu={openContextMenu}
+          data-active={active ? 'true' : undefined}
+          id={id ? `${id}-button` : undefined}
+          {...dataObjectToProps(data)}
+          {...longTouchForContextMenuProps}
+          focusRipple
+          // If the touch ripple is not disabled, the dragged preview will
+          // use the size of the ripple and it will be too big.
+          disableTouchRipple
+        >
+          <span
+            style={{
+              ...styles.tabLabelAndIcon,
+              height: gdevelopTheme.closableTabs.height,
+              color: textColor,
+              fontFamily: gdevelopTheme.closableTabs.fontFamily,
+            }}
+          >
+            {icon || renderCustomIcon ? (
+              <span style={styles.tabIcon}>
+                {renderCustomIcon ? renderCustomIcon(brightness) : icon}
+              </span>
+            ) : null}
+            {label && (
+              <span
+                ref={spanLabelRef}
+                style={{
+                  ...styles.tabLabel,
+                  maxWidth: labelMaxWidth,
+                }}
               >
-                <span
-                  style={{
-                    ...styles.tabLabel,
-                    color: textColor,
-                    fontFamily: muiTheme.closableTabs.fontFamily,
-                  }}
-                >
-                  {label}
-                </span>
-              </ButtonBase>
-              {closable && (
-                <ButtonBase
-                  onClick={onClose}
-                  onContextMenu={openContextMenu}
-                  focusRipple
-                >
-                  <Close
-                    style={{
-                      ...styles.closeButton,
-                      width: muiTheme.closableTabs.height / 2,
-                      height: muiTheme.closableTabs.height / 2,
-                    }}
-                    htmlColor={textColor}
-                  />
-                </ButtonBase>
-              )}
-            </span>
-            <ContextMenu
-              ref={contextMenu}
-              buildMenuTemplate={() => [
-                {
-                  label: 'Close',
-                  click: onClose,
-                  enabled: closable,
-                },
-                {
-                  label: 'Close others',
-                  click: onCloseOthers,
-                },
-                {
-                  label: 'Close all',
-                  click: onCloseAll,
-                },
-              ]}
+                {label}
+              </span>
+            )}
+          </span>
+        </ButtonBase>
+        {closable && (
+          <ButtonBase
+            onClick={onClose}
+            onAuxClick={closeOnMiddleClick}
+            onContextMenu={openContextMenu}
+            {...longTouchForContextMenuProps}
+            focusRipple
+          >
+            <Cross
+              style={{
+                ...styles.closeButton,
+                width: gdevelopTheme.closableTabs.height / 2,
+                height: gdevelopTheme.closableTabs.height,
+              }}
+              htmlColor={textColor}
             />
-          </React.Fragment>
-        );
-      }}
-    </ThemeConsumer>
+          </ButtonBase>
+        )}
+      </span>
+      <ContextMenu
+        ref={contextMenu}
+        buildMenuTemplate={(i18n: I18nType) => [
+          {
+            label: i18n._(t`Close`),
+            click: onClose,
+            enabled: closable,
+          },
+          {
+            label: i18n._(t`Close others`),
+            click: onCloseOthers,
+          },
+          {
+            label: i18n._(t`Close all`),
+            click: onCloseAll,
+          },
+          ...(onPopOut
+            ? [
+                { type: 'separator' },
+                {
+                  label: i18n._(t`Pop out in a separate window (beta)`),
+                  click: onPopOut,
+                  enabled: closable && popOutEnabled,
+                },
+              ]
+            : []),
+        ]}
+      />
+    </React.Fragment>
   );
 }

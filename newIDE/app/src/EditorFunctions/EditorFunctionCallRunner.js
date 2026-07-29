@@ -1,0 +1,294 @@
+// @flow
+import { type I18n as I18nType } from '@lingui/core';
+import { type EventsGenerationResult } from '.';
+import {
+  editorFunctions,
+  editorFunctionsWithoutProject,
+  type EditorFunction,
+  type EditorFunctionWithoutProject,
+  type EditorCallbacks,
+  type EditorFunctionCall,
+  type EditorFunctionCallResult,
+  type EditorFunctionGenericOutput,
+  type EventsGenerationOptions,
+  type AssetSearchAndInstallOptions,
+  type AssetSearchAndInstallResult,
+  type RelatedAiRequestLastMessages,
+  type ResourceSearchAndInstallOptions,
+  type ResourceSearchAndInstallResult,
+  type ToolOptions,
+} from '.';
+import {
+  type SceneEventsOutsideEditorChanges,
+  type InstancesOutsideEditorChanges,
+  type ObjectsOutsideEditorChanges,
+  type ObjectGroupsOutsideEditorChanges,
+  type ProjectItemRenamedOutsideEditorChanges,
+  type WillDeleteSceneChanges,
+  type WillDeleteObjectChanges,
+} from './OutsideEditorChanges';
+import PixiResourcesLoader from '../ObjectsRendering/PixiResourcesLoader';
+import { type EnsureExtensionInstalledOptions } from '../AiGeneration/UseEnsureExtensionInstalled';
+
+type ProcessEditorFunctionCallsOptions = {|
+  project: ?gdProject,
+  functionCalls: Array<EditorFunctionCall>,
+  i18n: I18nType,
+  editorCallbacks: EditorCallbacks,
+  toolOptions: ToolOptions | null,
+  // The AI request's tools version (e.g. 'v12'), threaded to the functions so
+  // they can gate version-dependent behavior (e.g. isNoOpConsideredSuccess).
+  toolsVersion?: ?string,
+  // When true, a `run_script` call is exposed only non-mutating functions
+  // (explorer sub-agent scripts, which must stay read-only).
+  runScriptReadOnly?: boolean,
+  relatedAiRequestId: string | null,
+  getRelatedAiRequestLastMessages: () => RelatedAiRequestLastMessages,
+  generateEvents: (
+    options: EventsGenerationOptions
+  ) => Promise<EventsGenerationResult>,
+  onSceneEventsModifiedOutsideEditor: (
+    changes: SceneEventsOutsideEditorChanges
+  ) => void,
+  onInstancesModifiedOutsideEditor: (
+    changes: InstancesOutsideEditorChanges
+  ) => void,
+  onObjectsModifiedOutsideEditor: (
+    changes: ObjectsOutsideEditorChanges
+  ) => void,
+  onObjectGroupsModifiedOutsideEditor: (
+    changes: ObjectGroupsOutsideEditorChanges
+  ) => void,
+  onProjectItemRenamedOutsideEditor: (
+    changes: ProjectItemRenamedOutsideEditorChanges
+  ) => void,
+  onWillDeleteScene: (changes: WillDeleteSceneChanges) => Promise<void>,
+  onWillDeleteObject: (changes: WillDeleteObjectChanges) => void,
+  ensureExtensionInstalled: (
+    options: EnsureExtensionInstalledOptions
+  ) => Promise<void>,
+  onWillInstallExtension: (extensionNames: Array<string>) => void,
+  onExtensionInstalled: (extensionNames: Array<string>) => void,
+  searchAndInstallAsset: (
+    options: AssetSearchAndInstallOptions
+  ) => Promise<AssetSearchAndInstallResult>,
+  searchAndInstallResources: (
+    options: ResourceSearchAndInstallOptions
+  ) => Promise<ResourceSearchAndInstallResult>,
+  getAssetStoreTagForNewObject: (objectType: string) => string | null,
+|};
+
+export const processEditorFunctionCalls = async ({
+  functionCalls,
+  project,
+  i18n,
+  editorCallbacks,
+  toolOptions,
+  toolsVersion,
+  runScriptReadOnly,
+  generateEvents,
+  onSceneEventsModifiedOutsideEditor,
+  onInstancesModifiedOutsideEditor,
+  onObjectsModifiedOutsideEditor,
+  onObjectGroupsModifiedOutsideEditor,
+  onProjectItemRenamedOutsideEditor,
+  onWillDeleteScene,
+  onWillDeleteObject,
+  relatedAiRequestId,
+  getRelatedAiRequestLastMessages,
+  ensureExtensionInstalled,
+  onWillInstallExtension,
+  onExtensionInstalled,
+  searchAndInstallAsset,
+  searchAndInstallResources,
+  getAssetStoreTagForNewObject,
+}: ProcessEditorFunctionCallsOptions): Promise<{|
+  results: Array<EditorFunctionCallResult>,
+  createdSceneNames: Array<string>,
+  createdProject: ?gdProject,
+|}> => {
+  const results: Array<EditorFunctionCallResult> = [];
+  const createdSceneNames: Array<string> = [];
+  let createdProject: ?gdProject = null;
+
+  for (const functionCall of functionCalls) {
+    const call_id = functionCall.call_id;
+    const name = functionCall.name;
+    if (!project && !editorFunctionsWithoutProject[name]) {
+      results.push({
+        status: 'finished',
+        call_id,
+        success: false,
+        output: {
+          message: 'No project opened.',
+        },
+      });
+      continue;
+    }
+    if (project && name === 'initialize_project') {
+      results.push({
+        status: 'finished',
+        call_id,
+        success: false,
+        output: {
+          message:
+            'A project is already open — initialize_project cannot be called. If starting from a new project is the right approach, suggest the user close the current project and start a new AI request.',
+        },
+      });
+      continue;
+    }
+    let args;
+    try {
+      try {
+        args = JSON.parse(functionCall.arguments);
+      } catch (error) {
+        console.error('Error parsing arguments: ', error);
+        results.push({
+          status: 'finished',
+          call_id,
+          success: false,
+          output: {
+            message: 'Invalid arguments (not a valid JSON string).',
+          },
+        });
+        // Without this, the function would still run with `args: undefined`
+        // and a second result would be pushed for the same call_id.
+        continue;
+      }
+
+      // $FlowFixMe[invalid-compare]
+      if (name === null) {
+        results.push({
+          status: 'finished',
+          call_id,
+          success: false,
+          output: {
+            message: 'Missing or invalid function name.',
+          },
+        });
+        continue;
+      }
+
+      // $FlowFixMe[invalid-compare]
+      if (args === null) {
+        results.push({
+          status: 'finished',
+          call_id,
+          success: false,
+          output: {
+            message: `Invalid arguments for function: ${name}.`,
+          },
+        });
+        continue;
+      }
+
+      // Check if the function exists
+      const editorFunction: EditorFunction | null =
+        editorFunctions[name] || null;
+      const editorFunctionWithoutProject: EditorFunctionWithoutProject | null =
+        editorFunctionsWithoutProject[name] || null;
+      if (!editorFunction && !editorFunctionWithoutProject) {
+        results.push({
+          status: 'finished',
+          call_id,
+          success: false,
+          output: {
+            message: `Unknown function: ${name}.`,
+          },
+        });
+        continue;
+      }
+
+      const argumentsWithoutProject = {
+        args,
+        i18n,
+        toolOptions,
+        toolsVersion,
+        runScriptReadOnly,
+        editorCallbacks,
+        relatedAiRequestId,
+        getRelatedAiRequestLastMessages,
+        generateEvents,
+        onSceneEventsModifiedOutsideEditor,
+        onInstancesModifiedOutsideEditor,
+        onObjectsModifiedOutsideEditor,
+        onObjectGroupsModifiedOutsideEditor,
+        onProjectItemRenamedOutsideEditor,
+        onWillDeleteScene,
+        onWillDeleteObject,
+        ensureExtensionInstalled,
+        onWillInstallExtension,
+        onExtensionInstalled,
+        searchAndInstallAsset,
+        searchAndInstallResources,
+        getAssetStoreTagForNewObject,
+        PixiResourcesLoader,
+      };
+
+      // Execute the function
+      let result: EditorFunctionGenericOutput;
+      if (editorFunction) {
+        if (project) {
+          result = await editorFunction.launchFunction({
+            ...argumentsWithoutProject,
+            project,
+          });
+        } else {
+          result = ({
+            success: false,
+            message: `Function ${name} requires a project to be opened before being used.`,
+          }: EditorFunctionGenericOutput);
+        }
+      } else if (editorFunctionWithoutProject) {
+        result = await editorFunctionWithoutProject.launchFunction(
+          argumentsWithoutProject
+        );
+      } else {
+        result = ({
+          success: false,
+          message: `Unknown function with name: ${name}. Please use something else as this seems not supported or existing.`,
+        }: EditorFunctionGenericOutput);
+      }
+
+      if (result.aborted) {
+        results.push({ status: 'aborted', call_id });
+        continue;
+      }
+
+      const { success, meta, ...output } = result;
+      const editorFunctionDef = editorFunction || editorFunctionWithoutProject;
+      // `run_script` sets `meta.didModifyProject` explicitly: a script can
+      // apply project-changing calls before failing, so its "did modify" is
+      // NOT `modifiesProject && success` — honor the reported value when given.
+      const didModifyProject =
+        meta && typeof meta.didModifyProject === 'boolean'
+          ? meta.didModifyProject || undefined
+          : editorFunctionDef && editorFunctionDef.modifiesProject && success
+          ? true
+          : undefined;
+      results.push({
+        status: 'finished',
+        call_id,
+        success,
+        output,
+        didModifyProject,
+      });
+
+      if (meta && meta.newSceneNames) {
+        createdSceneNames.push(...meta.newSceneNames);
+      }
+      if (meta && meta.createdProject) {
+        createdProject = meta.createdProject;
+      }
+    } catch (error) {
+      results.push({
+        status: 'finished',
+        call_id,
+        success: false,
+        output: { message: error.message || 'Unknown error' },
+      });
+    }
+  }
+
+  return { results, createdSceneNames, createdProject };
+};

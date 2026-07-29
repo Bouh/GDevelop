@@ -4,17 +4,16 @@
  * reserved. This project is released under the MIT License.
  */
 
-#ifndef GDCORE_EXTERNALLAYOUT_H
-#define GDCORE_EXTERNALLAYOUT_H
+#pragma once
+
 #include <memory>
+
 #include "GDCore/Project/InitialInstancesContainer.h"
 #include "GDCore/String.h"
 namespace gd {
 class SerializerElement;
 }
-#if defined(GD_IDE_ONLY)
-#include "GDCore/IDE/Dialogs/LayoutEditorCanvas/LayoutEditorCanvasOptions.h"
-#endif
+#include "GDCore/IDE/Dialogs/LayoutEditorCanvas/EditorSettings.h"
 
 namespace gd {
 
@@ -54,21 +53,17 @@ class GD_CORE_API ExternalLayout {
    */
   gd::InitialInstancesContainer& GetInitialInstances() { return instances; }
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Get the user settings for the IDE.
    */
-  const gd::LayoutEditorCanvasOptions& GetAssociatedSettings() const {
-    return editionSettings;
+  const gd::EditorSettings& GetAssociatedEditorSettings() const {
+    return editorSettings;
   }
 
   /**
    * \brief Get the user settings for the IDE.
    */
-  gd::LayoutEditorCanvasOptions& GetAssociatedSettings() {
-    return editionSettings;
-  }
-#endif
+  gd::EditorSettings& GetAssociatedEditorSettings() { return editorSettings; }
 
   /**
    * \brief Get the name of the layout last used to edit the external layout.
@@ -80,44 +75,26 @@ class GD_CORE_API ExternalLayout {
    */
   void SetAssociatedLayout(const gd::String& name) { associatedLayout = name; }
 
-/** \name Serialization
- */
-///@{
-#if defined(GD_IDE_ONLY)
+  /** \name Serialization
+   */
+  ///@{
   /**
    * \brief Serialize external layout.
    */
   void SerializeTo(SerializerElement& element) const;
-#endif
 
   /**
    * \brief Unserialize the external layout.
    */
-  void UnserializeFrom(const SerializerElement& element);
+  void UnserializeFrom(gd::Project &project, const SerializerElement& element);
   ///@}
 
  private:
   gd::String name;
   gd::InitialInstancesContainer instances;
-#if defined(GD_IDE_ONLY)
-  gd::LayoutEditorCanvasOptions editionSettings;
-#endif
+  gd::EditorSettings editorSettings;
   gd::String associatedLayout;
-};
-
-/**
- * \brief Functor testing ExternalLayout' name
- */
-struct ExternalLayoutHasName
-    : public std::binary_function<std::unique_ptr<gd::ExternalLayout>,
-                                  gd::String,
-                                  bool> {
-  bool operator()(const std::unique_ptr<gd::ExternalLayout>& externalLayout,
-                  gd::String name) const {
-    return externalLayout->GetName() == name;
-  }
 };
 
 }  // namespace gd
 
-#endif  // GDCORE_EXTERNALLAYOUT_H

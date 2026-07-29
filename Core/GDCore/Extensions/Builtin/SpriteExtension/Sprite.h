@@ -6,21 +6,17 @@
 
 #ifndef SPRITE_H
 #define SPRITE_H
-#include <SFML/Graphics/Sprite.hpp>
 #include <memory>
+
 #include "GDCore/Extensions/Builtin/SpriteExtension/Point.h"
 #include "GDCore/Extensions/Builtin/SpriteExtension/Polygon2d.h"
 #include "GDCore/String.h"
-class SFMLTextureWrapper;
 #undef LoadImage  // prevent windows.h to be polluting everything
 
 namespace gd {
 
 /**
  * \brief Represents a sprite to be displayed on the screen.
- *
- * A sprite contains a SFML sprite to be displayed, some points,
- * and can also have its own texture (rather than a texture from ImageManager).
  *
  * \see Direction
  * \see SpriteObject
@@ -48,7 +44,7 @@ class GD_CORE_API Sprite {
 
   /**
    * \brief Get the collision mask (custom or automatically generated owing to
-   * IsCollisionMaskAutomatic())
+   * IsFullImageCollisionMask())
    *
    * \warning If the image has not been loaded ( using LoadImage ) and the
    * collision mask is set as automatic, the returned mask won't be correct.
@@ -71,7 +67,7 @@ class GD_CORE_API Sprite {
 
   /**
    * \brief Set the custom collision mask.
-   * Call then `SetCollisionMaskAutomatic(false)` to use it.
+   * Call then `SetFullImageCollisionMask(false)` to use it.
    */
   void SetCustomCollisionMask(const std::vector<Polygon2d>& collisionMask);
 
@@ -79,15 +75,15 @@ class GD_CORE_API Sprite {
    * \brief Return true if the collision mask is a bounding box, false if a
    * custom collision mask is used.
    */
-  inline bool IsCollisionMaskAutomatic() const {
-    return automaticCollisionMask;
+  inline bool IsFullImageCollisionMask() const {
+    return fullImageCollisionMask;
   }
 
   /**
    * \brief Un/set use of the custom collision mask.
    */
-  inline void SetCollisionMaskAutomatic(bool enabled) {
-    automaticCollisionMask = enabled;
+  inline void SetFullImageCollisionMask(bool enabled) {
+    fullImageCollisionMask = enabled;
   };
 
   /**
@@ -163,58 +159,12 @@ class GD_CORE_API Sprite {
    */
   bool SetDefaultCenterPoint(bool enabled);
 
-#if !defined(EMSCRIPTEN)
-  /** \name Sprite runtime management
-   * Functions used by the C++ game engine.
-   */
-  ///@{
-  /**
-   * \brief Get the SFML sprite associated with the sprite
-   */
-  inline const sf::Sprite& GetSFMLSprite() const { return sfmlSprite; }
-
-  /**
-   * \brief Get the SFML sprite associated with the sprite
-   */
-  inline sf::Sprite& GetSFMLSprite() { return sfmlSprite; }
-
-  /**
-   * \brief Set the SFML texture of the sprite
-   */
-  void LoadImage(std::shared_ptr<SFMLTextureWrapper> image);
-
-  /**
-   * \brief Get SFML texture used by the sprite
-   */
-  std::shared_ptr<SFMLTextureWrapper> GetSFMLTexture() { return sfmlImage; };
-
-  /**
-   * \brief Get SFML texture used by the sprite
-   */
-  const std::shared_ptr<SFMLTextureWrapper> GetSFMLTexture() const {
-    return sfmlImage;
-  };
-
-  /**
-   * \brief Make the sprite, if it uses a texture from ImageManager,
-   * copy this texture and take ownership of it.
-   */
-  void MakeSpriteOwnsItsImage();
-///@}
-#endif
-
  private:
-#if !defined(EMSCRIPTEN)
-  sf::Sprite sfmlSprite;  ///< Displayed SFML sprite
-  std::shared_ptr<SFMLTextureWrapper>
-      sfmlImage;        ///< Pointer to the image displayed by the sprite.
-  bool hasItsOwnImage;  ///< True if sfmlImage is only owned by this Sprite.
-#endif
   gd::String image;  ///< Name of the image to be loaded in Image Manager.
 
-  bool automaticCollisionMask;  ///< True to use the custom collision mask.
-                                ///< Otherwise, a basic bounding box is returned
-                                ///< by GetCollisionMask()
+  bool fullImageCollisionMask;  ///< True to use a bounding box wrapping the
+                                ///< whole image as collision mask. If false,
+                                ///< custom collision mask is used.
   std::vector<Polygon2d> customCollisionMask;  ///< Custom collision mask
 
   std::vector<Point> points;  ///< List of the points used by the sprite

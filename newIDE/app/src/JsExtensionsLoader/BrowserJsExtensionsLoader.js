@@ -7,73 +7,211 @@ import {
 } from '.';
 import ObjectsEditorService from '../ObjectEditor/ObjectsEditorService';
 import ObjectsRenderingService from '../ObjectsRendering/ObjectsRenderingService';
-const gd = global.gd;
+const gd: libGDevelop = global.gd;
 
 // The list of "JsExtension.js" files to be bundled in the webapp, keyed by their extension name.
 const jsExtensions = [
   {
     name: 'AdMob',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/AdMob/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'AdvancedWindow',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/AdvancedWindow/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'FacebookInstantGames',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/FacebookInstantGames/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
     name: 'DeviceSensors',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/DeviceSensors/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
     name: 'DeviceVibration',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/DeviceVibration/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'SaveState',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/SaveState/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'DebuggerTools',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/DebuggerTools/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'Physics2',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Physics2Behavior/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'Physics3D',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Physics3DBehavior/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'ExampleJsExtension',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/ExampleJsExtension/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
     name: 'Tween',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/TweenBehavior/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
     name: 'Video',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Video/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
     name: 'FileSystem',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/FileSystem/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'Firebase',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Firebase/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'Leaderboards',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Leaderboards/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'PlayerAuthentication',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/PlayerAuthentication/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'Multiplayer',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Multiplayer/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'DialogueTree',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/DialogueTree/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
   {
     name: 'BBText',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/BBText/JsExtension.js'),
     objectsRenderingServiceModules: {
+      // $FlowFixMe[cannot-resolve-module]
       'pixi-multistyle-text/dist/pixi-multistyle-text.umd': require('GDJS-for-web-app-only/Runtime/Extensions/BBText/pixi-multistyle-text/dist/pixi-multistyle-text.umd'),
     },
   },
   {
+    name: 'TileMap',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/JsExtension.js'),
+    objectsRenderingServiceModules: {
+      // $FlowFixMe[cannot-resolve-module]
+      'pixi-tilemap/dist/pixi-tilemap.umd': require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/pixi-tilemap/dist/pixi-tilemap.umd'),
+      // $FlowFixMe[cannot-resolve-module]
+      'helper/TileMapHelper': require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/helper/TileMapHelper.js'),
+      // $FlowFixMe[cannot-resolve-module]
+      'pako/dist/pako.min': require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/pako/dist/pako.min'),
+    },
+  },
+  {
     name: 'Effects',
+    // $FlowFixMe[cannot-resolve-module]
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Effects/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
+  {
+    name: 'P2P',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/P2P/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'Lighting',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Lighting/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'SpatialSound',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/SpatialSound/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'BitmapText',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/BitmapText/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'Screenshot',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Screenshot/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'TextInput',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/TextInput/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'Scene3D',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/3D/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'SpineObject',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Spine/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'Steamworks',
+    // $FlowFixMe[cannot-resolve-module]
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Steamworks/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
 ];
+
+const getExpectedNumberOfJSExtensionModules = ({
+  filterExamples,
+}: {|
+  filterExamples: boolean,
+|}): number => {
+  return jsExtensions.filter(
+    ({ name }) => !filterExamples || !name.includes('Example')
+  ).length;
+};
 
 type MakeExtensionsLoaderArguments = {|
   objectsEditorService: typeof ObjectsEditorService,
@@ -94,56 +232,58 @@ export default function makeExtensionsLoader({
   return {
     loadAllExtensions(
       _: TranslationFunction
-    ): Promise<
-      Array<{ extensionModulePath: string, result: ExtensionLoadingResult }>
-    > {
-      return Promise.resolve(
-        jsExtensions
-          .filter(({ name }) => !filterExamples || !name.includes('Example'))
-          .map(({ name, extensionModule, objectsRenderingServiceModules }) => {
-            // Load any editor for objects, if we have somewhere where
-            // to register them.
-            if (
-              objectsEditorService &&
-              extensionModule.registerEditorConfigurations
-            ) {
-              extensionModule.registerEditorConfigurations(
-                objectsEditorService
-              );
-            }
+    ): Promise<{|
+      results: Array<{|
+        extensionModulePath: string,
+        result: ExtensionLoadingResult,
+      |}>,
+      expectedNumberOfJSExtensionModulesLoaded: number,
+    |}> {
+      const results = jsExtensions
+        .filter(({ name }) => !filterExamples || !name.includes('Example'))
+        .map(({ name, extensionModule, objectsRenderingServiceModules }) => {
+          if (
+            objectsEditorService &&
+            extensionModule.registerEditorConfigurations
+          ) {
+            extensionModule.registerEditorConfigurations(objectsEditorService);
+          }
 
-            // Register modules for ObjectsRenderingService
-            if (objectsRenderingService && objectsRenderingServiceModules) {
-              for (let requirePath in objectsRenderingServiceModules) {
+          if (objectsRenderingService) {
+            if (objectsRenderingServiceModules) {
+              for (const requirePath in objectsRenderingServiceModules) {
                 objectsRenderingService.registerModule(
                   requirePath,
+                  // $FlowFixMe[invalid-computed-prop]
                   objectsRenderingServiceModules[requirePath]
                 );
               }
             }
-
-            // Load any renderer for objects, if we have somewhere where
-            // to register them.
-            if (
-              objectsRenderingService &&
-              extensionModule.registerInstanceRenderers
-            ) {
+            if (extensionModule.registerInstanceRenderers) {
               extensionModule.registerInstanceRenderers(
                 objectsRenderingService
               );
             }
+            if (extensionModule.registerClearCache) {
+              extensionModule.registerClearCache(objectsRenderingService);
+            }
+          }
 
-            return {
-              extensionModulePath: 'internal-extension://' + name,
-              result: loadExtension(
-                _,
-                gd,
-                gd.JsPlatform.get(),
-                extensionModule
-              ),
-            };
-          })
+          return {
+            extensionModulePath: 'internal-extension://' + name,
+            result: loadExtension(_, gd, gd.JsPlatform.get(), extensionModule),
+          };
+        });
+      const expectedNumberOfJSExtensionModulesLoaded = getExpectedNumberOfJSExtensionModules(
+        {
+          filterExamples,
+        }
       );
+
+      return Promise.resolve({
+        results,
+        expectedNumberOfJSExtensionModulesLoaded,
+      });
     },
   };
 }

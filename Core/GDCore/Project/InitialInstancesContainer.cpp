@@ -25,13 +25,13 @@ std::size_t InitialInstancesContainer::GetInstancesCount() const {
 }
 
 void InitialInstancesContainer::UnserializeFrom(
-    const SerializerElement& element) {
+    gd::Project &project, const SerializerElement &element) {
   initialInstances.clear();
 
   element.ConsiderAsArrayOf("instance", "Objet");
   for (std::size_t i = 0; i < element.GetChildrenCount(); ++i) {
     gd::InitialInstance instance;
-    instance.UnserializeFrom(element.GetChild(i));
+    instance.UnserializeFrom(project, element.GetChild(i));
     initialInstances.push_back(instance);
   }
 }
@@ -39,6 +39,16 @@ void InitialInstancesContainer::UnserializeFrom(
 void InitialInstancesContainer::IterateOverInstances(
     gd::InitialInstanceFunctor& func) {
   for (auto& instance : initialInstances) func(instance);
+}
+
+void InitialInstancesContainer::IterateOverInstances(
+  const std::function< bool(gd::InitialInstance &) >& func) {
+  for (auto& instance : initialInstances) {
+    bool shouldStop = func(instance);
+    if (shouldStop) {
+      return;
+    }
+  }
 }
 
 void InitialInstancesContainer::IterateOverInstancesWithZOrdering(
@@ -60,7 +70,6 @@ void InitialInstancesContainer::IterateOverInstancesWithZOrdering(
   for (auto& instance : sortedInstances) func(instance);
 }
 
-#if defined(GD_IDE_ONLY)
 gd::InitialInstance& InitialInstancesContainer::InsertNewInitialInstance() {
   gd::InitialInstance newInstance;
   initialInstances.push_back(newInstance);
@@ -69,14 +78,14 @@ gd::InitialInstance& InitialInstancesContainer::InsertNewInitialInstance() {
 }
 
 void InitialInstancesContainer::RemoveInstanceIf(
-    std::function<bool(const gd::InitialInstance&)> predicat) {
+    std::function<bool(const gd::InitialInstance&)> predicate) {
   // Note that we can't use erase–remove idiom here because remove_if would
   // move the instances, and the container must guarantee that
   // iterators/pointers to instances always remain valid.
   for (std::list<gd::InitialInstance>::iterator it = initialInstances.begin(),
                                                 end = initialInstances.end();
        it != end;) {
-    if (predicat(*it))
+    if (predicate(*it))
       it = initialInstances.erase(it);
     else
       ++it;
@@ -135,8 +144,19 @@ void InitialInstancesContainer::MoveInstancesToLayer(
   }
 }
 
+std::size_t InitialInstancesContainer::GetLayerInstancesCount(
+    const gd::String &layerName) const {
+  std::size_t count = 0;
+  for (const gd::InitialInstance &instance : initialInstances) {
+    if (instance.GetLayer() == layerName) {
+      count++;
+    }
+  }
+  return count;
+}
+
 bool InitialInstancesContainer::SomeInstancesAreOnLayer(
-    const gd::String& layerName) {
+    const gd::String& layerName) const {
   return std::any_of(initialInstances.begin(),
                      initialInstances.end(),
                      [&layerName](const InitialInstance& currentInstance) {
@@ -145,12 +165,26 @@ bool InitialInstancesContainer::SomeInstancesAreOnLayer(
 }
 
 bool InitialInstancesContainer::HasInstancesOfObject(
-    const gd::String& objectName) {
+    const gd::String& objectName) const {
   return std::any_of(initialInstances.begin(),
                      initialInstances.end(),
                      [&objectName](const InitialInstance& currentInstance) {
                        return currentInstance.GetObjectName() == objectName;
                      });
+}
+
+bool InitialInstancesContainer::IsInstancesCountOfObjectGreaterThan(
+    const gd::String &objectName, const std::size_t minInstanceCount) const {
+  std::size_t count = 0;
+  for (const gd::InitialInstance &instance : initialInstances) {
+    if (instance.GetObjectName() == objectName) {
+      count++;
+      if (count > minInstanceCount) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 void InitialInstancesContainer::Create(
@@ -173,12 +207,13 @@ void InitialInstancesContainer::SerializeTo(SerializerElement& element) const {
 }
 
 void InitialInstancesContainer::Clear() { initialInstances.clear(); }
-#endif
 
 InitialInstanceFunctor::~InitialInstanceFunctor(){};
 
 void HighestZOrderFinder::operator()(gd::InitialInstance& instance) {
   if (!layerRestricted || instance.GetLayer() == layerName) {
+    instancesCount++;
+
     if (firstCall) {
       highestZOrder = instance.GetZOrder();
       lowestZOrder = instance.GetZOrder();

@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+
 #include "GDCore/Serialization/SerializerValue.h"
 #include "GDCore/String.h"
 
@@ -22,7 +23,7 @@ namespace gd {
  * properties).
  *
  * It is used for serialization (to JSON or XML), or as a generic
- * container for properties of objects (see for example gd::BehaviorContent).
+ * container for properties of objects (see for example gd::Behavior).
  *
  * It also has specialized methods in GDevelop.js (see postjs.js) to be
  * converted to a JavaScript object.
@@ -177,6 +178,18 @@ class GD_CORE_API SerializerElement {
    * \brief Return true if no value was set for the element.
    */
   bool IsValueUndefined() const { return valueUndefined; }
+
+  /**
+   * \brief Save the value either as a string or as an array of strings if it
+   * has line breaks.
+   */
+  void SetMultilineStringValue(const gd::String &value);
+
+  /**
+   * \brief Read the value, either represented as a string or as an array of strings,
+   * into a string.
+   */
+  gd::String GetMultilineStringValue();
   ///@}
 
   /** \name Attributes
@@ -310,10 +323,17 @@ class GD_CORE_API SerializerElement {
                             gd::String deprecatedName = "") const;
 
   /**
+   * \deprecated Use HasChild instead. This should be removed from the codebase.
    * \brief Return true if the specified attribute exists.
    * \param name The name of the attribute to find.
    */
   bool HasAttribute(const gd::String &name) const;
+
+  /**
+   * \brief Remove the attribute with the specified name
+   * \param name The name of the attribute to remove.
+   */
+  void RemoveAttribute(const gd::String& name);
 
   /**
    * \brief Return all the attributes of the element.
@@ -382,11 +402,19 @@ class GD_CORE_API SerializerElement {
    * \brief Get a child of the element using its name.
    *
    * \param name The name of the child.
-   * \param name The index of the child, in case of an array.
+   * \param index The index of the child, in case of an array.
    */
   SerializerElement &GetChild(gd::String name,
                               std::size_t index = 0,
                               gd::String deprecatedName = "") const;
+
+  /**
+   * \brief Get or create a child of the element.
+   *
+   * \param name The name of the child.
+   */
+  SerializerElement &GetOrCreateChild(gd::String name,
+                                      gd::String deprecatedName = "");
 
   /**
    * \brief Get a child of the element using its index (when the element is
@@ -425,6 +453,13 @@ class GD_CORE_API SerializerElement {
   void RemoveChild(const gd::String &name);
 
   /**
+   * \brief Remove all children and attributes.
+   */
+  void Clear();
+
+  bool IsEmpty();
+
+  /**
    * \brief Return all the children of the element.
    */
   const std::vector<std::pair<gd::String, std::shared_ptr<SerializerElement> > >
@@ -440,15 +475,15 @@ class GD_CORE_API SerializerElement {
    * Initialize element using another element. Used by copy-ctor and assign-op.
    * Don't forget to update me if members were changed!
    */
-  void Init(const gd::SerializerElement& other);
+  void Init(const gd::SerializerElement &other);
 
-  bool valueUndefined;  ///< If true, the element does not have a value.
+  bool valueUndefined = true;  ///< If true, the element does not have a value.
   SerializerValue elementValue;
 
   std::map<gd::String, SerializerValue> attributes;
   std::vector<std::pair<gd::String, std::shared_ptr<SerializerElement> > >
       children;
-  mutable bool isArray;        ///< true if element is considered as an array
+  mutable bool isArray = false;  ///< true if element is considered as an array
   mutable gd::String arrayOf;  ///< The name of the children (was useful for XML
                                ///< parsed elements).
   mutable gd::String deprecatedArrayOf;  ///< Alternate name for children

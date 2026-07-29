@@ -1,0 +1,750 @@
+/*
+ * GDevelop Core
+ * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
+ * reserved. This project is released under the MIT License.
+ */
+/**
+ * @file Tests covering serialization to JSON.
+ */
+#include "DummyPlatform.h"
+#include "GDCore/CommonTools.h"
+#include "GDCore/Events/Builtin/StandardEvent.h"
+#include "GDCore/Events/Event.h"
+#include "GDCore/Events/EventsList.h"
+#include "GDCore/Events/Serialization.h"
+#include "GDCore/Extensions/Builtin/SpriteExtension/SpriteObject.h"
+#include "GDCore/Extensions/Platform.h"
+#include "GDCore/Project/CustomObjectConfiguration.h"
+#include "GDCore/Project/EventsFunctionsExtension.h"
+#include "GDCore/Project/Layout.h"
+#include "GDCore/Project/Object.h"
+#include "GDCore/Project/ObjectsContainer.h"
+#include "GDCore/Project/Project.h"
+#include "GDCore/Project/Variable.h"
+#include "GDCore/Serialization/Serializer.h"
+#include "GDCore/Tools/SystemStats.h"
+#include "GDCore/Tools/VersionWrapper.h"
+#include "catch.hpp"
+
+using namespace gd;
+
+namespace {
+
+void SetupSpriteConfiguration(gd::ObjectConfiguration &configuration) {
+  auto *spriteConfiguration = dynamic_cast<gd::SpriteObject *>(&configuration);
+  REQUIRE(spriteConfiguration != nullptr);
+  gd::Animation animation;
+  animation.SetName("Idle");
+  spriteConfiguration->GetAnimations().AddAnimation(animation);
+};
+
+gd::Object &SetupProjectWithSprite(gd::Project &project,
+                                   gd::Platform &platform) {
+  SetupProjectWithDummyPlatform(project, platform);
+
+  gd::Layout &layout = project.InsertNewLayout("Scene", 0);
+  gd::Object &object = layout.GetObjects().InsertNewObject(
+      project, "MyExtension::Sprite", "MyObject", 0);
+  SetupSpriteConfiguration(object.GetConfiguration());
+
+  return object;
+};
+
+void CheckSpriteConfigurationInObjectElement(SerializerElement &objectElement) {
+  REQUIRE(objectElement.HasChild("animations"));
+  auto &animationsElement = objectElement.GetChild("animations");
+  animationsElement.ConsiderAsArrayOf("animation");
+  REQUIRE(animationsElement.GetChildrenCount() == 1);
+  auto &animationElement = animationsElement.GetChild(0);
+
+  REQUIRE(animationElement.GetStringAttribute("name") == "Idle");
+};
+
+void CheckSpriteConfigurationInProjectElement(
+    SerializerElement &projectElement) {
+  auto &layoutsElement = projectElement.GetChild("layouts");
+  layoutsElement.ConsiderAsArrayOf("layout");
+  REQUIRE(layoutsElement.GetChildrenCount() == 1);
+  auto &layoutElement = layoutsElement.GetChild(0);
+
+  REQUIRE(layoutElement.GetStringAttribute("name") == "Scene");
+  REQUIRE(layoutElement.HasChild("objects"));
+
+  auto &objectsElement = layoutElement.GetChild("objects");
+  objectsElement.ConsiderAsArrayOf("object");
+  REQUIRE(objectsElement.GetChildrenCount() == 1);
+  auto &objectElement = objectsElement.GetChild(0);
+
+  REQUIRE(objectElement.GetStringAttribute("name") == "MyObject");
+  REQUIRE(objectElement.GetStringAttribute("type") == "MyExtension::Sprite");
+  CheckSpriteConfigurationInObjectElement(objectElement);
+};
+
+void CheckSpriteConfiguration(gd::ObjectConfiguration &configuration) {
+  auto *spriteConfiguration = dynamic_cast<gd::SpriteObject *>(&configuration);
+  REQUIRE(spriteConfiguration);
+  REQUIRE(spriteConfiguration->GetAnimations().GetAnimationsCount() == 1);
+
+  auto &animation = spriteConfiguration->GetAnimations().GetAnimation(0);
+  REQUIRE(animation.GetName() == "Idle");
+};
+
+void CheckSpriteConfiguration(gd::Object &object) {
+  REQUIRE(object.GetName() == "MyObject");
+  REQUIRE(object.GetType() == "MyExtension::Sprite");
+
+  CheckSpriteConfiguration(object.GetConfiguration());
+};
+
+void CheckSpriteConfiguration(gd::Project &project) {
+  auto &layout = project.GetLayout("Scene");
+  auto &object = layout.GetObjects().GetObject("MyObject");
+  CheckSpriteConfiguration(object);
+};
+
+gd::Object &SetupProjectWithCustomObject(gd::Project &project,
+                                         gd::Platform &platform) {
+  SetupProjectWithDummyPlatform(project, platform);
+
+  auto &eventsExtension =
+      project.InsertNewEventsFunctionsExtension("MyEventsExtension", 0);
+  auto &eventsBasedObject = eventsExtension.GetEventsBasedObjects().InsertNew(
+      "MyEventsBasedObject", 0);
+  eventsBasedObject.SetFullName("My events based object");
+  eventsBasedObject.SetDescription("An events based object for test");
+  eventsBasedObject.GetObjects().InsertNewObject(
+      project, "MyExtension::Sprite", "MyChild", 0);
+
+  gd::Layout &layout = project.InsertNewLayout("Scene", 0);
+  gd::Object &object = layout.GetObjects().InsertNewObject(
+      project, "MyEventsExtension::MyEventsBasedObject", "MyObject", 0);
+  auto &configuration = object.GetConfiguration();
+  auto *customObjectConfiguration =
+      dynamic_cast<gd::CustomObjectConfiguration *>(&configuration);
+  auto &spriteConfiguration =
+      customObjectConfiguration->GetChildObjectConfiguration("MyChild");
+  SetupSpriteConfiguration(spriteConfiguration);
+
+  return object;
+};
+
+void CheckCustomObjectConfigurationInProjectElement(
+    SerializerElement &projectElement) {
+  auto &layoutsElement = projectElement.GetChild("layouts");
+  layoutsElement.ConsiderAsArrayOf("layout");
+  REQUIRE(layoutsElement.GetChildrenCount() == 1);
+  auto &layoutElement = layoutsElement.GetChild(0);
+
+  REQUIRE(layoutElement.GetStringAttribute("name") == "Scene");
+  REQUIRE(layoutElement.HasChild("objects"));
+
+  auto &objectsElement = layoutElement.GetChild("objects");
+  objectsElement.ConsiderAsArrayOf("object");
+  REQUIRE(objectsElement.GetChildrenCount() == 1);
+  auto &objectElement = objectsElement.GetChild(0);
+
+  REQUIRE(objectElement.GetStringAttribute("name") == "MyObject");
+  REQUIRE(objectElement.GetStringAttribute("type") ==
+          "MyEventsExtension::MyEventsBasedObject");
+  auto &childrenContentElement = objectElement.GetChild("childrenContent");
+
+  REQUIRE(childrenContentElement.HasChild("MyChild"));
+  auto &childElement = childrenContentElement.GetChild("MyChild");
+  CheckSpriteConfigurationInObjectElement(childElement);
+};
+
+void CheckCustomObjectConfiguration(gd::Object &object) {
+  REQUIRE(object.GetName() == "MyObject");
+  REQUIRE(object.GetType() == "MyEventsExtension::MyEventsBasedObject");
+
+  auto &configuration = object.GetConfiguration();
+  auto *customObjectConfiguration =
+      dynamic_cast<gd::CustomObjectConfiguration *>(&configuration);
+  auto &spriteConfiguration =
+      customObjectConfiguration->GetChildObjectConfiguration("MyChild");
+  CheckSpriteConfiguration(spriteConfiguration);
+};
+
+void CheckCustomObjectConfiguration(gd::Project &project) {
+  auto &layout = project.GetLayout("Scene");
+  auto &object = layout.GetObjects().GetObject("MyObject");
+  CheckCustomObjectConfiguration(object);
+};
+} // namespace
+
+TEST_CASE("ObjectSerialization", "[common]") {
+
+  SECTION("Save and load a project with a sprite configuration") {
+    gd::Platform platform;
+    gd::Project writtenProject;
+    SetupProjectWithSprite(writtenProject, platform);
+    CheckSpriteConfiguration(writtenProject);
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+    CheckSpriteConfigurationInProjectElement(projectElement);
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+    CheckSpriteConfiguration(readProject);
+  }
+
+  SECTION("Clean up the mixed values marker wrongly saved on object variables") {
+    gd::Platform platform;
+    gd::Project writtenProject;
+    auto &object = SetupProjectWithSprite(writtenProject, platform);
+    object.GetVariables().InsertNew("MyVariable").SetValue(123);
+    // Simulate a project that was corrupted by an editor version which
+    // wrongly persisted the editor-only "mixed values" marker on an object
+    // variable.
+    object.GetVariables().Get("MyVariable").MarkAsMixedValues();
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+
+    auto &readVariable = readProject.GetLayout("Scene")
+                             .GetObjects()
+                             .GetObject("MyObject")
+                             .GetVariables()
+                             .Get("MyVariable");
+    REQUIRE(readVariable.HasMixedValues() == false);
+    REQUIRE(readVariable.GetValue() == 123);
+  }
+
+  SECTION("Clone a sprite object") {
+    gd::Platform platform;
+    gd::Project project;
+    auto &object = SetupProjectWithSprite(project, platform);
+    CheckSpriteConfiguration(object);
+
+    auto clonedObject = object.Clone();
+    CheckSpriteConfiguration(*(clonedObject.get()));
+  }
+
+  SECTION("Save and load a project with a custom object configuration") {
+    gd::Platform platform;
+    gd::Project writtenProject;
+    SetupProjectWithCustomObject(writtenProject, platform);
+    CheckCustomObjectConfiguration(writtenProject);
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+    CheckCustomObjectConfigurationInProjectElement(projectElement);
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+    CheckCustomObjectConfiguration(readProject);
+  }
+
+  // clang-format off
+  SECTION("Save and load a project with an objects folder structure containing missing object references") {
+  // clang-format on
+    gd::Platform platform;
+    gd::Project writtenProject;
+    SetupProjectWithSprite(writtenProject, platform);
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+    auto& layoutsElement = projectElement.GetChild("layouts");
+    layoutsElement.ConsiderAsArrayOf("layout");
+    auto& layoutElement = layoutsElement.GetChild(0);
+
+    auto& objectsFolderStructureElement =
+        layoutElement.GetChild("objectsFolderStructure");
+    auto& rootChildrenElement = objectsFolderStructureElement.GetChild("children");
+    rootChildrenElement.ConsiderAsArrayOf("objectFolderOrObject");
+
+    auto& folderElement = rootChildrenElement.AddChild("objectFolderOrObject");
+    folderElement.SetAttribute("folderName", "Background");
+    auto& folderChildrenElement = folderElement.AddChild("children");
+    folderChildrenElement.ConsiderAsArrayOf("objectFolderOrObject");
+    auto& invalidObjectElement =
+        folderChildrenElement.AddChild("objectFolderOrObject");
+    invalidObjectElement.SetAttribute("objectName", "DoesNotExist");
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+
+    auto& readLayout = readProject.GetLayout("Scene");
+    auto& rootFolder = readLayout.GetObjects().GetRootFolder();
+    REQUIRE(rootFolder.HasObjectNamed("MyObject"));
+    REQUIRE(!rootFolder.HasObjectNamed("DoesNotExist"));
+  }
+
+  SECTION("Clone a custom object") {
+    gd::Platform platform;
+    gd::Project project;
+    auto &object = SetupProjectWithCustomObject(project, platform);
+    CheckCustomObjectConfiguration(object);
+
+    auto clonedObject = object.Clone();
+    CheckCustomObjectConfiguration(*(clonedObject.get()));
+  }
+
+  SECTION("Exclude default behaviors from serialization") {
+    gd::Platform platform;
+    gd::Project project;
+    SetupProjectWithDummyPlatform(project, platform);
+
+    gd::Layout &layout = project.InsertNewLayout("Scene", 0);
+    gd::Object &object = layout.GetObjects().InsertNewObject(
+        project, "MyExtension::FakeObjectWithDefaultBehavior", "MyObject", 0);
+    REQUIRE(object.HasBehaviorNamed("Effect"));
+
+    object.AddNewBehavior(project, "MyExtension::MyBehavior", "MyBehavior");
+    REQUIRE(object.HasBehaviorNamed("MyBehavior"));
+
+    SerializerElement projectElement;
+    project.SerializeTo(projectElement);
+
+    // Check serialized behaviors.
+    auto &layoutsElement = projectElement.GetChild("layouts");
+    layoutsElement.ConsiderAsArrayOf("layout");
+    REQUIRE(layoutsElement.GetChildrenCount() == 1);
+    auto &layoutElement = layoutsElement.GetChild(0);
+
+    REQUIRE(layoutElement.GetStringAttribute("name") == "Scene");
+    REQUIRE(layoutElement.HasChild("objects"));
+
+    auto &objectsElement = layoutElement.GetChild("objects");
+    objectsElement.ConsiderAsArrayOf("object");
+    REQUIRE(objectsElement.GetChildrenCount() == 1);
+    auto &objectElement = objectsElement.GetChild(0);
+
+    auto &behaviorsElement = objectElement.GetChild("behaviors");
+    behaviorsElement.ConsiderAsArrayOf("behavior");
+    REQUIRE(behaviorsElement.GetChildrenCount() == 1);
+    auto &behaviorElement = behaviorsElement.GetChild(0);
+    REQUIRE(behaviorElement.GetStringAttribute("name") == "MyBehavior");
+  }
+
+  // clang-format off
+  SECTION("Save and load a project with custom object dependencies from different extensions") {
+    // clang-format on
+    gd::Platform platform;
+    gd::Project writtenProject;
+    SetupProjectWithDummyPlatform(writtenProject, platform);
+
+    {
+      // The extension with the dependency is added first to make the
+      // implementation change the order in which extensions are loaded.
+      auto &eventsExtensionWithDependency =
+          writtenProject.InsertNewEventsFunctionsExtension(
+              "MyEventsExtensionWithDependency", 0);
+      auto &eventsExtension = writtenProject.InsertNewEventsFunctionsExtension(
+          "MyEventsExtension", 1);
+      {
+        auto &eventsBasedObject =
+            eventsExtension.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObject", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction("MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyExtension::Sprite", "MyChildSprite", 0);
+        // Add a variant that will be used by the other extension.
+        auto *variant = eventsBasedObject.GetDefaultVariant().Clone();
+        variant->SetName("MyVariant");
+        variant = &eventsBasedObject.GetVariants().InsertVariant(*variant, 0);
+        auto &spriteConfiguration =
+            variant->GetObjects().GetObject("MyChildSprite").GetConfiguration();
+        SetupSpriteConfiguration(spriteConfiguration);
+      }
+      // An event-based object with a custom object child that overrides its
+      // configuration.
+      {
+        auto &eventsBasedObject =
+            eventsExtensionWithDependency.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObjectWithDependency", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction("MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyEventsExtension::MyEventsBasedObject",
+            "MyChildCustomObject", 0);
+        auto *customObjectConfiguration =
+            dynamic_cast<gd::CustomObjectConfiguration *>(
+                &childObject.GetConfiguration());
+        customObjectConfiguration->SetVariantName("MyVariant");
+      }
+    }
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+
+    REQUIRE(readProject.GetEventsFunctionsExtensionsCount() == 2);
+    {
+      auto &eventsExtensionWithDependency =
+          readProject.GetEventsFunctionsExtension(0);
+      REQUIRE(eventsExtensionWithDependency.GetEventsBasedObjects().GetCount() ==
+              1);
+      auto &eventsBasedObject =
+          eventsExtensionWithDependency.GetEventsBasedObjects().Get(0);
+      REQUIRE(eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() == 1);
+      REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+      auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+      REQUIRE(childObject.GetName() == "MyChildCustomObject");
+      REQUIRE(childObject.GetType() == "MyEventsExtension::MyEventsBasedObject");
+      auto *customObjectConfiguration =
+          dynamic_cast<gd::CustomObjectConfiguration *>(
+              &childObject.GetConfiguration());
+      REQUIRE(customObjectConfiguration != nullptr);
+      REQUIRE(customObjectConfiguration->GetVariantName() == "MyVariant");
+    }
+    {
+      auto &eventsExtension = readProject.GetEventsFunctionsExtension(1);
+      REQUIRE(eventsExtension.GetEventsBasedObjects().GetCount() == 1);
+      auto &eventsBasedObject = eventsExtension.GetEventsBasedObjects().Get(0);
+      REQUIRE(eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() == 1);
+      REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+      auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+      REQUIRE(childObject.GetName() == "MyChildSprite");
+      REQUIRE(childObject.GetType() == "MyExtension::Sprite");
+
+      REQUIRE(eventsBasedObject.GetVariants().HasVariantNamed("MyVariant"));
+      auto &variant = eventsBasedObject.GetVariants().GetVariant("MyVariant");
+
+      auto &spriteConfiguration =
+          variant.GetObjects().GetObject("MyChildSprite").GetConfiguration();
+      CheckSpriteConfiguration(spriteConfiguration);
+    }
+  }
+
+  // clang-format off
+  SECTION("Save and load a project with custom object dependencies from different extensions with a legacy children overridings") {
+  // clang-format on
+    gd::Platform platform;
+    gd::Project writtenProject;
+    SetupProjectWithDummyPlatform(writtenProject, platform);
+
+    {
+      // The extension with the dependency is added first to make the
+      // implementation change the order in which extensions are loaded.
+      auto &eventsExtensionWithDependency =
+          writtenProject.InsertNewEventsFunctionsExtension(
+              "MyEventsExtensionWithDependency", 0);
+      auto &eventsExtension = writtenProject.InsertNewEventsFunctionsExtension(
+          "MyEventsExtension", 1);
+      {
+        auto &eventsBasedObject =
+            eventsExtension.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObject", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction("MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyExtension::Sprite", "MyChildSprite", 0);
+      }
+      // An event-based object with a custom object child that overrides its
+      // configuration.
+      {
+        auto &eventsBasedObject =
+            eventsExtensionWithDependency.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObjectWithDependency", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction("MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyEventsExtension::MyEventsBasedObject",
+            "MyChildCustomObject", 0);
+        auto *customObjectConfiguration =
+            dynamic_cast<gd::CustomObjectConfiguration *>(
+                &childObject.GetConfiguration());
+        auto &spriteConfiguration =
+            customObjectConfiguration->GetChildObjectConfiguration(
+                "MyChildSprite");
+        SetupSpriteConfiguration(spriteConfiguration);
+      }
+    }
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+
+    REQUIRE(readProject.GetEventsFunctionsExtensionsCount() == 2);
+    {
+      auto &eventsExtensionWithDependency =
+          readProject.GetEventsFunctionsExtension(0);
+      REQUIRE(eventsExtensionWithDependency.GetEventsBasedObjects().GetCount() ==
+              1);
+      auto &eventsBasedObject =
+          eventsExtensionWithDependency.GetEventsBasedObjects().Get(0);
+      REQUIRE(eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() == 1);
+      REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+      auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+      REQUIRE(childObject.GetName() == "MyChildCustomObject");
+      REQUIRE(childObject.GetType() == "MyEventsExtension::MyEventsBasedObject");
+      auto *customObjectConfiguration =
+          dynamic_cast<gd::CustomObjectConfiguration *>(
+              &childObject.GetConfiguration());
+      REQUIRE(customObjectConfiguration != nullptr);
+      auto &spriteConfiguration =
+          customObjectConfiguration->GetChildObjectConfiguration("MyChildSprite");
+      CheckSpriteConfiguration(spriteConfiguration);
+    }
+    {
+      auto &eventsExtension = readProject.GetEventsFunctionsExtension(1);
+      REQUIRE(eventsExtension.GetEventsBasedObjects().GetCount() == 1);
+      auto &eventsBasedObject = eventsExtension.GetEventsBasedObjects().Get(0);
+      REQUIRE(eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() == 1);
+      REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+      auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+      REQUIRE(childObject.GetName() == "MyChildSprite");
+      REQUIRE(childObject.GetType() == "MyExtension::Sprite");
+    }
+  }
+
+  // clang-format off
+  SECTION("Save and load a project with custom object dependencies from different extensions both ways") {
+    // clang-format on
+    gd::Platform platform;
+    gd::Project writtenProject;
+    SetupProjectWithDummyPlatform(writtenProject, platform);
+
+    {
+      auto &eventsExtensionA = writtenProject.InsertNewEventsFunctionsExtension(
+          "MyEventsExtensionA", 0);
+      auto &eventsExtensionB = writtenProject.InsertNewEventsFunctionsExtension(
+          "MyEventsExtensionB", 1);
+      {
+        auto &eventsBasedObject =
+            eventsExtensionA.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObject", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction(
+            "MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyExtension::Sprite", "MyChildSprite", 0);
+        // Add a variant that will be used by the other extension.
+        auto *variant = eventsBasedObject.GetDefaultVariant().Clone();
+        variant->SetName("MyVariant");
+        variant = &eventsBasedObject.GetVariants().InsertVariant(*variant, 0);
+        auto &spriteConfiguration =
+            variant->GetObjects().GetObject("MyChildSprite").GetConfiguration();
+        SetupSpriteConfiguration(spriteConfiguration);
+      }
+      {
+        auto &eventsBasedObject =
+            eventsExtensionB.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObject", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction(
+            "MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyExtension::Sprite", "MyChildSprite", 0);
+        // Add a variant that will be used by the other extension.
+        auto *variant = eventsBasedObject.GetDefaultVariant().Clone();
+        variant->SetName("MyVariant");
+        variant = &eventsBasedObject.GetVariants().InsertVariant(*variant, 0);
+        auto &spriteConfiguration =
+            variant->GetObjects().GetObject("MyChildSprite").GetConfiguration();
+        SetupSpriteConfiguration(spriteConfiguration);
+      }
+      // An event-based object with a custom object child that overrides its
+      // configuration.
+      {
+        auto &eventsBasedObject =
+            eventsExtensionA.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObjectWithDependency", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction(
+            "MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyEventsExtensionB::MyEventsBasedObject",
+            "MyChildCustomObject", 0);
+        auto *customObjectConfiguration =
+            dynamic_cast<gd::CustomObjectConfiguration *>(
+                &childObject.GetConfiguration());
+        customObjectConfiguration->SetVariantName("MyVariant");
+      }
+      {
+        auto &eventsBasedObject =
+            eventsExtensionB.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObjectWithDependency", 0);
+        eventsBasedObject.GetEventsFunctions().InsertNewEventsFunction(
+            "MyFunction", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyEventsExtensionA::MyEventsBasedObject",
+            "MyChildCustomObject", 0);
+        auto *customObjectConfiguration =
+            dynamic_cast<gd::CustomObjectConfiguration *>(
+                &childObject.GetConfiguration());
+        customObjectConfiguration->SetVariantName("MyVariant");
+      }
+    }
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+
+    REQUIRE(readProject.GetEventsFunctionsExtensionsCount() == 2);
+    {
+      auto &eventsExtensionA =
+          readProject.GetEventsFunctionsExtension(0);
+      REQUIRE(eventsExtensionA.GetEventsBasedObjects().GetCount() ==
+              2);
+      {
+        auto &eventsBasedObject =
+            eventsExtensionA.GetEventsBasedObjects().Get(0);
+        REQUIRE(
+            eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() ==
+            1);
+        REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+        auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+        REQUIRE(childObject.GetName() == "MyChildCustomObject");
+        REQUIRE(childObject.GetType() ==
+                "MyEventsExtensionB::MyEventsBasedObject");
+        auto *customObjectConfiguration =
+            dynamic_cast<gd::CustomObjectConfiguration *>(
+                &childObject.GetConfiguration());
+        REQUIRE(customObjectConfiguration != nullptr);
+        REQUIRE(customObjectConfiguration->GetVariantName() == "MyVariant");
+      }
+      {
+        auto &eventsBasedObject =
+            eventsExtensionA.GetEventsBasedObjects().Get(1);
+        REQUIRE(
+            eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() ==
+            1);
+        REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+        auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+        REQUIRE(childObject.GetName() == "MyChildSprite");
+        REQUIRE(childObject.GetType() == "MyExtension::Sprite");
+
+        REQUIRE(eventsBasedObject.GetVariants().HasVariantNamed("MyVariant"));
+        auto &variant = eventsBasedObject.GetVariants().GetVariant("MyVariant");
+
+        auto &spriteConfiguration =
+            variant.GetObjects().GetObject("MyChildSprite").GetConfiguration();
+        CheckSpriteConfiguration(spriteConfiguration);
+      }
+    }
+    {
+      auto &eventsExtensionB = readProject.GetEventsFunctionsExtension(1);
+      REQUIRE(eventsExtensionB.GetEventsBasedObjects().GetCount() == 2);
+      {
+        auto &eventsBasedObject =
+            eventsExtensionB.GetEventsBasedObjects().Get(0);
+        REQUIRE(
+            eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() ==
+            1);
+        REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+        auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+        REQUIRE(childObject.GetName() == "MyChildCustomObject");
+        REQUIRE(childObject.GetType() ==
+                "MyEventsExtensionA::MyEventsBasedObject");
+        auto *customObjectConfiguration =
+            dynamic_cast<gd::CustomObjectConfiguration *>(
+                &childObject.GetConfiguration());
+        REQUIRE(customObjectConfiguration != nullptr);
+        REQUIRE(customObjectConfiguration->GetVariantName() == "MyVariant");
+      }
+      {
+        auto &eventsBasedObject =
+            eventsExtensionB.GetEventsBasedObjects().Get(1);
+        REQUIRE(
+            eventsBasedObject.GetEventsFunctions().GetEventsFunctionsCount() ==
+            1);
+        REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+        auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+        REQUIRE(childObject.GetName() == "MyChildSprite");
+        REQUIRE(childObject.GetType() == "MyExtension::Sprite");
+
+        REQUIRE(eventsBasedObject.GetVariants().HasVariantNamed("MyVariant"));
+        auto &variant = eventsBasedObject.GetVariants().GetVariant("MyVariant");
+
+        auto &spriteConfiguration =
+            variant.GetObjects().GetObject("MyChildSprite").GetConfiguration();
+        CheckSpriteConfiguration(spriteConfiguration);
+      }
+    }
+  }
+
+  SECTION("Save and load a project with custom object dependencies inside an extension") {
+    gd::Platform platform;
+    gd::Project writtenProject;
+    SetupProjectWithDummyPlatform(writtenProject, platform);
+
+    {
+      auto &eventsExtension = writtenProject.InsertNewEventsFunctionsExtension(
+          "MyEventsExtension", 0);
+      {
+        auto &eventsBasedObject =
+            eventsExtension.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObject", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyExtension::Sprite", "MyChildSprite", 0);
+      }
+      // An event-based object with a custom object child that overrides its
+      // configuration.
+      // The extension with the dependency is added first to make the
+      // implementation change the order in which extensions are loaded.
+      {
+        auto &eventsBasedObject =
+            eventsExtension.GetEventsBasedObjects().InsertNew(
+                "MyEventsBasedObjectWithDependency", 0);
+        auto &childObject = eventsBasedObject.GetObjects().InsertNewObject(
+            writtenProject, "MyEventsExtension::MyEventsBasedObject",
+            "MyChildCustomObject", 0);
+        auto *customObjectConfiguration =
+            dynamic_cast<gd::CustomObjectConfiguration *>(
+                &childObject.GetConfiguration());
+        auto &spriteConfiguration =
+            customObjectConfiguration->GetChildObjectConfiguration(
+                "MyChildSprite");
+        SetupSpriteConfiguration(spriteConfiguration);
+      }
+    }
+
+    SerializerElement projectElement;
+    writtenProject.SerializeTo(projectElement);
+
+    gd::Project readProject;
+    readProject.AddPlatform(platform);
+    readProject.UnserializeFrom(projectElement);
+
+    REQUIRE(readProject.GetEventsFunctionsExtensionsCount() == 1);
+    auto &eventsExtension =
+        readProject.GetEventsFunctionsExtension(0);
+    REQUIRE(eventsExtension.GetEventsBasedObjects().GetCount() == 2);
+    auto &eventsBasedObject =
+        eventsExtension.GetEventsBasedObjects().Get(0);
+    REQUIRE(eventsBasedObject.GetObjects().GetObjectsCount() == 1);
+    auto &childObject = eventsBasedObject.GetObjects().GetObject(0);
+    REQUIRE(childObject.GetName() == "MyChildCustomObject");
+    REQUIRE(childObject.GetType() == "MyEventsExtension::MyEventsBasedObject");
+    auto *customObjectConfiguration =
+        dynamic_cast<gd::CustomObjectConfiguration *>(
+            &childObject.GetConfiguration());
+    REQUIRE(customObjectConfiguration != nullptr);
+    auto &spriteConfiguration =
+        customObjectConfiguration->GetChildObjectConfiguration("MyChildSprite");
+    CheckSpriteConfiguration(spriteConfiguration);
+  }
+
+  SECTION("Can unserialize over an existing extension without duplicating its event-based objects") {
+    gd::Platform platform;
+    gd::Project project;
+    SetupProjectWithDummyPlatform(project, platform);
+
+    auto &eventsExtension =
+        project.InsertNewEventsFunctionsExtension("MyEventsExtension", 0);
+    {
+      auto &eventsBasedObject =
+          eventsExtension.GetEventsBasedObjects().InsertNew(
+              "MyEventsBasedObject", 0);
+    }
+
+    SerializerElement extensionElement;
+    eventsExtension.SerializeTo(extensionElement);
+    eventsExtension.UnserializeFrom(project, extensionElement);
+
+    REQUIRE(eventsExtension.GetEventsBasedObjects().GetCount() == 1);
+  }
+}

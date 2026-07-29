@@ -1,128 +1,93 @@
 // @flow
-import { Trans } from '@lingui/macro';
-
-import React, { Component } from 'react';
-import { SortableContainer, SortableElement } from 'react-sortable-hoc';
+import { Trans, t } from '@lingui/macro';
+import { type I18n as I18nType } from '@lingui/core';
+import * as React from 'react';
 import { mapFor } from '../../../Utils/MapFor';
-import Add from '@material-ui/icons/Add';
 import DirectionTools from './DirectionTools';
-import MiniToolbar from '../../../UI/MiniToolbar';
-import ImageThumbnail, {
-  thumbnailContainerStyle,
-} from '../../../ResourcesList/ResourceThumbnail/ImageThumbnail';
+import ImageThumbnail from '../../../ResourcesList/ResourceThumbnail/ImageThumbnail';
 import {
   copySpritePoints,
   copySpritePolygons,
   allDirectionSpritesHaveSamePointsAs,
   allDirectionSpritesHaveSameCollisionMasksAs,
+  deleteSpritesFromAnimation,
+  duplicateSpritesInAnimation,
+  isFirstSpriteUsingFullImageCollisionMask,
+  allObjectSpritesHaveSameCollisionMaskAs,
+  allObjectSpritesHaveSamePointsAs,
+  getCurrentElements,
+  getTotalSpritesCount,
 } from './Utils/SpriteObjectHelper';
 import ResourcesLoader from '../../../ResourcesLoader';
 import {
   type ResourceSource,
-  type ChooseResourceFunction,
-} from '../../../ResourcesList/ResourceSource.flow';
-import { type ResourceExternalEditor } from '../../../ResourcesList/ResourceExternalEditor.flow';
+  type ResourceManagementProps,
+} from '../../../ResourcesList/ResourceSource';
 import { applyResourceDefaults } from '../../../ResourcesList/ResourceUtils';
-import FlatButton from '../../../UI/FlatButton';
-import ThemeConsumer from '../../../UI/Theme/ThemeConsumer';
-const gd = global.gd;
-const path = require('path');
+import RaisedButtonWithSplitMenu from '../../../UI/RaisedButtonWithSplitMenu';
+import useForceUpdate from '../../../Utils/UseForceUpdate';
+import {
+  ColumnStackLayout,
+  ResponsiveLineStackLayout,
+} from '../../../UI/Layout';
+import { Column } from '../../../UI/Grid';
+import Add from '../../../UI/CustomSvgIcons/Add';
+import ContextMenu, {
+  type ContextMenuInterface,
+} from '../../../UI/Menu/ContextMenu';
+import useAlertDialog from '../../../UI/Alert/useAlertDialog';
+import { groupResourcesByAnimations } from './AnimationImportHelper';
+import { type ResourceExternalEditor } from '../../../ResourcesList/ResourceExternalEditor';
+import { makeDragSourceAndDropTarget } from '../../../UI/DragAndDrop/DragSourceAndDropTarget';
+import { makeDropTarget } from '../../../UI/DragAndDrop/DropTarget';
+import { useAutoScrollDuringDrag } from '../../../UI/DragAndDrop/UseAutoScrollDuringDrag';
+import { ColumnDropIndicator } from '../../../MainFrame/EditorTabs/DropIndicator';
+import { useDragDropManager } from 'react-dnd';
 
-const SPRITE_SIZE = 100; //TODO: Factor with Thumbnail
+const gd: libGDevelop = global.gd;
+
+const SPRITE_SIZE = 100;
 
 const styles = {
   spritesList: {
-    whiteSpace: 'nowrap',
+    display: 'flex',
+    overflowX: 'auto',
     overflowY: 'hidden',
+    flex: 1,
+  },
+  spriteAndIndicator: {
+    display: 'flex',
+    flexShrink: 0,
+  },
+  spriteDragSource: {
+    display: 'flex',
+  },
+  // A drop zone to allow moving a sprite at the end of the list. It also
+  // grows to fill the empty space after the last sprite, if any.
+  endOfListDropZone: {
+    display: 'flex',
+    flex: 1,
+    minWidth: 30,
   },
   thumbnailExtraStyle: {
-    marginRight: 10,
-  },
-  spriteThumbnailImage: {
-    maxWidth: SPRITE_SIZE,
-    maxHeight: SPRITE_SIZE,
-    verticalAlign: 'middle',
+    marginLeft: 5,
   },
 };
 
-const AddSpriteButton = SortableElement(({ displayHint, onAdd }) => {
-  return (
-    <ThemeConsumer>
-      {muiTheme => (
-        <div
-          style={{
-            ...thumbnailContainerStyle,
-            backgroundColor: muiTheme.list.itemsBackgroundColor,
-          }}
-        >
-          <FlatButton
-            onClick={onAdd}
-            label={<Trans>Add</Trans>}
-            icon={<Add />}
-          />
-        </div>
-      )}
-    </ThemeConsumer>
-  );
-});
+// `name` and `thumbnail` are displayed by the `CustomDragLayer` as a preview
+// under the cursor or finger during the drag.
+type DraggedSpriteItem = {|
+  directionPtr: number,
+  name: string,
+  thumbnail: string,
+|};
 
-const SortableSpriteThumbnail = SortableElement(
-  ({ sprite, project, resourcesLoader, selected, onSelect, onContextMenu }) => {
-    return (
-      <ImageThumbnail
-        selectable
-        selected={selected}
-        onSelect={onSelect}
-        onContextMenu={onContextMenu}
-        resourceName={sprite.getImageName()}
-        resourcesLoader={resourcesLoader}
-        project={project}
-        style={styles.thumbnailExtraStyle}
-      />
-    );
-  }
+const DragSourceAndDropTarget = makeDragSourceAndDropTarget<DraggedSpriteItem>(
+  'sprite-editor-sprites-list',
+  { vibrate: 100 }
 );
-
-const SortableList = SortableContainer(
-  ({
-    direction,
-    project,
-    resourcesLoader,
-    onAddSprite,
-    selectedSprites,
-    onSelectSprite,
-    onSpriteContextMenu,
-  }) => {
-    const spritesCount = direction.getSpritesCount();
-    return (
-      <div style={styles.spritesList}>
-        {[
-          ...mapFor(0, spritesCount, i => {
-            const sprite = direction.getSprite(i);
-            return (
-              <SortableSpriteThumbnail
-                sprite={sprite}
-                key={sprite.ptr}
-                index={i}
-                selected={!!selectedSprites[sprite.ptr]}
-                onContextMenu={(x, y) => onSpriteContextMenu(x, y, sprite)}
-                onSelect={selected => onSelectSprite(sprite, selected)}
-                resourcesLoader={resourcesLoader}
-                project={project}
-              />
-            );
-          }),
-          <AddSpriteButton
-            displayHint={!direction.getSpritesCount()}
-            key="add-sprite-button"
-            disabled
-            index={spritesCount}
-            onAdd={onAddSprite}
-          />,
-        ]}
-      </div>
-    );
-  }
+const EndOfListDropTarget = makeDropTarget<DraggedSpriteItem>(
+  'sprite-editor-sprites-list'
 );
 
 /**
@@ -131,13 +96,15 @@ const SortableList = SortableContainer(
 const checkDirectionPointsAndCollisionsMasks = (direction: gdDirection) => {
   let allDirectionSpritesHaveSamePoints = false;
   let allDirectionSpritesHaveSameCollisionMasks = false;
-  if (direction.getSpritesCount() !== 0) {
+  const firstDirectionSprite =
+    direction.getSpritesCount() > 0 ? direction.getSprite(0) : null;
+  if (firstDirectionSprite) {
     allDirectionSpritesHaveSamePoints = allDirectionSpritesHaveSamePointsAs(
-      direction.getSprite(0),
+      firstDirectionSprite,
       direction
     );
     allDirectionSpritesHaveSameCollisionMasks = allDirectionSpritesHaveSameCollisionMasksAs(
-      direction.getSprite(0),
+      firstDirectionSprite,
       direction
     );
   }
@@ -148,190 +115,727 @@ const checkDirectionPointsAndCollisionsMasks = (direction: gdDirection) => {
   };
 };
 
+/**
+ * Check if all sprites of the object have the same points and collision masks
+ */
+const checkObjectPointsAndCollisionsMasks = (
+  animations: gdSpriteAnimationList
+) => {
+  let allObjectSpritesHaveSamePoints = false;
+  let allObjectSpritesHaveSameCollisionMasks = false;
+  const firstObjectSprite = getCurrentElements(animations, 0, 0, 0).sprite;
+
+  if (firstObjectSprite) {
+    allObjectSpritesHaveSamePoints = allObjectSpritesHaveSamePointsAs(
+      firstObjectSprite,
+      animations
+    );
+    allObjectSpritesHaveSameCollisionMasks = allObjectSpritesHaveSameCollisionMaskAs(
+      firstObjectSprite,
+      animations
+    );
+  }
+
+  return {
+    allObjectSpritesHaveSamePoints,
+    allObjectSpritesHaveSameCollisionMasks,
+  };
+};
+
+export const applyPointsAndMasksToSpriteIfNecessary = (
+  animations: gdSpriteAnimationList,
+  direction: gdDirection,
+  sprite: gdSprite
+) => {
+  const {
+    allDirectionSpritesHaveSameCollisionMasks,
+    allDirectionSpritesHaveSamePoints,
+  } = checkDirectionPointsAndCollisionsMasks(direction);
+  const {
+    allObjectSpritesHaveSameCollisionMasks,
+    allObjectSpritesHaveSamePoints,
+  } = checkObjectPointsAndCollisionsMasks(animations);
+  const shouldUseFullImageCollisionMask = isFirstSpriteUsingFullImageCollisionMask(
+    animations
+  );
+  const firstObjectSprite = getCurrentElements(animations, 0, 0, 0).sprite;
+  const firstDirectionSprite =
+    direction.getSpritesCount() > 0 ? direction.getSprite(0) : null;
+
+  // Copy points if toggles were set before adding the sprite.
+  if (allObjectSpritesHaveSamePoints && firstObjectSprite) {
+    // Copy points from the first sprite of the object, if existing.
+    copySpritePoints(firstObjectSprite, sprite);
+  } else if (allDirectionSpritesHaveSamePoints && firstDirectionSprite) {
+    // Copy points from the first sprite of the direction, if this is not the first one we add.
+    copySpritePoints(firstDirectionSprite, sprite);
+  }
+
+  // Copy collision masks if toggles were set before adding the sprite.
+  if (allObjectSpritesHaveSameCollisionMasks && firstObjectSprite) {
+    // Copy collision masks from the first sprite of the object, if existing.
+    copySpritePolygons(firstObjectSprite, sprite);
+  } else if (
+    allDirectionSpritesHaveSameCollisionMasks &&
+    firstDirectionSprite
+  ) {
+    // Copy collision masks from the first sprite of the direction, if this is not the first one we add.
+    copySpritePolygons(firstDirectionSprite, sprite);
+  }
+
+  if (shouldUseFullImageCollisionMask) {
+    sprite.setFullImageCollisionMask(true);
+  }
+};
+
+export const addAnimationFrame = (
+  animations: gdSpriteAnimationList,
+  direction: gdDirection,
+  resource: gdResource,
+  onSpriteAdded: (sprite: gdSprite) => void
+) => {
+  const sprite = new gd.Sprite();
+  sprite.setImageName(resource.getName());
+
+  applyPointsAndMasksToSpriteIfNecessary(animations, direction, sprite);
+
+  onSpriteAdded(sprite); // Call the callback before `addSprite`, as `addSprite` will store a copy of it.
+  direction.addSprite(sprite);
+  sprite.delete();
+};
+
 type Props = {|
+  animations: gdSpriteAnimationList,
   direction: gdDirection,
   project: gdProject,
   resourcesLoader: typeof ResourcesLoader,
-  resourceSources: Array<ResourceSource>,
-  resourceExternalEditors: Array<ResourceExternalEditor>,
-  onChooseResource: ChooseResourceFunction,
-  onSpriteContextMenu: (x: number, y: number, sprite: gdSprite) => void,
-  selectedSprites: {
-    [number]: boolean,
-  },
-  onSelectSprite: (sprite: gdSprite, selected: boolean) => void,
+  resourceManagementProps: ResourceManagementProps,
+  editDirectionWith: (
+    i18n: I18nType,
+    ResourceExternalEditor,
+    direction: gdDirection
+  ) => Promise<void>,
   onReplaceByDirection: (newDirection: gdDirection) => void,
+  onSpriteAdded: (sprite: gdSprite) => void,
+  onSpriteUpdated?: () => void,
+  onFirstSpriteUpdated?: () => void,
+  addAnimations: (resourcesByAnimation: Map<string, Array<gdResource>>) => void,
   onChangeName: (newAnimationName: string) => void, // Used by piskel to set the name, if there is no name
   objectName: string, // This is used for the default name of images created with Piskel.
   animationName: string, // This is used for the default name of images created with Piskel.
 |};
 
-export default class SpritesList extends Component<Props, void> {
-  onSortEnd = ({
-    oldIndex,
-    newIndex,
-  }: {
-    oldIndex: number,
-    newIndex: number,
-  }) => {
-    this.props.direction.moveSprite(oldIndex, newIndex);
-    this.forceUpdate();
-  };
+const SpritesList = ({
+  animations,
+  direction,
+  project,
+  resourcesLoader,
+  resourceManagementProps,
+  editDirectionWith,
+  onReplaceByDirection,
+  onSpriteAdded,
+  onSpriteUpdated,
+  onFirstSpriteUpdated,
+  addAnimations,
+  onChangeName,
+  objectName,
+  animationName,
+}: Props): React.Node => {
+  // It's important to save the selected sprites in a ref, so that
+  // we can update the selection when a context menu is opened without relying on the state.
+  // Otherwise, the selection would be updated after the context menu is opened.
+  // Then, we need to ensure we trigger a force-update every time the selection changes.
+  const selectedSprites = React.useRef<{
+    [number]: boolean,
+  }>({});
+  const spriteContextMenu = React.useRef<?ContextMenuInterface>(null);
+  const forceUpdate = useForceUpdate();
+  const { showConfirmation } = useAlertDialog();
+  const dragDropManager = useDragDropManager();
 
-  onAddSprite = () => {
-    const {
-      resourceSources,
-      onChooseResource,
-      project,
+  const storageProvider = resourceManagementProps.getStorageProvider();
+  const resourceSources = resourceManagementProps.resourceSources
+    .filter(source => source.kind === 'image')
+    .filter(
+      ({ onlyForStorageProvider }) =>
+        !onlyForStorageProvider ||
+        onlyForStorageProvider === storageProvider.internalName
+    );
+
+  const updateSelectionIndexesAfterMoveUp = React.useCallback(
+    (oldIndex: number, newIndex: number, wasMovedItemSelected: boolean) => {
+      for (let i = oldIndex; i <= newIndex; ++i) {
+        const spriteAtIndex = direction.getSprite(i);
+        if (i === newIndex) {
+          // If this is the new index of the moved sprite, we keep its selection status.
+          selectedSprites.current[spriteAtIndex.ptr] = wasMovedItemSelected;
+        } else {
+          // If moving up, the other sprites are going down, so their previous index was i+1.
+          const previousSpriteIndex = i + 1;
+          const previousSelectionStatus = !!selectedSprites.current[
+            direction.getSprite(previousSpriteIndex).ptr
+          ];
+          selectedSprites.current[spriteAtIndex.ptr] = previousSelectionStatus;
+        }
+      }
+    },
+    [direction]
+  );
+
+  const updateSelectionIndexesAfterMoveDown = React.useCallback(
+    (oldIndex: number, newIndex: number, wasMovedItemSelected: boolean) => {
+      for (let i = oldIndex; i >= newIndex; --i) {
+        const spriteAtIndex = direction.getSprite(i);
+        if (i === newIndex) {
+          // If this is the new index of the moved sprite, we keep its selection status.
+          selectedSprites.current[spriteAtIndex.ptr] = wasMovedItemSelected;
+        } else {
+          // If moving down, the other sprites are going up, so their previous index was i-1.
+          const previousSpriteIndex = i - 1;
+          const previousSelectionStatus = !!selectedSprites.current[
+            direction.getSprite(previousSpriteIndex).ptr
+          ];
+          selectedSprites.current[spriteAtIndex.ptr] = previousSelectionStatus;
+        }
+      }
+    },
+    [direction]
+  );
+
+  const moveSpriteToIndex = React.useCallback(
+    (oldIndex: number, newIndex: number) => {
+      if (oldIndex === newIndex) return;
+      // We store the selection value of the moved sprite, as its pointer will
+      // be changed by the move.
+      const wasMovedItemSelected = !!selectedSprites.current[
+        direction.getSprite(oldIndex).ptr
+      ];
+      direction.moveSprite(oldIndex, newIndex);
+
+      // When moving a sprite, the pointers are all shifted, so we need to
+      // update the selectedSprites map for the user not to lose their selection.
+      if (oldIndex < newIndex) {
+        updateSelectionIndexesAfterMoveUp(
+          oldIndex,
+          newIndex,
+          wasMovedItemSelected
+        );
+      } else {
+        updateSelectionIndexesAfterMoveDown(
+          oldIndex,
+          newIndex,
+          wasMovedItemSelected
+        );
+      }
+
+      forceUpdate();
+      onSpriteUpdated && onSpriteUpdated();
+      if (oldIndex === 0 || newIndex === 0) {
+        // If a sprite was moved from or to the first position,
+        // then the first sprite has changed.
+        onFirstSpriteUpdated && onFirstSpriteUpdated();
+      }
+    },
+    [
       direction,
-    } = this.props;
-    if (!resourceSources) return;
-    const sources = resourceSources.filter(source => source.kind === 'image');
-    if (!sources.length) return;
+      forceUpdate,
+      onSpriteUpdated,
+      onFirstSpriteUpdated,
+      updateSelectionIndexesAfterMoveDown,
+      updateSelectionIndexesAfterMoveUp,
+    ]
+  );
 
-    const {
-      allDirectionSpritesHaveSameCollisionMasks,
-      allDirectionSpritesHaveSamePoints,
-    } = checkDirectionPointsAndCollisionsMasks(direction);
+  const draggedSpriteIndex = React.useRef<number | null>(null);
+  const spritesListRef = React.useRef<HTMLDivElement | null>(null);
+  const getSpritesListElement = React.useCallback(
+    () => spritesListRef.current,
+    []
+  );
+  const { startAutoScroll, stopAutoScroll } = useAutoScrollDuringDrag(
+    getSpritesListElement
+  );
 
-    onChooseResource(sources[0].name).then(resources => {
-      resources.forEach(resource => {
-        applyResourceDefaults(project, resource);
-        project.getResourcesManager().addResource(resource);
+  const dropBeforeSprite = React.useCallback(
+    (targetIndex: number) => {
+      const oldIndex = draggedSpriteIndex.current;
+      if (oldIndex === null) return;
+      draggedSpriteIndex.current = null;
+      // The sprite is inserted before the hovered sprite, so when moving
+      // forward, the target index is decreased by one to account for the
+      // removal of the sprite from its previous position.
+      moveSpriteToIndex(
+        oldIndex,
+        targetIndex > oldIndex ? targetIndex - 1 : targetIndex
+      );
+    },
+    [moveSpriteToIndex]
+  );
 
-        const sprite = new gd.Sprite();
-        sprite.setImageName(resource.getName());
-        if (allDirectionSpritesHaveSamePoints) {
-          copySpritePoints(direction.getSprite(0), sprite);
-        }
-        if (allDirectionSpritesHaveSameCollisionMasks) {
-          copySpritePolygons(direction.getSprite(0), sprite);
-        }
-        direction.addSprite(sprite);
+  const dropAtEndOfList = React.useCallback(
+    () => {
+      const oldIndex = draggedSpriteIndex.current;
+      if (oldIndex === null) return;
+      draggedSpriteIndex.current = null;
+      moveSpriteToIndex(oldIndex, direction.getSpritesCount() - 1);
+    },
+    [moveSpriteToIndex, direction]
+  );
+
+  const onAddSprite = React.useCallback(
+    async (initialResourceSource: ResourceSource) => {
+      const directionSpritesCountBeforeAdding = direction.getSpritesCount();
+      const {
+        selectedResources,
+        selectedSourceName,
+      } = await resourceManagementProps.onChooseResource({
+        initialSourceName: initialResourceSource.name,
+        multiSelection: true,
+        resourceKind: 'image',
       });
 
-      // Important, we are responsible for deleting the resources that were given to us.
-      // Otherwise we have a memory leak, as calling addResource is making a copy of the resource.
-      resources.forEach(resource => resource.delete());
+      if (!selectedResources.length) return;
+      const selectedResourceSource = resourceSources.find(
+        source => source.name === selectedSourceName
+      );
+      if (!selectedResourceSource) return;
 
-      this.forceUpdate();
-    });
-  };
-
-  editWith = (externalEditor: ResourceExternalEditor) => {
-    const {
-      project,
-      direction,
-      resourcesLoader,
-      onReplaceByDirection,
-      onChangeName,
-      objectName,
-      animationName,
-    } = this.props;
-    const resourceNames = mapFor(0, direction.getSpritesCount(), i => {
-      return direction.getSprite(i).getImageName();
-    });
-
-    const {
-      allDirectionSpritesHaveSameCollisionMasks,
-      allDirectionSpritesHaveSamePoints,
-    } = checkDirectionPointsAndCollisionsMasks(direction);
-
-    let externalEditorData = {};
-    const metadataRaw = direction.getMetadata();
-    if (metadataRaw) {
-      try {
-        externalEditorData = JSON.parse(metadataRaw);
-      } catch (e) {
-        console.error('Malformed metadata', e);
+      let hasCreatedAnyResource = false;
+      if (selectedResourceSource.shouldCreateResource) {
+        selectedResources.forEach(resource => {
+          applyResourceDefaults(project, resource);
+          const hasCreatedResource = project
+            .getResourcesManager()
+            .addResource(resource);
+          hasCreatedAnyResource = hasCreatedAnyResource || hasCreatedResource;
+        });
       }
-    }
 
-    externalEditor.edit({
-      project,
-      resourcesLoader,
-      singleFrame: false,
-      resourceNames,
-      extraOptions: {
-        fps:
-          direction.getTimeBetweenFrames() > 0
-            ? 1 / direction.getTimeBetweenFrames()
-            : 1,
-        name:
-          animationName ||
-          (resourceNames.length > 0
-            ? path.basename(resourceNames[0], path.extname(resourceNames[0]))
-            : objectName),
-        isLooping: direction.isLooping(),
-        externalEditorData,
-      },
-      onChangesSaved: resources => {
-        const newDirection = new gd.Direction();
-        newDirection.setTimeBetweenFrames(direction.getTimeBetweenFrames());
-        newDirection.setLoop(direction.isLooping());
-        resources.forEach(resource => {
-          const sprite = new gd.Sprite();
-          sprite.setImageName(resource.name);
-          // Restore collision masks and points
-          if (resource.originalIndex !== undefined) {
-            const originalSprite = direction.getSprite(resource.originalIndex);
-            copySpritePoints(originalSprite, sprite);
-            copySpritePolygons(originalSprite, sprite);
-          } else {
-            if (allDirectionSpritesHaveSamePoints) {
-              copySpritePoints(direction.getSprite(0), sprite);
-            }
-            if (allDirectionSpritesHaveSameCollisionMasks) {
-              copySpritePolygons(direction.getSprite(0), sprite);
+      if (
+        directionSpritesCountBeforeAdding === 0 &&
+        selectedResources.length > 1 &&
+        selectedResourceSource.shouldGuessAnimationsFromName
+      ) {
+        const resourcesByAnimation = groupResourcesByAnimations(
+          selectedResources
+        );
+        if (resourcesByAnimation.size > 1) {
+          addAnimations(resourcesByAnimation);
+        } else {
+          // Use `resourcesByAnimation` because frames are sorted.
+          for (const resources of resourcesByAnimation.values()) {
+            for (const resource of resources) {
+              addAnimationFrame(animations, direction, resource, onSpriteAdded);
             }
           }
-          newDirection.addSprite(sprite);
-          sprite.delete();
+        }
+      } else {
+        for (const resource of selectedResources) {
+          addAnimationFrame(animations, direction, resource, onSpriteAdded);
+        }
+      }
+
+      if (selectedResourceSource.shouldCreateResource) {
+        // Important, we are responsible for deleting the resources that were given to us.
+        // Otherwise we have a memory leak, as calling addResource is making a copy of the resource.
+        selectedResources.forEach(resource => resource.delete());
+      }
+
+      forceUpdate();
+
+      if (hasCreatedAnyResource) {
+        await resourceManagementProps.onFetchNewlyAddedResources();
+        resourceManagementProps.onNewResourcesAdded();
+      }
+
+      if (selectedResources.length && onSpriteUpdated) onSpriteUpdated();
+      if (directionSpritesCountBeforeAdding === 0 && onFirstSpriteUpdated) {
+        // If there was no sprites before, we can assume the first sprite was added.
+        onFirstSpriteUpdated();
+      }
+    },
+    [
+      direction,
+      resourceManagementProps,
+      forceUpdate,
+      onSpriteUpdated,
+      onFirstSpriteUpdated,
+      project,
+      addAnimations,
+      animations,
+      onSpriteAdded,
+      resourceSources,
+    ]
+  );
+
+  const deleteSprites = React.useCallback(
+    async () => {
+      const sprites = selectedSprites.current;
+      const firstSpritePtr = animations
+        .getAnimation(0)
+        .getDirection(0)
+        .getSprite(0).ptr;
+      const isObjectFirstSpriteDeleted = !!sprites[firstSpritePtr];
+
+      const totalSpritesCount = getTotalSpritesCount(animations);
+      const isDeletingLastSprites =
+        Object.keys(sprites).length === totalSpritesCount;
+      const oneOfSpritesInCurrentDirection =
+        direction.getSpritesCount() > 0 ? direction.getSprite(0) : null;
+
+      const isUsingCustomCollisionMask =
+        !animations.adaptCollisionMaskAutomatically() &&
+        oneOfSpritesInCurrentDirection &&
+        !oneOfSpritesInCurrentDirection.isFullImageCollisionMask();
+      const shouldWarnBecauseLosingCustomCollisionMask =
+        isDeletingLastSprites && isUsingCustomCollisionMask;
+
+      if (shouldWarnBecauseLosingCustomCollisionMask) {
+        const deleteAnswer = await showConfirmation({
+          title: t`Remove the sprite`,
+          message: t`You are about to remove the last sprite of this object, which has a custom collision mask. The custom collision mask will be lost. Are you sure you want to continue?`,
+          confirmButtonLabel: t`Remove`,
+          dismissButtonLabel: t`Cancel`,
         });
+        if (!deleteAnswer) return;
+      }
 
-        // set metadata if there is such on the direction
-        if (resources[0].metadata) {
-          newDirection.setMetadata(JSON.stringify(resources[0].metadata));
+      mapFor(0, animations.getAnimationsCount(), index => {
+        const animation = animations.getAnimation(index);
+        deleteSpritesFromAnimation(animation, sprites);
+      });
+
+      // Clear selection after deletion.
+      selectedSprites.current = {};
+      forceUpdate();
+      if (onSpriteUpdated) onSpriteUpdated();
+      if (isObjectFirstSpriteDeleted && onFirstSpriteUpdated)
+        onFirstSpriteUpdated();
+      if (shouldWarnBecauseLosingCustomCollisionMask) {
+        // The user has deleted the last custom collision mask, so revert to automatic
+        // collision mask adaptation.
+        animations.setAdaptCollisionMaskAutomatically(true);
+      }
+    },
+    [
+      onSpriteUpdated,
+      onFirstSpriteUpdated,
+      animations,
+      forceUpdate,
+      showConfirmation,
+      direction,
+    ]
+  );
+
+  const duplicateSprites = React.useCallback(
+    () => {
+      const sprites = selectedSprites.current;
+      mapFor(0, animations.getAnimationsCount(), index => {
+        const animation = animations.getAnimation(index);
+        duplicateSpritesInAnimation(animation, sprites);
+      });
+
+      // Clear selection after duplication.
+      selectedSprites.current = {};
+      forceUpdate();
+      if (onSpriteUpdated) onSpriteUpdated();
+    },
+    [onSpriteUpdated, animations, forceUpdate]
+  );
+
+  const addSpriteToSelection = React.useCallback(
+    // $FlowFixMe[missing-local-annot]
+    (sprite, selected) => {
+      selectedSprites.current = {
+        ...selectedSprites.current,
+        [sprite.ptr]: selected,
+      };
+      forceUpdate();
+    },
+    [forceUpdate]
+  );
+
+  const selectUniqueSprite = React.useCallback(
+    (sprite: gdSprite) => {
+      selectedSprites.current = {
+        [sprite.ptr]: true,
+      };
+      forceUpdate();
+    },
+    [forceUpdate]
+  );
+
+  const getSelectedSpriteIndexes = React.useCallback(
+    () => {
+      const selectedIndexes = [];
+      mapFor(0, direction.getSpritesCount(), i => {
+        if (selectedSprites.current[direction.getSprite(i).ptr]) {
+          selectedIndexes.push(i);
         }
+      });
+      return selectedIndexes;
+    },
+    [direction]
+  );
 
-        // Burst the ResourcesLoader cache to force images to be reloaded (and not cached by the browser).
-        resourcesLoader.burstUrlsCacheForResources(project, resourceNames);
-        onReplaceByDirection(newDirection);
-        // Set optional animation name if the user hasn't done so
-        if (resources[0].newAnimationName) {
-          onChangeName(resources[0].newAnimationName);
+  const moveSelectedSpritesToPosition = React.useCallback(
+    (targetStartIndex: number) => {
+      const spritesCount = direction.getSpritesCount();
+      const selectedIndexes = getSelectedSpriteIndexes();
+      if (selectedIndexes.length === 0) return;
+      const startIndex = Math.min(
+        targetStartIndex,
+        spritesCount - selectedIndexes.length
+      );
+
+      // First gather the selected sprites at the end of the list, in order:
+      // moving a sprite to the last position never disturbs the sprites
+      // already gathered there. `currentPositions` keeps track of how each
+      // move shifts the other sprites.
+      const selectedCount = selectedIndexes.length;
+      const currentPositions = mapFor(0, spritesCount, i => i);
+      selectedIndexes.forEach(selectedIndex => {
+        const fromIndex = currentPositions.indexOf(selectedIndex);
+        if (fromIndex !== spritesCount - 1) {
+          direction.moveSprite(fromIndex, spritesCount - 1);
         }
-        newDirection.delete();
-      },
-    });
-  };
+        currentPositions.push(currentPositions.splice(fromIndex, 1)[0]);
+      });
+      // Then move this block of sprites to its final position, in order:
+      // each move leaves the rest of the block in place.
+      mapFor(0, selectedCount, j => {
+        const fromIndex = spritesCount - selectedCount + j;
+        const toIndex = startIndex + j;
+        if (fromIndex !== toIndex) direction.moveSprite(fromIndex, toIndex);
+      });
 
-  render() {
-    return (
-      <div>
-        <MiniToolbar justifyContent="flex-end" smallest>
-          <DirectionTools
-            direction={this.props.direction}
-            resourcesLoader={this.props.resourcesLoader}
-            project={this.props.project}
-            resourceExternalEditors={this.props.resourceExternalEditors}
-            onEditWith={this.editWith}
-          />
-        </MiniToolbar>
-        <SortableList
-          resourcesLoader={this.props.resourcesLoader}
-          direction={this.props.direction}
-          project={this.props.project}
-          onSortEnd={this.onSortEnd}
-          onAddSprite={this.onAddSprite}
-          selectedSprites={this.props.selectedSprites}
-          onSelectSprite={this.props.onSelectSprite}
-          onSpriteContextMenu={this.props.onSpriteContextMenu}
-          helperClass="sortable-helper"
-          lockAxis="x"
-          axis="x"
+      // As sprites were moved, the pointers of the selected sprites are now
+      // the ones at the final positions of the selection.
+      const newSelectedSprites: { [number]: boolean } = {};
+      mapFor(0, selectedCount, j => {
+        newSelectedSprites[direction.getSprite(startIndex + j).ptr] = true;
+      });
+      selectedSprites.current = newSelectedSprites;
+
+      forceUpdate();
+      if (onSpriteUpdated) onSpriteUpdated();
+      if (startIndex === 0 || selectedIndexes[0] === 0) {
+        // A sprite was moved from or to the first position,
+        // so the first sprite has changed.
+        if (onFirstSpriteUpdated) onFirstSpriteUpdated();
+      }
+    },
+    [
+      direction,
+      getSelectedSpriteIndexes,
+      forceUpdate,
+      onSpriteUpdated,
+      onFirstSpriteUpdated,
+    ]
+  );
+
+  const openSpriteContextMenu = React.useCallback(
+    // $FlowFixMe[missing-local-annot]
+    (x, y, sprite) => {
+      // When the context menu opens (long press on mobile), it intercepts
+      // subsequent touch events, so the drag backend would never receive
+      // touchend and a drag started by the press would stay active
+      // indefinitely. End it explicitly before opening the menu.
+      if (dragDropManager.getMonitor().isDragging()) {
+        dragDropManager.getActions().endDrag();
+      }
+      // If the sprite is not selected, select only it.
+      if (!selectedSprites.current[sprite.ptr]) {
+        selectUniqueSprite(sprite);
+      }
+      // Otherwise, keep the selection as is.
+      if (spriteContextMenu.current) {
+        spriteContextMenu.current.open(x, y);
+      }
+    },
+    [selectUniqueSprite, dragDropManager]
+  );
+
+  const spritesCount = direction.getSpritesCount();
+  const hasMoreThanOneSprite = spritesCount > 1;
+
+  return (
+    <ColumnStackLayout noMargin>
+      <DirectionTools
+        animationName={animationName}
+        direction={direction}
+        resourcesLoader={resourcesLoader}
+        project={project}
+        resourceExternalEditors={
+          resourceManagementProps.resourceExternalEditors
+        }
+        onEditWith={(i18n, ResourceExternalEditor) =>
+          editDirectionWith(i18n, ResourceExternalEditor, direction)
+        }
+        onDirectionUpdated={onSpriteUpdated}
+      />
+      <ResponsiveLineStackLayout noMargin expand alignItems="center">
+        <div style={styles.spritesList} ref={spritesListRef}>
+          {mapFor(0, spritesCount, i => {
+            const sprite = direction.getSprite(i);
+            return (
+              <DragSourceAndDropTarget
+                key={sprite.ptr}
+                beginDrag={() => {
+                  draggedSpriteIndex.current = i;
+                  startAutoScroll();
+                  const imageName = sprite.getImageName();
+                  return {
+                    directionPtr: direction.ptr,
+                    name: imageName,
+                    thumbnail: resourcesLoader.getResourceFullUrl(
+                      project,
+                      imageName,
+                      {}
+                    ),
+                  };
+                }}
+                endDrag={stopAutoScroll}
+                // If there is only one sprite, don't make it draggable.
+                canDrag={() => hasMoreThanOneSprite}
+                // Only allow moving sprites within the same direction.
+                canDrop={item => item.directionPtr === direction.ptr}
+                drop={() => dropBeforeSprite(i)}
+              >
+                {({ connectDragSource, connectDropTarget, isOver, canDrop }) =>
+                  connectDropTarget(
+                    <div style={styles.spriteAndIndicator}>
+                      {isOver && canDrop && <ColumnDropIndicator />}
+                      {connectDragSource(
+                        <div style={styles.spriteDragSource}>
+                          <ImageThumbnail
+                            selectable
+                            selected={!!selectedSprites.current[sprite.ptr]}
+                            onSelect={selected =>
+                              addSpriteToSelection(sprite, selected)
+                            }
+                            onContextMenu={(x, y) =>
+                              openSpriteContextMenu(x, y, sprite)
+                            }
+                            resourceName={sprite.getImageName()}
+                            resourcesLoader={resourcesLoader}
+                            project={project}
+                            style={i === 0 ? {} : styles.thumbnailExtraStyle}
+                            size={SPRITE_SIZE}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+              </DragSourceAndDropTarget>
+            );
+          })}
+          {spritesCount === 0 ? (
+            <ImageThumbnail
+              key="empty"
+              project={project}
+              resourceName=""
+              resourcesLoader={resourcesLoader}
+              size={SPRITE_SIZE}
+            />
+          ) : (
+            <EndOfListDropTarget
+              canDrop={item => item.directionPtr === direction.ptr}
+              drop={dropAtEndOfList}
+            >
+              {({ connectDropTarget, isOver, canDrop }) =>
+                connectDropTarget(
+                  <div style={styles.endOfListDropZone}>
+                    {isOver && canDrop && <ColumnDropIndicator />}
+                  </div>
+                )
+              }
+            </EndOfListDropTarget>
+          )}
+        </div>
+        <ContextMenu
+          ref={spriteContextMenu}
+          buildMenuTemplate={(i18n: I18nType) => {
+            // Read the sprites and the selection when the menu is opened,
+            // so that the menu is always up to date.
+            const menuSpritesCount = direction.getSpritesCount();
+            const selectedIndexes = getSelectedSpriteIndexes();
+            // The position at which the selection starts when moved to the end.
+            const lastStartIndex = menuSpritesCount - selectedIndexes.length;
+            const isSelectionAtPosition = (startIndex: number) =>
+              selectedIndexes.every(
+                (selectedIndex, j) => selectedIndex === startIndex + j
+              );
+            return [
+              {
+                label: i18n._(t`Delete selection`),
+                click: deleteSprites,
+              },
+              {
+                label: i18n._(t`Duplicate selection`),
+                click: duplicateSprites,
+              },
+              ...(menuSpritesCount > 1 && selectedIndexes.length > 0
+                ? [
+                    { type: 'separator' },
+                    {
+                      label: i18n._(t`Move to beginning`),
+                      click: () => moveSelectedSpritesToPosition(0),
+                      enabled: !isSelectionAtPosition(0),
+                    },
+                    ...(lastStartIndex >= 2
+                      ? [
+                          {
+                            label: i18n._(t`Move to position`),
+                            submenu: mapFor(1, lastStartIndex, index => ({
+                              label: i18n._(t`Position ${index}`),
+                              click: () => moveSelectedSpritesToPosition(index),
+                              enabled: !isSelectionAtPosition(index),
+                            })),
+                          },
+                        ]
+                      : []),
+                    {
+                      label: i18n._(t`Move to end`),
+                      click: () =>
+                        moveSelectedSpritesToPosition(lastStartIndex),
+                      enabled: !isSelectionAtPosition(lastStartIndex),
+                    },
+                  ]
+                : []),
+            ];
+          }}
         />
-      </div>
-    );
-  }
-}
+        <Column noMargin>
+          <RaisedButtonWithSplitMenu
+            onClick={() => {
+              onAddSprite(resourceSources[0]);
+            }}
+            // The event-based object editor gives an empty list.
+            disabled={resourceSources.length === 0}
+            label={<Trans>Add a sprite</Trans>}
+            icon={<Add />}
+            primary
+            buildMenuTemplate={(i18n: I18nType) => {
+              const storageProvider = resourceManagementProps.getStorageProvider();
+              return resourceManagementProps.resourceSources
+                .filter(source => source.kind === 'image')
+                .filter(
+                  ({ onlyForStorageProvider }) =>
+                    !onlyForStorageProvider ||
+                    onlyForStorageProvider === storageProvider.internalName
+                )
+                .map(source => ({
+                  label: i18n._(source.displayName),
+                  click: () => onAddSprite(source),
+                }));
+            }}
+          />
+        </Column>
+      </ResponsiveLineStackLayout>
+    </ColumnStackLayout>
+  );
+};
+
+export default SpritesList;

@@ -1,7 +1,7 @@
 // @flow
 import * as React from 'react';
-import { Spacer, Line } from './Grid';
-import { ResponsiveWindowMeasurer } from './Reponsive/ResponsiveWindowMeasurer';
+import { Spacer, Line, Column, LargeSpacer } from './Grid';
+import { useResponsiveWindowSize } from './Responsive/ResponsiveWindowMeasurer';
 
 type TextFieldWithButtonLayoutProps = {|
   renderTextField: () => React.Node,
@@ -24,30 +24,31 @@ const buttonCommonStyles = {
 };
 
 const textFieldWithButtonLayoutStyles = {
-  container: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'flex-start', // Align from the top to stay at the same position when error/multiline
-  },
   filledTextFieldWithLabelRightButtonMargins: {
     ...buttonCommonStyles,
-    marginTop: 24, // Properly align with the text field (only dense "filled" text fields supported)
-    marginLeft: 10,
+    marginTop: 15, // Properly align with the text field (only dense "filled" text fields supported)
+    marginLeft: 8,
   },
   filledTextFieldWithoutLabelRightButtonMargins: {
     ...buttonCommonStyles,
-    marginTop: 15, // Properly align with the text field (only dense "filled" text fields supported)
-    marginLeft: 10,
+    marginTop: 6, // Properly align with the text field (only dense "filled" text fields supported)
+    marginLeft: 8,
   },
   standardTextFieldWithLabelRightButtonMargins: {
     ...buttonCommonStyles,
     marginTop: 17, // Properly align with the text field (only "standard" text fields with margin "none" supported)
-    marginLeft: 10,
+    marginLeft: 8,
   },
   standardTextFieldWithoutLabelRightButtonMargins: {
     ...buttonCommonStyles,
     marginTop: 0, // Properly align with the text field (only "standard" text fields with margin "none" supported)
-    marginLeft: 10,
+    marginLeft: 8,
+  },
+  textFieldOnMobileMargins: {
+    ...buttonCommonStyles,
+    // Thanks to the ResponsiveLineStackLayout, the text field is full width on mobile and is spaced out already.
+    marginTop: 0,
+    marginLeft: 0,
   },
 };
 
@@ -59,70 +60,197 @@ export const TextFieldWithButtonLayout = ({
   noFloatingLabelText,
   renderTextField,
   renderButton,
-}: TextFieldWithButtonLayoutProps) => {
+}: TextFieldWithButtonLayoutProps): React.Node => {
+  const { isMobile, isLandscape } = useResponsiveWindowSize();
   return (
-    <div style={textFieldWithButtonLayoutStyles.container}>
+    <ResponsiveLineStackLayout
+      alignItems="flex-start" // Align from the top to stay at the same position when error/multiline
+      expand
+      noMargin
+      noResponsiveLandscape
+    >
       {renderTextField()}
       {renderButton(
-        margin === 'none'
+        isMobile && !isLandscape
+          ? // $FlowFixMe[incompatible-type]
+            textFieldWithButtonLayoutStyles.textFieldOnMobileMargins
+          : margin === 'none'
           ? noFloatingLabelText
-            ? textFieldWithButtonLayoutStyles.standardTextFieldWithoutLabelRightButtonMargins
-            : textFieldWithButtonLayoutStyles.standardTextFieldWithLabelRightButtonMargins
+            ? // $FlowFixMe[incompatible-type]
+              textFieldWithButtonLayoutStyles.standardTextFieldWithoutLabelRightButtonMargins
+            : // $FlowFixMe[incompatible-type]
+              textFieldWithButtonLayoutStyles.standardTextFieldWithLabelRightButtonMargins
           : noFloatingLabelText
-          ? textFieldWithButtonLayoutStyles.filledTextFieldWithoutLabelRightButtonMargins
-          : textFieldWithButtonLayoutStyles.filledTextFieldWithLabelRightButtonMargins
+          ? // $FlowFixMe[incompatible-type]
+            textFieldWithButtonLayoutStyles.filledTextFieldWithoutLabelRightButtonMargins
+          : // $FlowFixMe[incompatible-type]
+            textFieldWithButtonLayoutStyles.filledTextFieldWithLabelRightButtonMargins
       )}
-    </div>
+    </ResponsiveLineStackLayout>
   );
 };
 
-type ResponsiveLineStackLayoutProps = {|
+type LineStackLayoutProps = {|
+  id?: string,
   alignItems?: string,
   justifyContent?: string,
   expand?: boolean,
   noMargin?: boolean,
   children: React.Node,
+  useLargeSpacer?: boolean,
+  overflow?: 'hidden', // allows children Text components to use text ellipsis when they are too long
+  neverShrink?: boolean,
+  useFullHeight?: boolean,
 |};
 
-export const ResponsiveLineStackLayout = ({
+export const LineStackLayout = ({
+  id,
   alignItems,
   justifyContent,
   expand,
   noMargin,
   children,
-}: ResponsiveLineStackLayoutProps) => {
+  useLargeSpacer,
+  overflow,
+  neverShrink,
+  useFullHeight,
+}: LineStackLayoutProps): React.Node => {
   let isFirstChild = true;
   return (
-    <ResponsiveWindowMeasurer>
-      {windowWidth =>
-        windowWidth === 'small' ? (
-          React.Children.map(children, (child, index) => {
-            return <Line expand>{child}</Line>;
-          })
-        ) : (
-          <Line
-            alignItems={alignItems}
-            justifyContent={justifyContent}
-            expand={expand}
-            noMargin={noMargin}
-          >
-            {React.Children.map(children, (child, index) => {
-              if (!child) return null;
+    <Line
+      id={id}
+      alignItems={alignItems}
+      justifyContent={justifyContent}
+      expand={expand}
+      noMargin={noMargin}
+      overflow={overflow}
+      neverShrink={neverShrink}
+      useFullHeight={useFullHeight}
+    >
+      {React.Children.map(children, (child, index) => {
+        if (!child) return null;
 
-              const addSpacers = !isFirstChild;
-              isFirstChild = false;
+        const addSpacers = !isFirstChild;
+        isFirstChild = false;
 
-              return (
-                <React.Fragment>
-                  {addSpacers && <Spacer />}
-                  {addSpacers && <Spacer />}
-                  {child}
-                </React.Fragment>
-              );
-            })}
-          </Line>
-        )
-      }
-    </ResponsiveWindowMeasurer>
+        return (
+          <React.Fragment>
+            {addSpacers && (useLargeSpacer ? <LargeSpacer /> : <Spacer />)}
+            {child}
+          </React.Fragment>
+        );
+      })}
+    </Line>
+  );
+};
+
+type ResponsiveLineStackLayoutProps = {|
+  id?: string,
+  alignItems?: string,
+  justifyContent?: string,
+  expand?: boolean,
+  /** Prefer `noColumnMargin` if needed. */
+  noMargin?: boolean,
+  /** Remove the margin on the left and right of the column, when the layout is shown as a single column. */
+  noColumnMargin?: boolean,
+  /** Do not measure window width in case parent component is in smaller component */
+  forceMobileLayout?: boolean,
+  noOverflowParent?: boolean,
+  noResponsiveLandscape?: boolean,
+  useLargeSpacer?: boolean,
+  children: React.Node,
+|};
+
+export const ResponsiveLineStackLayout = ({
+  id,
+  alignItems,
+  justifyContent,
+  expand,
+  noMargin,
+  noColumnMargin,
+  forceMobileLayout,
+  noOverflowParent,
+  noResponsiveLandscape,
+  useLargeSpacer,
+  children,
+}: ResponsiveLineStackLayoutProps): React.Node => {
+  const { isMobile, isLandscape } = useResponsiveWindowSize();
+  const assumeMobileScreen = forceMobileLayout || isMobile;
+  const shouldPreventSwitchingToColumn = noResponsiveLandscape && isLandscape;
+  const shouldSwitchToColumn =
+    assumeMobileScreen && !shouldPreventSwitchingToColumn;
+
+  return shouldSwitchToColumn ? (
+    <ColumnStackLayout
+      id={id}
+      noMargin={noMargin || noColumnMargin}
+      expand
+      useLargeSpacer={useLargeSpacer}
+      noOverflowParent={noOverflowParent}
+    >
+      {children}
+    </ColumnStackLayout>
+  ) : (
+    <LineStackLayout
+      id={id}
+      alignItems={alignItems}
+      justifyContent={justifyContent}
+      expand={expand}
+      noMargin={noMargin}
+      useLargeSpacer={useLargeSpacer}
+    >
+      {children}
+    </LineStackLayout>
+  );
+};
+
+type ColumnStackLayoutProps = {|
+  id?: string,
+  alignItems?: string,
+  justifyContent?: string,
+  expand?: boolean,
+  noMargin?: boolean,
+  children: React.Node,
+  noOverflowParent?: boolean,
+  useFullHeight?: boolean,
+  useLargeSpacer?: boolean,
+|};
+
+export const ColumnStackLayout = ({
+  id,
+  alignItems,
+  justifyContent,
+  expand,
+  noMargin,
+  children,
+  noOverflowParent,
+  useFullHeight,
+  useLargeSpacer,
+}: ColumnStackLayoutProps): React.Node => {
+  let isFirstChild = true;
+  return (
+    <Column
+      id={id}
+      alignItems={alignItems}
+      justifyContent={justifyContent}
+      expand={expand}
+      noMargin={noMargin}
+      noOverflowParent={noOverflowParent}
+      useFullHeight={useFullHeight}
+    >
+      {React.Children.map(children, (child, index) => {
+        if (!child) return null;
+
+        const addSpacers = !isFirstChild;
+        isFirstChild = false;
+
+        return (
+          <React.Fragment>
+            {addSpacers && (useLargeSpacer ? <LargeSpacer /> : <Spacer />)}
+            {child}
+          </React.Fragment>
+        );
+      })}
+    </Column>
   );
 };

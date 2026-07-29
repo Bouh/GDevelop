@@ -1,195 +1,288 @@
+// @flow
 import RenderedInstance from './RenderedInstance';
-import * as PIXI from 'pixi.js';
-const gd = global.gd;
+import PixiResourcesLoader from '../../ObjectsRendering/PixiResourcesLoader';
+import ResourcesLoader from '../../ResourcesLoader';
+import * as PIXI from 'pixi.js-legacy';
+const gd: libGDevelop = global.gd;
 
 /**
  * Renderer for gd.SpriteObject
- *
- * @extends RenderedInstance
- * @class RenderedSpriteInstance
- * @constructor
  */
-function RenderedSpriteInstance(
-  project,
-  layout,
-  instance,
-  associatedObject,
-  pixiContainer,
-  pixiResourcesLoader
-) {
-  RenderedInstance.call(
-    this,
-    project,
-    layout,
-    instance,
-    associatedObject,
-    pixiContainer,
-    pixiResourcesLoader
-  );
+export default class RenderedSpriteInstance extends RenderedInstance {
+  _renderedAnimation: number;
+  _renderedDirection: number;
+  _centerX: number;
+  _centerY: number;
+  _originX: number;
+  _originY: number;
+  _sprite: ?gdSprite = null;
+  _shouldNotRotate: boolean = false;
+  _preScale = 1;
 
-  this._renderedAnimation = 0;
-  this._renderedDirection = 0;
-  this._centerX = 0;
-  this._centerY = 0;
-  this._originX = 0;
-  this._originY = 0;
-
-  //Setup the PIXI object:
-  this._pixiObject = new PIXI.Sprite(
-    this._pixiResourcesLoader.getInvalidPIXITexture()
-  );
-  this._pixiContainer.addChild(this._pixiObject);
-  this.updatePIXITexture();
-  this.updatePIXISprite();
-}
-RenderedSpriteInstance.prototype = Object.create(RenderedInstance.prototype);
-
-/**
- * Return a URL for thumbnail of the specified object.
- */
-RenderedSpriteInstance.getThumbnail = function(
-  project,
-  resourcesLoader,
-  object
-) {
-  const spriteObject = gd.asSpriteObject(object);
-
-  if (
-    spriteObject.getAnimationsCount() > 0 &&
-    spriteObject.getAnimation(0).getDirectionsCount() > 0 &&
-    spriteObject
-      .getAnimation(0)
-      .getDirection(0)
-      .getSpritesCount() > 0
+  constructor(
+    project: gdProject,
+    instance: gdInitialInstance,
+    associatedObjectConfiguration: gdObjectConfiguration,
+    // $FlowFixMe[value-as-type]
+    pixiContainer: PIXI.Container,
+    pixiResourcesLoader: Class<PixiResourcesLoader>
   ) {
-    const imageName = spriteObject
-      .getAnimation(0)
-      .getDirection(0)
-      .getSprite(0)
-      .getImageName();
-    return resourcesLoader.getResourceFullUrl(project, imageName);
-  }
+    super(
+      project,
+      instance,
+      associatedObjectConfiguration,
+      pixiContainer,
+      pixiResourcesLoader
+    );
 
-  return 'res/unknown32.png';
-};
-
-RenderedSpriteInstance.prototype.updatePIXISprite = function() {
-  this._pixiObject.anchor.x =
-    this._centerX / this._pixiObject.texture.frame.width;
-  this._pixiObject.anchor.y =
-    this._centerY / this._pixiObject.texture.frame.height;
-  this._pixiObject.rotation = this._shouldNotRotate
-    ? 0
-    : RenderedInstance.toRad(this._instance.getAngle());
-  if (this._instance.hasCustomSize()) {
-    this._pixiObject.scale.x =
-      this._instance.getCustomWidth() / this._pixiObject.texture.frame.width;
-    this._pixiObject.scale.y =
-      this._instance.getCustomHeight() / this._pixiObject.texture.frame.height;
-  } else {
-    this._pixiObject.scale.x = 1;
-    this._pixiObject.scale.y = 1;
-  }
-  this._pixiObject.position.x =
-    this._instance.getX() +
-    (this._centerX - this._originX) * Math.abs(this._pixiObject.scale.x);
-  this._pixiObject.position.y =
-    this._instance.getY() +
-    (this._centerY - this._originY) * Math.abs(this._pixiObject.scale.y);
-};
-
-RenderedSpriteInstance.prototype.updateSprite = function() {
-  this._sprite = null;
-  this._shouldNotRotate = false;
-
-  const spriteObject = gd.asSpriteObject(this._associatedObject);
-  if (spriteObject.hasNoAnimations()) return false;
-
-  this._renderedAnimation = this._instance.getRawFloatProperty('animation');
-  if (this._renderedAnimation >= spriteObject.getAnimationsCount())
     this._renderedAnimation = 0;
-
-  const animation = spriteObject.getAnimation(this._renderedAnimation);
-  if (animation.hasNoDirections()) return false;
-
-  this._renderedDirection = 0;
-  if (animation.useMultipleDirections()) {
-    let normalizedAngle = Math.floor(this._instance.getAngle()) % 360;
-    if (normalizedAngle < 0) normalizedAngle += 360;
-
-    this._renderedDirection = Math.round(normalizedAngle / 45) % 8;
-  }
-
-  if (this._renderedDirection >= animation.getDirectionsCount())
     this._renderedDirection = 0;
+    this._centerX = 0;
+    this._centerY = 0;
+    this._originX = 0;
+    this._originY = 0;
 
-  const direction = animation.getDirection(this._renderedDirection);
-
-  if (direction.getSpritesCount() === 0) return false;
-
-  this._shouldNotRotate = animation.useMultipleDirections();
-  this._sprite = direction.getSprite(0);
-  return true;
-};
-
-RenderedSpriteInstance.prototype.updatePIXITexture = function() {
-  this.updateSprite();
-  if (!this._sprite) return;
-
-  this._pixiObject.texture = this._pixiResourcesLoader.getPIXITexture(
-    this._project,
-    this._sprite.getImageName()
-  );
-
-  const origin = this._sprite.getOrigin();
-  this._originX = origin.getX();
-  this._originY = origin.getY();
-
-  if (this._sprite.isDefaultCenterPoint()) {
-    if (this._pixiObject.texture.noFrame) {
-      var that = this;
-      // We might have to wait for the texture to load
-      this._pixiObject.texture.on('update', function() {
-        that._centerX = that._pixiObject.texture.width / 2;
-        that._centerY = that._pixiObject.texture.height / 2;
-        that._pixiObject.texture.off('update', this);
-      });
-    } else {
-      this._centerX = this._pixiObject.texture.width / 2;
-      this._centerY = this._pixiObject.texture.height / 2;
-    }
-  } else {
-    const center = this._sprite.getCenter();
-    this._centerX = center.getX();
-    this._centerY = center.getY();
+    //Setup the PIXI object:
+    this._pixiObject = new PIXI.Sprite(
+      this._pixiResourcesLoader.getInvalidPIXITexture()
+    );
+    this._pixiContainer.addChild(this._pixiObject);
+    this.updatePIXITextureAndSprite();
   }
-};
 
-RenderedSpriteInstance.prototype.update = function() {
-  const animation = this._instance.getRawFloatProperty('animation');
-  if (this._renderedAnimation !== animation) this.updatePIXITexture();
+  onRemovedFromScene(): void {
+    super.onRemovedFromScene();
+    // Keep textures because they are shared by all sprites.
+    this._pixiObject.destroy(false);
+    // Avoid to use _pixiObject after destroy is called.
+    // It can happen when onRemovedFromScene and update cross each other.
+    this._pixiObject = null;
+  }
 
-  this.updatePIXISprite();
-};
+  /**
+   * Return a URL for thumbnail of the specified object.
+   */
+  static getThumbnail(
+    project: gdProject,
+    resourcesLoader: Class<ResourcesLoader>,
+    objectConfiguration: gdObjectConfiguration
+  ): string {
+    const spriteConfiguration = gd.asSpriteConfiguration(objectConfiguration);
+    const animations = spriteConfiguration.getAnimations();
 
-RenderedSpriteInstance.prototype.getOriginX = function() {
-  if (!this._sprite || !this._pixiObject) return 0;
+    if (
+      animations.getAnimationsCount() > 0 &&
+      animations.getAnimation(0).getDirectionsCount() > 0 &&
+      animations
+        .getAnimation(0)
+        .getDirection(0)
+        .getSpritesCount() > 0
+    ) {
+      const imageName = animations
+        .getAnimation(0)
+        .getDirection(0)
+        .getSprite(0)
+        .getImageName();
+      return resourcesLoader.getResourceFullUrl(project, imageName, {});
+    }
 
-  return this._sprite.getOrigin().getX() * this._pixiObject.scale.x;
-};
+    return 'res/unknown32.png';
+  }
 
-RenderedSpriteInstance.prototype.getOriginY = function() {
-  if (!this._sprite || !this._pixiObject) return 0;
+  updatePIXISprite(): void {
+    // Avoid to use _pixiObject after destroy is called.
+    // It can happen when onRemovedFromScene and update cross each other.
+    if (!this._pixiObject) {
+      return;
+    }
+    const objectTextureFrame = this._pixiObject.texture.frame;
+    // In case the texture is not loaded yet, we don't want to crash.
+    if (!objectTextureFrame) return;
 
-  return this._sprite.getOrigin().getY() * this._pixiObject.scale.y;
-};
+    this._pixiObject.anchor.x = this._centerX / objectTextureFrame.width;
+    this._pixiObject.anchor.y = this._centerY / objectTextureFrame.height;
+    this._pixiObject.rotation = this._shouldNotRotate
+      ? 0
+      : RenderedInstance.toRad(this._instance.getAngle());
+    if (this._instance.hasCustomSize()) {
+      this._pixiObject.scale.x =
+        this.getCustomWidth() / objectTextureFrame.width;
+      this._pixiObject.scale.y =
+        this.getCustomHeight() / objectTextureFrame.height;
+    } else {
+      this._pixiObject.scale.x = this._preScale;
+      this._pixiObject.scale.y = this._preScale;
+    }
+    this._pixiObject.position.x =
+      this._instance.getX() +
+      (this._centerX - this._originX) * Math.abs(this._pixiObject.scale.x);
+    this._pixiObject.position.y =
+      this._instance.getY() +
+      (this._centerY - this._originY) * Math.abs(this._pixiObject.scale.y);
 
-RenderedSpriteInstance.prototype.getDefaultWidth = function() {
-  return Math.abs(this._pixiObject.width);
-};
+    // Do not hide completely an object so it can still be manipulated
+    const alphaForDisplay = Math.max(this._instance.getOpacity() / 255, 0.5);
+    this._pixiObject.alpha = alphaForDisplay;
 
-RenderedSpriteInstance.prototype.getDefaultHeight = function() {
-  return Math.abs(this._pixiObject.height);
-};
+    this._pixiObject.scale.x =
+      Math.abs(this._pixiObject.scale.x) *
+      (this._instance.isFlippedX() ? -1 : 1);
+    this._pixiObject.scale.y =
+      Math.abs(this._pixiObject.scale.y) *
+      (this._instance.isFlippedY() ? -1 : 1);
+  }
 
-export default RenderedSpriteInstance;
+  updateSprite(): boolean {
+    this._sprite = null;
+    this._shouldNotRotate = false;
+
+    const spriteConfiguration = gd.asSpriteConfiguration(
+      this._associatedObjectConfiguration
+    );
+    this._preScale = spriteConfiguration.getPreScale();
+    const animations = spriteConfiguration.getAnimations();
+    if (animations.hasNoAnimations()) return false;
+
+    this._renderedAnimation = this._instance.getRawDoubleProperty('animation');
+    if (this._renderedAnimation >= animations.getAnimationsCount())
+      this._renderedAnimation = 0;
+
+    const animation = animations.getAnimation(this._renderedAnimation);
+    if (animation.hasNoDirections()) return false;
+
+    this._renderedDirection = 0;
+    if (animation.useMultipleDirections()) {
+      let normalizedAngle = Math.floor(this._instance.getAngle()) % 360;
+      if (normalizedAngle < 0) normalizedAngle += 360;
+
+      this._renderedDirection = Math.round(normalizedAngle / 45) % 8;
+    }
+
+    if (this._renderedDirection >= animation.getDirectionsCount())
+      this._renderedDirection = 0;
+
+    const direction = animation.getDirection(this._renderedDirection);
+
+    if (direction.getSpritesCount() === 0) return false;
+
+    this._shouldNotRotate = animation.useMultipleDirections();
+    this._sprite = direction.getSprite(0);
+    return true;
+  }
+
+  updatePIXITextureAndSprite(): void {
+    // Avoid to use _pixiObject after destroy is called.
+    // It can happen when onRemovedFromScene and update cross each other.
+    if (!this._pixiObject) {
+      return;
+    }
+    this.updateSprite();
+    const sprite = this._sprite;
+    if (!sprite) {
+      // No sprite is currently selected (e.g. the object has no animations yet).
+      // If the current texture has been destroyed (should not happen, but extra safety),
+      // swap it with the placeholder.
+      if (
+        !this._pixiObject.texture ||
+        !this._pixiObject.texture.orig ||
+        !this._pixiObject.texture.baseTexture
+      ) {
+        this._pixiObject.texture = this._pixiResourcesLoader.getInvalidPIXITexture();
+      }
+      return;
+    }
+
+    const texture = this._pixiResourcesLoader.getPIXITexture(
+      this._project,
+      sprite.getImageName()
+    );
+    this._pixiObject.texture = texture;
+
+    if (!texture.baseTexture || !texture.baseTexture.valid) {
+      // Post pone texture update if texture is not loaded.
+      texture.once('update', () => {
+        if (this._wasDestroyed) return;
+        this.updatePIXITextureAndSprite();
+      });
+      return;
+    }
+
+    const origin = sprite.getOrigin();
+    this._originX = origin.getX();
+    this._originY = origin.getY();
+
+    if (sprite.isDefaultCenterPoint()) {
+      this._centerX = texture.width / 2;
+      this._centerY = texture.height / 2;
+    } else {
+      const center = sprite.getCenter();
+      this._centerX = center.getX();
+      this._centerY = center.getY();
+    }
+
+    this.updatePIXISprite();
+  }
+
+  update(): void {
+    if (!this._pixiObject) return;
+    const animation = this._instance.getRawDoubleProperty('animation');
+
+    // Extra safety check.
+    const currentTexture = this._pixiObject.texture;
+    const isCurrentTextureDestroyed =
+      !currentTexture || !currentTexture.orig || !currentTexture.baseTexture;
+    if (isCurrentTextureDestroyed) {
+      console.warn(
+        'Current texture for a RenderedSpriteInstance is destroyed. This should never happen - verify how resources are (re)loaded.'
+      );
+    }
+
+    if (this._renderedAnimation !== animation || isCurrentTextureDestroyed) {
+      this.updatePIXITextureAndSprite();
+    } else {
+      this.updatePIXISprite();
+    }
+  }
+
+  getOriginX(): number {
+    if (!this._sprite || !this._pixiObject) return 0;
+
+    return this._sprite.getOrigin().getX() * Math.abs(this._pixiObject.scale.x);
+  }
+
+  getOriginY(): number {
+    if (!this._sprite || !this._pixiObject) return 0;
+
+    return this._sprite.getOrigin().getY() * Math.abs(this._pixiObject.scale.y);
+  }
+
+  getDefaultWidth(): number {
+    const objectTextureFrame = this._pixiObject.texture.frame;
+    // In case the texture is not loaded yet, we don't want to crash.
+    if (!objectTextureFrame) return 32;
+
+    return Math.abs(objectTextureFrame.width) * this._preScale;
+  }
+
+  getDefaultHeight(): number {
+    const objectTextureFrame = this._pixiObject.texture.frame;
+    // In case the texture is not loaded yet, we don't want to crash.
+    if (!objectTextureFrame) return 32;
+
+    return Math.abs(objectTextureFrame.height) * this._preScale;
+  }
+
+  getCenterX(): number {
+    if (!this._sprite || !this._pixiObject) return 0;
+    return (
+      this._centerX * Math.abs(this._pixiObject.scale.x) // This is equivalent to `this._animationFrame.center.x * Math.abs(this._scaleX)` in the runtime.
+    );
+  }
+
+  getCenterY(): number {
+    if (!this._sprite || !this._pixiObject) return 0;
+    return (
+      this._centerY * Math.abs(this._pixiObject.scale.y) // This is equivalent to `this._animationFrame.center.y * Math.abs(this._scaleY)` in the runtime.
+    );
+  }
+}

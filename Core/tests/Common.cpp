@@ -19,6 +19,8 @@
 #include "GDCore/Tools/VersionWrapper.h"
 #include "catch.hpp"
 
+// TODO: Add some tests on layouts and behavior shared data.
+
 TEST_CASE("Project", "[common]") {
   SECTION("Basics") {
     gd::Project project;
@@ -75,7 +77,14 @@ TEST_CASE("EventsList", "[common][events]") {
 
     size_t endMemory = gd::SystemStats::GetUsedVirtualMemory();
     INFO("Memory used: " << endMemory - startMemory << "KB");
-    REQUIRE(1500 >= endMemory - startMemory);
+    // Each event carries a MemoryTracked member and an entry in
+    // MemoryTrackedRegistry (use-after-free detection), adding a few tens
+    // of bytes per event on 64-bit platforms.
+    #if defined(WINDOWS)
+      REQUIRE(4200 >= endMemory - startMemory);
+    #else
+      REQUIRE(2400 >= endMemory - startMemory);
+    #endif
   }
 }
 

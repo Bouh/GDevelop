@@ -5,10 +5,10 @@ Copyright (c) 2010-2016 Florian Rival (Florian.Rival@gmail.com)
 This project is released under the MIT License.
 */
 #if defined(GD_IDE_ONLY)
+#include <iostream>
+
 #include "GDCore/Extensions/PlatformExtension.h"
 #include "GDCore/Tools/Localization.h"
-
-#include <iostream>
 
 void DeclareTopDownMovementBehaviorExtension(gd::PlatformExtension& extension);
 
@@ -68,12 +68,23 @@ class TopDownMovementBehaviorJsExtension : public gd::PlatformExtension {
         .SetGetter("getAngleOffset");
     autConditions["TopDownMovementBehavior::AngleOffset"].SetFunctionName(
         "getAngleOffset");
-    autConditions["TopDownMovementBehavior::Angle"].SetFunctionName(
-        "getAngle");
+    // Deprecated, prefer IsMovementAngleAround instead.
+    autConditions["TopDownMovementBehavior::Angle"].SetFunctionName("getAngle");
+    autConditions["TopDownMovementBehavior::TopDownMovementBehavior::IsMovementAngleAround"]
+        .SetFunctionName("isMovementAngleAround");
     autConditions["TopDownMovementBehavior::XVelocity"].SetFunctionName(
         "getXVelocity");
     autConditions["TopDownMovementBehavior::YVelocity"].SetFunctionName(
         "getYVelocity");
+    autActions
+        ["TopDownMovementBehavior::TopDownMovementBehavior::"
+         "SetMovementAngleOffset"]
+            .SetFunctionName("setMovementAngleOffset")
+            .SetGetter("getMovementAngleOffset");
+    autConditions
+        ["TopDownMovementBehavior::TopDownMovementBehavior::"
+         "MovementAngleOffset"]
+            .SetFunctionName("getMovementAngleOffset");
 
     autActions["TopDownMovementBehavior::AllowDiagonals"].SetFunctionName(
         "allowDiagonals");
@@ -96,6 +107,11 @@ class TopDownMovementBehaviorJsExtension : public gd::PlatformExtension {
         "simulateControl");
     autActions["TopDownMovementBehavior::IgnoreDefaultControls"]
         .SetFunctionName("ignoreDefaultControls");
+    autActions["TopDownMovementBehavior::SimulateStick"].SetFunctionName(
+        "simulateStick");
+    autConditions["TopDownMovementBehavior::TopDownMovementBehavior::IsUsingControl"].SetFunctionName(
+        "isUsingControl");
+    autExpressions["StickAngle"].SetFunctionName("getLastStickInputAngle");
 
     autExpressions["Acceleration"].SetFunctionName("getAcceleration");
     autExpressions["Deceleration"].SetFunctionName("getDeceleration");
@@ -106,6 +122,14 @@ class TopDownMovementBehaviorJsExtension : public gd::PlatformExtension {
     autExpressions["Angle"].SetFunctionName("getAngle");
     autExpressions["XVelocity"].SetFunctionName("getXVelocity");
     autExpressions["YVelocity"].SetFunctionName("getYVelocity");
+    autActions["TopDownMovementBehavior::TopDownMovementBehavior::SetVelocityX"]
+        .SetFunctionName("setXVelocity")
+        .SetGetter("getXVelocity");
+    autActions["TopDownMovementBehavior::TopDownMovementBehavior::SetVelocityY"]
+        .SetFunctionName("setYVelocity")
+        .SetGetter("getYVelocity");
+    autExpressions["MovementAngleOffset"].SetFunctionName(
+        "getMovementAngleOffset");
 
     GD_COMPLETE_EXTENSION_COMPILATION_INFORMATION();
   };

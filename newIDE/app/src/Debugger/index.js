@@ -10,13 +10,13 @@ import Text from '../UI/Text';
 import PlaceholderLoader from '../UI/PlaceholderLoader';
 import PlaceholderMessage from '../UI/PlaceholderMessage';
 import Background from '../UI/Background';
-import optionalRequire from '../Utils/OptionalRequire';
 import EmptyMessage from '../UI/EmptyMessage';
-const electron = optionalRequire('electron');
-const ipcRenderer = electron ? electron.ipcRenderer : null;
-
-//Each game connected to the debugger server is identified by a unique number
-export type DebuggerId = number;
+import {
+  type PreviewDebuggerServer,
+  type DebuggerId,
+  type DebuggerStatus,
+} from '../ExportAndShare/PreviewLauncher.flow';
+import { type Log, LogsManager } from './DebuggerConsole';
 
 export type ProfilerMeasuresSection = {|
   time: number,
@@ -30,152 +30,208 @@ export type ProfilerOutput = {|
   },
 |};
 
+/**
+ * Returns true if a log is a warning or debug log from a library out of our control that we do not want to bother users with.
+ * This is used in Debugger#_handleMessage below to filter out those kinds of messages.
+ */
+const isUnavoidableLibraryWarning = ({ group, message }: Log): boolean =>
+  group === 'JavaScript' &&
+  (message.includes('Electron Security Warning') ||
+    message.includes('Warning: This is a browser-targeted Firebase bundle'));
+
 type Props = {|
   project: gdProject,
   setToolbar: React.Node => void,
-  isActive: boolean,
+  previewDebuggerServer: PreviewDebuggerServer,
 |};
 
 type State = {|
-  debuggerServerStarted: boolean,
+  debuggerServerState: 'started' | 'stopped',
   debuggerServerError: ?any,
-
   debuggerIds: Array<DebuggerId>,
+  unregisterDebuggerServerCallbacks: ?() => void,
+
   debuggerGameData: { [DebuggerId]: any },
   profilerOutputs: { [DebuggerId]: ProfilerOutput },
   profilingInProgress: { [DebuggerId]: boolean },
+  debuggerStatus: { [DebuggerId]: DebuggerStatus },
   selectedId: DebuggerId,
+  logs: { [DebuggerId]: Array<Log> },
 |};
 
 /**
  * Start the debugger server, listen to commands received and issue commands to it.
- * This is only supported on Electron runtime for now.
  */
 export default class Debugger extends React.Component<Props, State> {
+  // $FlowFixMe[missing-local-annot]
   state = {
-    debuggerServerStarted: false,
+    debuggerServerState: (this.props.previewDebuggerServer.getServerState():
+      | 'started'
+      | 'stopped'),
     debuggerServerError: null,
-    debuggerIds: [],
+    debuggerIds: (this.props.previewDebuggerServer.getExistingDebuggerIds(): Array<DebuggerId>),
+    unregisterDebuggerServerCallbacks: null,
     debuggerGameData: {},
     profilerOutputs: {},
     profilingInProgress: {},
-    selectedId: 0,
+    debuggerStatus: {},
+    selectedId: '0',
+    logs: {},
   };
 
   _debuggerContents: { [DebuggerId]: ?DebuggerContent } = {};
+  _debuggerLogs: Map<DebuggerId, LogsManager> = new Map();
 
-  updateToolbar() {
-    if (!this.props.isActive) return;
+  updateToolbar = () => {
+    const { selectedId, debuggerStatus } = this.state;
+
+    const selectedDebuggerContents = this._debuggerContents[
+      this.state.selectedId
+    ];
+
+    const isSelectedDebuggerPaused = debuggerStatus[selectedId]
+      ? debuggerStatus[selectedId].isPaused
+      : false;
 
     this.props.setToolbar(
       <Toolbar
         onPlay={() => this._play(this.state.selectedId)}
         onPause={() => this._pause(this.state.selectedId)}
-        canPlay={this._hasSelectedDebugger()}
-        canPause={this._hasSelectedDebugger()}
-        onOpenProfiler={() => {
+        canPlay={this._hasSelectedDebugger() && isSelectedDebuggerPaused}
+        canPause={this._hasSelectedDebugger() && !isSelectedDebuggerPaused}
+        canOpenProfiler={this._hasSelectedDebugger()}
+        isProfilerShown={
+          !!selectedDebuggerContents &&
+          selectedDebuggerContents.isProfilerShown()
+        }
+        onToggleProfiler={() => {
           if (this._debuggerContents[this.state.selectedId])
-            this._debuggerContents[this.state.selectedId].openProfiler();
+            this._debuggerContents[this.state.selectedId].toggleProfiler();
+        }}
+        canOpenConsole={this._hasSelectedDebugger()}
+        isConsoleShown={
+          !!selectedDebuggerContents &&
+          selectedDebuggerContents.isConsoleShown()
+        }
+        onToggleConsole={() => {
+          if (this._debuggerContents[this.state.selectedId])
+            this._debuggerContents[this.state.selectedId].toggleConsole();
         }}
       />
     );
-  }
+  };
 
   componentDidMount() {
-    if (this.props.isActive) {
-      this._startServer();
-    }
-  }
-
-  componentWillReceiveProps(nextProps: Props) {
-    if (nextProps.isActive && !this.props.isActive) {
-      this._startServer();
-    }
+    this._registerServerCallbacks();
   }
 
   componentWillUnmount() {
-    this._removeServerListeners();
+    if (this.state.unregisterDebuggerServerCallbacks) {
+      this.state.unregisterDebuggerServerCallbacks();
+    }
   }
 
-  _removeServerListeners = () => {
-    if (!ipcRenderer) return;
+  _getLogsManager(id: DebuggerId): LogsManager {
+    let result = this._debuggerLogs.get(id);
+    if (!result) {
+      result = new LogsManager();
+      this._debuggerLogs.set(id, result);
+    }
+    return result;
+  }
 
-    ipcRenderer.removeAllListeners('debugger-send-message-done');
-    ipcRenderer.removeAllListeners('debugger-error-received');
-    ipcRenderer.removeAllListeners('debugger-connection-closed');
-    ipcRenderer.removeAllListeners('debugger-connection-opened');
-    ipcRenderer.removeAllListeners('debugger-start-server-done');
-    ipcRenderer.removeAllListeners('debugger-message-received');
-  };
+  _registerServerCallbacks = () => {
+    const { previewDebuggerServer } = this.props;
+    const { unregisterDebuggerServerCallbacks } = this.state;
+    if (
+      unregisterDebuggerServerCallbacks &&
+      previewDebuggerServer.getServerState() === 'started'
+    )
+      return; // Server already started and callbacks registered
 
-  _startServer = () => {
-    if (!ipcRenderer) return;
+    if (unregisterDebuggerServerCallbacks) unregisterDebuggerServerCallbacks(); // Unregister old callbacks, if any
 
-    this.setState({
-      debuggerServerStarted: false,
-    });
-    this._removeServerListeners();
-
-    ipcRenderer.on('debugger-error-received', (event, err) => {
-      this.setState(
-        {
-          debuggerServerError: err,
-        },
-        () => this.updateToolbar()
-      );
-    });
-
-    ipcRenderer.on('debugger-connection-closed', (event, { id }) => {
-      const { debuggerIds, selectedId } = this.state;
-      const remainingDebuggerIds = debuggerIds.filter(
-        debuggerId => debuggerId !== id
-      );
-      this.setState(
-        {
-          debuggerIds: remainingDebuggerIds,
-          selectedId:
-            selectedId !== id
-              ? selectedId
-              : remainingDebuggerIds.length
-              ? remainingDebuggerIds[remainingDebuggerIds.length - 1]
-              : selectedId,
-        },
-        () => this.updateToolbar()
-      );
-    });
-
-    ipcRenderer.on('debugger-connection-opened', (event, { id }) => {
-      this.setState(
-        {
-          debuggerIds: [...this.state.debuggerIds, id],
-          selectedId: id,
-        },
-        () => this.updateToolbar()
-      );
-    });
-
-    ipcRenderer.on('debugger-start-server-done', event => {
-      this.setState(
-        {
-          debuggerServerStarted: true,
-        },
-        () => this.updateToolbar()
-      );
-    });
-
-    ipcRenderer.on('debugger-message-received', (event, { id, message }) => {
-      console.log('Processing message received for debugger');
-      try {
-        const data = JSON.parse(message);
-        this._handleMessage(id, data);
-      } catch (e) {
-        console.warn(
-          'Error while parsing message received from debugger client:',
-          e
+    // Register new callbacks
+    const unregisterCallbacks = previewDebuggerServer.registerCallbacks({
+      onErrorReceived: err => {
+        this.setState(
+          {
+            debuggerServerError: err,
+          },
+          () => this.updateToolbar()
         );
-      }
+      },
+      onConnectionClosed: ({ id, debuggerIds }) => {
+        this._debuggerLogs.delete(id);
+        this.setState(
+          ({
+            selectedId,
+            debuggerGameData,
+            profilerOutputs,
+            profilingInProgress,
+            debuggerStatus,
+          }) => {
+            // Remove any data bound to the instance that might have been stored.
+            // Otherwise this would be a memory leak.
+            if (debuggerGameData[id]) delete debuggerGameData[id];
+            if (profilerOutputs[id]) delete profilerOutputs[id];
+            if (profilingInProgress[id]) delete profilingInProgress[id];
+            if (debuggerStatus[id]) delete debuggerStatus[id];
+
+            return {
+              debuggerIds,
+              selectedId:
+                selectedId !== id
+                  ? selectedId
+                  : debuggerIds.length
+                  ? debuggerIds[debuggerIds.length - 1]
+                  : selectedId,
+              debuggerGameData,
+              profilerOutputs,
+              profilingInProgress,
+              debuggerStatus,
+            };
+          },
+          () => this.updateToolbar()
+        );
+      },
+      onConnectionOpened: ({ id, debuggerIds }) => {
+        this.setState(
+          {
+            debuggerIds,
+            selectedId: id,
+          },
+          () => this.updateToolbar()
+        );
+      },
+      onConnectionErrored: ({ id, errorMessage }) => {
+        this._getLogsManager(id).addLog({
+          type: 'error',
+          timestamp: performance.now(),
+          group: 'Debugger connection',
+          message: 'The debugger connection errored: ' + errorMessage,
+        });
+      },
+      onServerStateChanged: () => {
+        this.setState(
+          {
+            debuggerServerState: previewDebuggerServer.getServerState(),
+          },
+          () => this.updateToolbar()
+        );
+      },
+      onHandleParsedMessage: ({ id, parsedMessage }) => {
+        this._handleMessage(id, parsedMessage);
+      },
     });
-    ipcRenderer.send('debugger-start-server');
+    this.setState({
+      unregisterDebuggerServerCallbacks: unregisterCallbacks,
+    });
+
+    // Fetch the status of each debugger client.
+    previewDebuggerServer.getExistingDebuggerIds().forEach(debuggerId => {
+      previewDebuggerServer.sendMessage(debuggerId, { command: 'getStatus' });
+    });
   };
 
   _handleMessage = (id: DebuggerId, data: any) => {
@@ -186,6 +242,16 @@ export default class Debugger extends React.Component<Props, State> {
           [id]: data.payload,
         },
       });
+    } else if (data.command === 'status') {
+      this.setState(
+        state => ({
+          debuggerStatus: {
+            ...state.debuggerStatus,
+            [id]: data.payload,
+          },
+        }),
+        () => this.updateToolbar()
+      );
     } else if (data.command === 'profiler.output') {
       this.setState({
         profilerOutputs: {
@@ -201,6 +267,14 @@ export default class Debugger extends React.Component<Props, State> {
       this.setState(state => ({
         profilingInProgress: { ...state.profilingInProgress, [id]: false },
       }));
+    } else if (data.command === 'hotReloader.logs') {
+      // Nothing to do.
+    } else if (data.command === 'updateInstances') {
+      // Nothing to do.
+    } else if (data.command === 'console.log') {
+      // Filter out unavoidable warnings that do not concern non-engine devs.
+      if (isUnavoidableLibraryWarning(data.payload)) return;
+      this._getLogsManager(id).addLog(data.payload);
     } else {
       console.warn(
         'Unknown command received from debugger client:',
@@ -210,58 +284,42 @@ export default class Debugger extends React.Component<Props, State> {
   };
 
   _play = (id: DebuggerId) => {
-    if (!ipcRenderer) return;
+    const { previewDebuggerServer } = this.props;
+    previewDebuggerServer.sendMessage(id, { command: 'play' });
 
-    ipcRenderer.send('debugger-send-message', {
-      id,
-      message: '{"command": "play"}',
-    });
+    // Pause status is transmitted by the game (using `status`).
   };
 
   _pause = (id: DebuggerId) => {
-    if (!ipcRenderer) return;
+    const { previewDebuggerServer } = this.props;
+    previewDebuggerServer.sendMessage(id, { command: 'pause' });
 
-    ipcRenderer.send('debugger-send-message', {
-      id,
-      message: '{"command": "pause"}',
-    });
+    // Pause status is transmitted by the game (using `status`).
   };
 
   _refresh = (id: DebuggerId) => {
-    if (!ipcRenderer) return;
-
-    ipcRenderer.send('debugger-send-message', {
-      id,
-      message: '{"command": "refresh"}',
-    });
+    const { previewDebuggerServer } = this.props;
+    previewDebuggerServer.sendMessage(id, { command: 'refresh' });
   };
 
-  _edit = (id: DebuggerId, path: Array<string>, newValue: any) => {
-    if (!ipcRenderer) return false;
-
-    ipcRenderer.send('debugger-send-message', {
-      id,
-      message: JSON.stringify({
-        command: 'set',
-        path,
-        newValue,
-      }),
+  _edit = (id: DebuggerId, path: Array<string>, newValue: any): any => {
+    const { previewDebuggerServer } = this.props;
+    previewDebuggerServer.sendMessage(id, {
+      command: 'set',
+      path,
+      newValue,
     });
 
     setTimeout(() => this._refresh(id), 100);
     return true;
   };
 
-  _call = (id: DebuggerId, path: Array<string>, args: Array<any>) => {
-    if (!ipcRenderer) return false;
-
-    ipcRenderer.send('debugger-send-message', {
-      id,
-      message: JSON.stringify({
-        command: 'call',
-        path,
-        args,
-      }),
+  _call = (id: DebuggerId, path: Array<string>, args: Array<any>): any => {
+    const { previewDebuggerServer } = this.props;
+    previewDebuggerServer.sendMessage(id, {
+      command: 'call',
+      path,
+      args,
     });
 
     setTimeout(() => this._refresh(id), 100);
@@ -269,34 +327,31 @@ export default class Debugger extends React.Component<Props, State> {
   };
 
   _startProfiler = (id: DebuggerId) => {
-    if (!ipcRenderer) return;
-
-    ipcRenderer.send('debugger-send-message', {
-      id,
-      message: '{"command": "profiler.start"}',
-    });
+    const { previewDebuggerServer } = this.props;
+    previewDebuggerServer.sendMessage(id, { command: 'profiler.start' });
   };
 
   _stopProfiler = (id: DebuggerId) => {
-    if (!ipcRenderer) return;
-
-    ipcRenderer.send('debugger-send-message', {
-      id,
-      message: '{"command": "profiler.stop"}',
-    });
+    const { previewDebuggerServer } = this.props;
+    previewDebuggerServer.sendMessage(id, { command: 'profiler.stop' });
   };
 
-  _hasSelectedDebugger = () => {
+  _hasSelectedDebugger = (): any => {
     const { selectedId, debuggerIds } = this.state;
-    return debuggerIds.indexOf(selectedId) !== -1;
+    if (debuggerIds.indexOf(selectedId) === -1) return false;
+
+    const debuggerStatus = this.state.debuggerStatus[selectedId];
+    if (debuggerStatus && debuggerStatus.isInGameEdition) return false;
+
+    return true;
   };
 
-  render() {
+  render(): any {
     const {
       debuggerServerError,
-      debuggerServerStarted,
+      debuggerServerState,
       selectedId,
-      debuggerIds,
+      debuggerStatus,
       debuggerGameData,
       profilerOutputs,
       profilingInProgress,
@@ -304,7 +359,7 @@ export default class Debugger extends React.Component<Props, State> {
 
     return (
       <Background>
-        {!debuggerServerStarted && !debuggerServerError && (
+        {debuggerServerState === 'stopped' && !debuggerServerError && (
           <PlaceholderMessage>
             <PlaceholderLoader />
             <Text>
@@ -312,7 +367,7 @@ export default class Debugger extends React.Component<Props, State> {
             </Text>
           </PlaceholderMessage>
         )}
-        {!debuggerServerStarted && debuggerServerError && (
+        {debuggerServerState === 'stopped' && debuggerServerError && (
           <PlaceholderMessage>
             <Text>
               <Trans>
@@ -322,15 +377,18 @@ export default class Debugger extends React.Component<Props, State> {
             </Text>
           </PlaceholderMessage>
         )}
-        {debuggerServerStarted && (
+        {debuggerServerState === 'started' && (
           <Column expand noMargin>
             <DebuggerSelector
               selectedId={selectedId}
-              debuggerIds={debuggerIds}
+              debuggerStatus={debuggerStatus}
               onChooseDebugger={id =>
-                this.setState({
-                  selectedId: id,
-                })
+                this.setState(
+                  {
+                    selectedId: id,
+                  },
+                  () => this.updateToolbar()
+                )
               }
             />
             {this._hasSelectedDebugger() && (
@@ -348,6 +406,8 @@ export default class Debugger extends React.Component<Props, State> {
                 onStopProfiler={() => this._stopProfiler(selectedId)}
                 profilerOutput={profilerOutputs[selectedId]}
                 profilingInProgress={profilingInProgress[selectedId]}
+                logsManager={this._getLogsManager(selectedId)}
+                onOpenedEditorsChanged={this.updateToolbar}
               />
             )}
             {!this._hasSelectedDebugger() && (

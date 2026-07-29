@@ -4,7 +4,6 @@
  * reserved. This project is released under the MIT License.
  */
 
-#if defined(GD_IDE_ONLY)
 #ifndef TRANSLATEACTION_H
 #define TRANSLATEACTION_H
 #include <map>
@@ -26,37 +25,22 @@ namespace gd {
 class GD_CORE_API InstructionSentenceFormatter {
  public:
   /**
-   * \brief Create a sentence from an instruction and its metadata.
-   *
-   * Sentence is provided in the gd::InstructionMetadata passed as parameter.
-   * Parameters placeholders ("_PARAMx_", x being the parameter index) are
-   * replaced by their values stored in the isntruction passed as parameter.
-   */
-  gd::String Translate(const gd::Instruction &instr,
-                       const gd::InstructionMetadata &metadata);
-
-  /**
    * \brief Create a formatted sentence from an instruction and its metadata.
    */
   std::vector<std::pair<gd::String, gd::TextFormatting> > GetAsFormattedText(
       const gd::Instruction &instr, const gd::InstructionMetadata &metadata);
 
   /**
-   * \brief Return the TextFormatting object associated to the \a type.
+   * \brief Return the value to display for a parameter, normalizing types
+   * (like `yesorno`/`trueorfalse`) whose runtime interpretation differs from
+   * the raw stored value.
+   *
+   * Look at `EventsCodeGenerator::GenerateParameterCodes` and
+   * `AdvancedExtension.cpp` (for GDJS) for related logic that must stay
+   * consistent.
    */
-  TextFormatting GetFormattingFromType(const gd::String &type);
-
-  /**
-   * \brief Return the label of a parameter type
-   */
-  gd::String LabelFromType(const gd::String &type);
-
-  /**
-   * \brief Load the configuration from the default configuration.
-   */
-  void LoadTypesFormattingFromConfig();
-
-  std::map<gd::String, gd::TextFormatting> typesFormatting;
+  static gd::String GetFormattedParameterValue(const gd::String &rawValue,
+                                               const gd::String &parameterType);
 
   static InstructionSentenceFormatter *Get() {
     if (NULL == _singleton) {
@@ -65,6 +49,9 @@ class GD_CORE_API InstructionSentenceFormatter {
 
     return (static_cast<InstructionSentenceFormatter *>(_singleton));
   }
+
+  gd::String GetFullText(const gd::Instruction &instr,
+                         const gd::InstructionMetadata &metadata);
 
   static void DestroySingleton() {
     if (NULL != _singleton) {
@@ -82,4 +69,3 @@ class GD_CORE_API InstructionSentenceFormatter {
 
 }  // namespace gd
 #endif  // TRANSLATEACTION_H
-#endif

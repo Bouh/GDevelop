@@ -32,6 +32,8 @@
     "loadingScreen": {
       "showGDevelopSplash": false
     },
+    "authorIds": [],
+    "authorUsernames": [],
     "extensions": [
       {
         "name": "BuiltinObject"
@@ -223,6 +225,7 @@
           "updateIfNotVisible": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "animations": [
             {
               "name": "NewObject",
@@ -372,6 +375,7 @@
           "type": "Sprite",
           "updateIfNotVisible": false,
           "variables": [],
+          "effects": [],
           "behaviors": [
             {
               "name": "DestroyOutside",

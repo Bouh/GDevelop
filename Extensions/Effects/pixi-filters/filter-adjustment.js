@@ -1,9 +1,49 @@
 /*!
- * @pixi/filter-adjustment - v2.5.0
- * Compiled Fri, 20 Dec 2019 18:59:17 UTC
+ * @pixi/filter-adjustment - v5.1.1
+ * Compiled Thu, 31 Aug 2023 09:18:38 UTC
  *
  * @pixi/filter-adjustment is licensed under the MIT License.
  * http://www.opensource.org/licenses/mit-license
- */
-!function(t,n){"object"==typeof exports&&"undefined"!=typeof module?n(exports,require("pixi.js")):"function"==typeof define&&define.amd?define(["exports","pixi.js"],n):n(t.__filters={},t.PIXI)}(this,function(t,n){"use strict";var r="attribute vec2 aVertexPosition;\nattribute vec2 aTextureCoord;\n\nuniform mat3 projectionMatrix;\n\nvarying vec2 vTextureCoord;\n\nvoid main(void)\n{\n    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);\n    vTextureCoord = aTextureCoord;\n}",e="varying vec2 vTextureCoord;\nuniform sampler2D uSampler;\n\nuniform float gamma;\nuniform float contrast;\nuniform float saturation;\nuniform float brightness;\nuniform float red;\nuniform float green;\nuniform float blue;\nuniform float alpha;\n\nvoid main(void)\n{\n    vec4 c = texture2D(uSampler, vTextureCoord);\n\n    if (c.a > 0.0) {\n        c.rgb /= c.a;\n\n        vec3 rgb = pow(c.rgb, vec3(1. / gamma));\n        rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);\n        rgb.r *= red;\n        rgb.g *= green;\n        rgb.b *= blue;\n        c.rgb = rgb * brightness;\n\n        c.rgb *= c.a;\n    }\n\n    gl_FragColor = c * alpha;\n}\n",i=function(t){function n(n){t.call(this,r,e),Object.assign(this,{gamma:1,saturation:1,contrast:1,brightness:1,red:1,green:1,blue:1,alpha:1},n)}return t&&(n.__proto__=t),n.prototype=Object.create(t&&t.prototype),n.prototype.constructor=n,n.prototype.apply=function(t,n,r,e){this.uniforms.gamma=Math.max(this.gamma,1e-4),this.uniforms.saturation=this.saturation,this.uniforms.contrast=this.contrast,this.uniforms.brightness=this.brightness,this.uniforms.red=this.red,this.uniforms.green=this.green,this.uniforms.blue=this.blue,this.uniforms.alpha=this.alpha,t.applyFilter(this,n,r,e)},n}(n.Filter);t.AdjustmentFilter=i,Object.defineProperty(t,"__esModule",{value:!0})}),Object.assign(PIXI.filters,this?this.__filters:__filters);
-//# sourceMappingURL=filter-adjustment.js.map
+ */var __filters=function(t,r){"use strict";var i=`attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+
+uniform mat3 projectionMatrix;
+
+varying vec2 vTextureCoord;
+
+void main(void)
+{
+    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+    vTextureCoord = aTextureCoord;
+}`,e=`varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+
+uniform float gamma;
+uniform float contrast;
+uniform float saturation;
+uniform float brightness;
+uniform float red;
+uniform float green;
+uniform float blue;
+uniform float alpha;
+
+void main(void)
+{
+    vec4 c = texture2D(uSampler, vTextureCoord);
+
+    if (c.a > 0.0) {
+        c.rgb /= c.a;
+
+        vec3 rgb = pow(c.rgb, vec3(1. / gamma));
+        rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);
+        rgb.r *= red;
+        rgb.g *= green;
+        rgb.b *= blue;
+        c.rgb = rgb * brightness;
+
+        c.rgb *= c.a;
+    }
+
+    gl_FragColor = c * alpha;
+}
+`;class a extends r.Filter{constructor(n){super(i,e),this.gamma=1,this.saturation=1,this.contrast=1,this.brightness=1,this.red=1,this.green=1,this.blue=1,this.alpha=1,Object.assign(this,n)}apply(n,s,o,u){this.uniforms.gamma=Math.max(this.gamma,1e-4),this.uniforms.saturation=this.saturation,this.uniforms.contrast=this.contrast,this.uniforms.brightness=this.brightness,this.uniforms.red=this.red,this.uniforms.green=this.green,this.uniforms.blue=this.blue,this.uniforms.alpha=this.alpha,n.applyFilter(this,s,o,u)}}return t.AdjustmentFilter=a,Object.defineProperty(t,"__esModule",{value:!0}),t}({},PIXI);Object.assign(PIXI.filters,__filters);

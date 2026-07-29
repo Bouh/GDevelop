@@ -6,66 +6,206 @@
 #if defined(GD_IDE_ONLY)
 
 #include "ArbitraryResourceWorker.h"
+
 #include <memory>
 #include <vector>
+
 #include "GDCore/Events/Event.h"
 #include "GDCore/Events/EventsList.h"
 #include "GDCore/Extensions/Metadata/InstructionMetadata.h"
+#include "GDCore/Extensions/Metadata/MetadataProvider.h"
+#include "GDCore/Extensions/Metadata/ParameterMetadataTools.h"
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Extensions/PlatformExtension.h"
 #include "GDCore/Project/Project.h"
-#include "GDCore/Project/ResourcesManager.h"
+#include "GDCore/Project/ResourcesContainer.h"
+#include "GDCore/Project/Effect.h"
+#include "GDCore/Tools/Log.h"
+#include "GDCore/IDE/ResourceExposer.h"
 
 using namespace std;
 
 namespace gd {
 
 void ArbitraryResourceWorker::ExposeImage(gd::String& imageName){
-    // Nothing to do, the image is a reference to a resource that
-    // is already exposed.
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeJson(gd::String& jsonName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeTilemap(gd::String& tilemapName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeTileset(gd::String& tilesetName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeModel3D(gd::String& resourceName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeAtlas(gd::String& resourceName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeSpine(gd::String& resourceName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeJavaScript(gd::String& resourceName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeVideo(gd::String& videoName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
+};
+
+void ArbitraryResourceWorker::ExposeBitmapFont(gd::String& bitmapFontName){
+    // Nothing to do by default - each child class can define here the action to
+    // do.
 };
 
 void ArbitraryResourceWorker::ExposeAudio(gd::String& audioName) {
-  for (auto resources : GetResources()) {
-    if (!resources) continue;
-
-    if (resources->HasResource(audioName) &&
-        resources->GetResource(audioName).GetKind() == "audio") {
-      // Nothing to do, the audio is a reference to a resource that
-      // is already exposed.
-      return;
-    }
+  if (resourcesManager->HasResource(audioName) &&
+      resourcesManager->GetResource(audioName).GetKind() == "audio") {
+    // Nothing to do, the audio is a reference to a proper resource.
+    return;
   }
 
+  // For compatibility with older projects (where events were referring to files
+  // directly), we consider that this resource name is a filename, and so expose
+  // it as a file.
   ExposeFile(audioName);
 };
 
 void ArbitraryResourceWorker::ExposeFont(gd::String& fontName) {
-  for (auto resources : GetResources()) {
-    if (!resources) continue;
-
-    if (resources->HasResource(fontName) &&
-        resources->GetResource(fontName).GetKind() == "font") {
-      // Nothing to do, the font is a reference to a resource that
-      // is already exposed.
-      return;
-    }
+  if (resourcesManager->HasResource(fontName) &&
+      resourcesManager->GetResource(fontName).GetKind() == "font") {
+    // Nothing to do, the font is a reference to a proper resource.
+    return;
   }
 
+  // For compatibility with older projects (where events were referring to files
+  // directly), we consider that this resource name is a filename, and so expose
+  // it as a file.
   ExposeFile(fontName);
 };
 
-void ArbitraryResourceWorker::ExposeResources(
-    gd::ResourcesManager* resourcesManager) {
-  if (!resourcesManager) return;
-
-  resourcesManagers.push_back(resourcesManager);
-
+void ArbitraryResourceWorker::ExposeResources() {
   std::vector<gd::String> resources = resourcesManager->GetAllResourceNames();
   for (std::size_t i = 0; i < resources.size(); i++) {
     if (resourcesManager->GetResource(resources[i]).UseFile())
       ExposeResource(resourcesManager->GetResource(resources[i]));
   }
+}
+
+void ArbitraryResourceWorker::ExposeEmbeddeds(gd::String& resourceName) {
+  gd::Resource& resource = resourcesManager->GetResource(resourceName);
+
+  if (!resource.GetMetadata().empty()) {
+    gd::SerializerElement serializerElement =
+        gd::Serializer::FromJSON(resource.GetMetadata());
+
+    if (serializerElement.HasChild("embeddedResourcesMapping")) {
+      bool anyEmbeddedResourceNameWasRenamed = false;
+      gd::SerializerElement& embeddedResourcesMappingElement =
+          serializerElement.GetChild("embeddedResourcesMapping");
+
+      for (const auto& child :
+           embeddedResourcesMappingElement.GetAllChildren()) {
+        const gd::String& targetResourceName =
+            child.second->GetValue().GetString();
+
+        if (resourcesManager->HasResource(targetResourceName)) {
+          std::cout << targetResourceName << std::endl;
+          gd::Resource& targetResource =
+              resourcesManager->GetResource(targetResourceName);
+
+          gd::String potentiallyUpdatedTargetResourceName = targetResourceName;
+          ExposeResourceWithType(targetResource.GetKind(), potentiallyUpdatedTargetResourceName);
+          ExposeEmbeddeds(potentiallyUpdatedTargetResourceName);
+
+          if (potentiallyUpdatedTargetResourceName != targetResourceName) {
+            // The resource name was renamed. Also update the mapping.
+            child.second->SetStringValue(potentiallyUpdatedTargetResourceName);
+            anyEmbeddedResourceNameWasRenamed = true;
+          }
+        }
+      }
+
+      if (anyEmbeddedResourceNameWasRenamed) {
+        resource.SetMetadata(gd::Serializer::ToJSON(serializerElement));
+      }
+    }
+  }
+}
+
+void ArbitraryResourceWorker::ExposeResourceWithType(
+    const gd::String &resourceType, gd::String &resourceName) {
+  if (resourceType == "image") {
+    ExposeImage(resourceName);
+    return;
+  }
+  if (resourceType == "model3D") {
+    ExposeModel3D(resourceName);
+    return;
+  }
+  if (resourceType == "audio") {
+    ExposeAudio(resourceName);
+    return;
+  }
+  if (resourceType == "font") {
+    ExposeFont(resourceName);
+    return;
+  }
+  if (resourceType == "bitmapFont") {
+    ExposeBitmapFont(resourceName);
+    return;
+  }
+  if (resourceType == "tilemap") {
+    ExposeTilemap(resourceName);
+    ExposeEmbeddeds(resourceName);
+    return;
+  }
+  if (resourceType == "tileset") {
+    ExposeTileset(resourceName);
+    return;
+  }
+  if (resourceType == "json") {
+    ExposeJson(resourceName);
+    ExposeEmbeddeds(resourceName);
+    return;
+  }
+  if (resourceType == "video") {
+    ExposeVideo(resourceName);
+    return;
+  }
+  if (resourceType == "atlas") {
+    ExposeAtlas(resourceName);
+    return;
+  }
+  if (resourceType == "spine") {
+    ExposeSpine(resourceName);
+    return;
+  }
+  if (resourceType == "javascript") {
+    ExposeJavaScript(resourceName);
+    return;
+  }
+  gd::LogError("Unexpected resource type: " + resourceType + " for: " + resourceName);
+  return;
 }
 
 void ArbitraryResourceWorker::ExposeResource(gd::Resource& resource) {
@@ -78,108 +218,129 @@ void ArbitraryResourceWorker::ExposeResource(gd::Resource& resource) {
 
 ArbitraryResourceWorker::~ArbitraryResourceWorker() {}
 
-void LaunchResourceWorkerOnEvents(const gd::Project& project,
-                                  gd::EventsList& events,
-                                  gd::ArbitraryResourceWorker& worker) {
-  // Get all extensions used
-  std::vector<std::shared_ptr<gd::PlatformExtension> > allGameExtensions;
-  std::vector<gd::String> usedExtensions = project.GetUsedExtensions();
-  for (std::size_t i = 0; i < usedExtensions.size(); ++i) {
-    std::shared_ptr<gd::PlatformExtension> extension =
-        project.GetCurrentPlatform().GetExtension(usedExtensions[i]);
+bool ResourceWorkerInEventsWorker::DoVisitInstruction(gd::Instruction& instruction, bool isCondition) {
+  const auto& platform = project.GetCurrentPlatform();
+  const auto& metadata = isCondition
+                              ? gd::MetadataProvider::GetConditionMetadata(
+                                    platform, instruction.GetType())
+                              : gd::MetadataProvider::GetActionMetadata(
+                                    platform, instruction.GetType());
 
-    if (extension != std::shared_ptr<gd::PlatformExtension>())
-      allGameExtensions.push_back(extension);
-  }
+  auto& resourcesContainersList = GetProjectScopedContainers().GetResourcesContainersList();
 
-  for (std::size_t j = 0; j < events.size(); j++) {
-    vector<gd::InstructionsList*> allActionsVectors =
-        events[j].GetAllActionsVectors();
-    for (std::size_t i = 0; i < allActionsVectors.size(); ++i) {
-      for (std::size_t k = 0; k < allActionsVectors[i]->size(); k++) {
-        gd::String type = allActionsVectors[i]->Get(k).GetType();
-        for (std::size_t e = 0; e < allGameExtensions.size(); ++e) {
-          bool extensionHasAction = false;
-
-          const std::map<gd::String, gd::InstructionMetadata>& allActions =
-              allGameExtensions[e]->GetAllActions();
-          if (allActions.find(type) != allActions.end())
-            extensionHasAction = true;
-
-          const vector<gd::String>& objects =
-              allGameExtensions[e]->GetExtensionObjectsTypes();
-          for (std::size_t o = 0; o < objects.size(); ++o) {
-            const std::map<gd::String, gd::InstructionMetadata>&
-                allObjectsActions =
-                    allGameExtensions[e]->GetAllActionsForObject(objects[o]);
-            if (allObjectsActions.find(type) != allObjectsActions.end())
-              extensionHasAction = true;
-          }
-
-          const vector<gd::String>& autos =
-              allGameExtensions[e]->GetBehaviorsTypes();
-          for (std::size_t a = 0; a < autos.size(); ++a) {
-            const std::map<gd::String, gd::InstructionMetadata>&
-                allAutosActions =
-                    allGameExtensions[e]->GetAllActionsForBehavior(autos[a]);
-            if (allAutosActions.find(type) != allAutosActions.end())
-              extensionHasAction = true;
-          }
-
-          if (extensionHasAction) {
-            allGameExtensions[e]->ExposeActionsResources(
-                allActionsVectors[i]->Get(k), worker);
-            break;
-          }
+  gd::ParameterMetadataTools::IterateOverParametersWithIndex(
+      instruction.GetParameters(), metadata.GetParameters(),
+      [this, &instruction, &resourcesContainersList](
+          const gd::ParameterMetadata &parameterMetadata,
+          const gd::Expression &parameterExpression, size_t parameterIndex,
+          const gd::String &lastObjectName, size_t lastObjectIndex) {
+        // Only resource parameters can refer to a resource. Prevent this expensive lookup for the
+        // many non-resource parameters (numbers, strings, objects, expressions...).
+        if (!parameterMetadata.GetValueTypeMetadata().IsResource()) {
+          return;
         }
-      }
-    }
 
-    vector<gd::InstructionsList*> allConditionsVector =
-        events[j].GetAllConditionsVectors();
-    for (std::size_t i = 0; i < allConditionsVector.size(); ++i) {
-      for (std::size_t k = 0; k < allConditionsVector[i]->size(); k++) {
-        gd::String type = allConditionsVector[i]->Get(k).GetType();
-        for (std::size_t e = 0; e < allGameExtensions.size(); ++e) {
-          bool extensionHasCondition = false;
-
-          const std::map<gd::String, gd::InstructionMetadata>& allConditions =
-              allGameExtensions[e]->GetAllConditions();
-          if (allConditions.find(type) != allConditions.end())
-            extensionHasCondition = true;
-
-          const vector<gd::String>& objects =
-              allGameExtensions[e]->GetExtensionObjectsTypes();
-          for (std::size_t j = 0; j < objects.size(); ++j) {
-            const std::map<gd::String, gd::InstructionMetadata>&
-                allObjectsConditions =
-                    allGameExtensions[e]->GetAllConditionsForObject(objects[j]);
-            if (allObjectsConditions.find(type) != allObjectsConditions.end())
-              extensionHasCondition = true;
-          }
-
-          const vector<gd::String>& autos =
-              allGameExtensions[e]->GetBehaviorsTypes();
-          for (std::size_t j = 0; j < autos.size(); ++j) {
-            const std::map<gd::String, gd::InstructionMetadata>&
-                allAutosConditions =
-                    allGameExtensions[e]->GetAllConditionsForBehavior(autos[j]);
-            if (allAutosConditions.find(type) != allAutosConditions.end())
-              extensionHasCondition = true;
-          }
-
-          if (extensionHasCondition)
-            allGameExtensions[e]->ExposeConditionsResources(
-                allConditionsVector[i]->Get(k), worker);
+        const String& parameterValue = parameterExpression.GetPlainString();
+        const auto resourceSourceType =
+            resourcesContainersList.GetResourcesContainerSourceType(
+                parameterValue);
+        // The actual resources referred by parameters or properties into
+        // events of extensions are detected on the instructions or objects
+        // that use these extensions.
+        if (resourceSourceType ==
+                gd::ResourcesContainer::SourceType::Properties ||
+            resourceSourceType ==
+                gd::ResourcesContainer::SourceType::Parameters) {
+          return;
         }
-      }
-    }
+        if (parameterMetadata.GetType() == "fontResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeFont(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "soundfile" ||
+                    parameterMetadata.GetType() ==
+                        "musicfile") {  // Should be renamed audioResource
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeAudio(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "bitmapFontResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeBitmapFont(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "imageResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeImage(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "jsonResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeJson(updatedParameterValue);
+          worker.ExposeEmbeddeds(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "tilemapResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeTilemap(updatedParameterValue);
+          worker.ExposeEmbeddeds(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "tilesetResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeTileset(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "model3DResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeModel3D(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "atlasResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeAtlas(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        } else if (parameterMetadata.GetType() == "spineResource") {
+          gd::String updatedParameterValue = parameterValue;
+          worker.ExposeSpine(updatedParameterValue);
+          instruction.SetParameter(parameterIndex, updatedParameterValue);
+        }
+      });
 
-    if (events[j].CanHaveSubEvents())
-      LaunchResourceWorkerOnEvents(project, events[j].GetSubEvents(), worker);
+  return false;
+};
+
+gd::ResourceWorkerInEventsWorker
+GetResourceWorkerOnEvents(const gd::Project &project,
+                          gd::ArbitraryResourceWorker &worker) {
+  gd::ResourceWorkerInEventsWorker eventsWorker(project, worker);
+  return eventsWorker;
+}
+
+void ResourceWorkerInObjectsWorker::DoVisitObject(gd::Object &object) {
+  if (!shouldCheckObject(object)) {
+    return;
   }
+  object.GetConfiguration().ExposeResources(worker);
+  auto& effects = object.GetEffects();
+  for (size_t effectIndex = 0; effectIndex < effects.GetEffectsCount(); effectIndex++)
+  {
+    auto& effect = effects.GetEffect(effectIndex);
+    gd::ResourceExposer::ExposeEffectResources(project.GetCurrentPlatform(), effect, worker);
+  }
+};
 
-  return;
+void ResourceWorkerInObjectsWorker::DoVisitBehavior(gd::Behavior &behavior){
+  behavior.ExposeResources(worker);
+};
+
+gd::ResourceWorkerInObjectsWorker
+GetResourceWorkerOnObjects(const gd::Project &project,
+                           gd::ArbitraryResourceWorker &worker) {
+  std::function<bool(const gd::Object &)> shouldCheckObject =
+      [](const gd::Object &object) { return true; };
+  return GetResourceWorkerOnObjects(project, worker, shouldCheckObject);
+}
+
+gd::ResourceWorkerInObjectsWorker GetResourceWorkerOnObjects(
+    const gd::Project &project, gd::ArbitraryResourceWorker &worker,
+    std::function<bool(const gd::Object &)> &shouldCheckObject) {
+  gd::ResourceWorkerInObjectsWorker resourcesWorker(project, worker,
+                                                    shouldCheckObject);
+  return resourcesWorker;
 }
 
 }  // namespace gd

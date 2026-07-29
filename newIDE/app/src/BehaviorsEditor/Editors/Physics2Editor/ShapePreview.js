@@ -10,10 +10,14 @@ type Props = {|
   offsetY: number,
   polygonOrigin: string,
   vertices: Array<Vertex>,
-  width: number,
-  height: number,
-  zoomFactor: number,
+  imageWidth: number,
+  imageHeight: number,
+  imageOffsetTop: number,
+  imageOffsetLeft: number,
+  imageZoomFactor: number,
   onMoveVertex: (index: number, newX: number, newY: number) => void,
+  forcedCursor: string | null,
+  deactivateControls?: boolean,
 |};
 
 type State = {|
@@ -21,220 +25,293 @@ type State = {|
   draggedIndex: number,
 |};
 
-export default class ShapePreview extends React.Component<Props, State> {
-  state = { draggedVertex: null, draggedIndex: -1 };
-  _svg: any;
+const ShapePreview = (props: Props): React.MixedElement => {
+  const { forcedCursor, deactivateControls } = props;
 
-  _onVertexDown = (vertex: Vertex, index: number) => {
-    if (this.state.draggedVertex) return;
-    this.setState({ draggedVertex: vertex, draggedIndex: index });
-  };
+  const svgRef = React.useRef<React.ElementRef<'svg'> | null>(null);
+  const [state, setState] = React.useState<State>({
+    draggedVertex: null,
+    draggedIndex: -1,
+  });
 
-  _onMouseUp = () => {
-    const draggingWasDone = !!this.state.draggedVertex;
-    const { draggedVertex, draggedIndex } = this.state;
-    this.setState(
-      {
+  if (deactivateControls) {
+    if (state.draggedVertex) {
+      setState({
         draggedVertex: null,
-      },
-      () => {
-        if (draggingWasDone)
-          this.props.onMoveVertex(
-            draggedIndex,
-            Math.round(draggedVertex ? draggedVertex.x : 0),
-            Math.round(draggedVertex ? draggedVertex.y : 0)
-          );
-      }
-    );
+        draggedIndex: -1,
+      });
+    }
+  }
+
+  const onVertexDown = (vertex: Vertex, index: number) => {
+    if (state.draggedVertex) return;
+    setState({ draggedVertex: vertex, draggedIndex: index });
   };
 
-  _onMouseMove = (event: any) => {
-    const {
-      offsetX,
-      offsetY,
-      polygonOrigin,
-      width,
-      height,
-      zoomFactor,
-    } = this.props;
-    const { draggedVertex } = this.state;
+  const onMouseUp = () => {
+    const { draggedVertex, draggedIndex } = state;
+    const draggingWasDone = !!draggedVertex;
+    if (draggingWasDone)
+      props.onMoveVertex(
+        draggedIndex,
+        Math.round(draggedVertex ? draggedVertex.x : 0),
+        Math.round(draggedVertex ? draggedVertex.y : 0)
+      );
+    setState({ draggedVertex: null, draggedIndex: -1 });
+  };
+
+  const onMouseMove = (event: any) => {
+    const { polygonOrigin, imageWidth, imageHeight, imageZoomFactor } = props;
+    const { draggedVertex, draggedIndex } = state;
     if (!draggedVertex) return;
 
-    const pointOnScreen = this._svg.createSVGPoint();
+    // $FlowFixMe[incompatible-type] Flow doesn't have SVG typings yet (@facebook/flow#4551)
+    // $FlowFixMe[prop-missing]
+    // $FlowFixMe[incompatible-use]
+    const pointOnScreen = svgRef.current.createSVGPoint();
     pointOnScreen.x = event.clientX;
     pointOnScreen.y = event.clientY;
-    const screenToSvgMatrix = this._svg.getScreenCTM().inverse();
+    // $FlowFixMe[incompatible-type] Flow doesn't have SVG typings yet (@facebook/flow#4551)
+    // $FlowFixMe[prop-missing]
+    // $FlowFixMe[incompatible-use]
+    const screenToSvgMatrix = svgRef.current.getScreenCTM().inverse();
     const pointOnSvg = pointOnScreen.matrixTransform(screenToSvgMatrix);
 
-    draggedVertex.x =
-      pointOnSvg.x / zoomFactor -
-      offsetX -
-      (polygonOrigin === 'Center' ? width / 2 : 0);
-    draggedVertex.y =
-      pointOnSvg.y / zoomFactor -
-      offsetY -
-      (polygonOrigin === 'Center' ? height / 2 : 0);
+    const { frameX, frameY } = confinePointToFrame(pointOnSvg.x, pointOnSvg.y);
 
-    this.forceUpdate();
+    draggedVertex.x =
+      frameX / imageZoomFactor -
+      props.offsetX -
+      (polygonOrigin === 'Center' ? imageWidth / 2 : 0);
+    draggedVertex.y =
+      frameY / imageZoomFactor -
+      props.offsetY -
+      (polygonOrigin === 'Center' ? imageHeight / 2 : 0);
+
+    props.onMoveVertex(
+      draggedIndex,
+      Math.round(draggedVertex ? draggedVertex.x : 0),
+      Math.round(draggedVertex ? draggedVertex.y : 0)
+    );
+    setState({ draggedVertex, draggedIndex });
   };
 
-  _renderBox() {
+  /**
+   * Given a point's coordinates, returns new coordinates that
+   * are confined inside the sprite frame.
+   */
+  const confinePointToFrame = (freeX: number, freeY: number) => {
+    const maxX = props.imageWidth * props.imageZoomFactor;
+    const maxY = props.imageHeight * props.imageZoomFactor;
+
+    const frameX = Math.min(maxX, Math.max(freeX, 0));
+    const frameY = Math.min(maxY, Math.max(freeY, 0));
+    return { frameX, frameY };
+  };
+
+  const forcedCursorStyle = forcedCursor
+    ? {
+        cursor: forcedCursor,
+      }
+    : {};
+
+  const boxStyle = {
+    ...forcedCursorStyle,
+  };
+
+  const renderBox = () => {
     const {
       dimensionA,
       dimensionB,
-      width,
-      height,
+      imageWidth,
+      imageHeight,
       offsetX,
       offsetY,
-      zoomFactor,
-    } = this.props;
-    const fixedWidth = dimensionA > 0 ? dimensionA : width > 0 ? width : 1;
-    const fixedHeight = dimensionB > 0 ? dimensionB : height > 0 ? height : 1;
+      imageZoomFactor,
+    } = props;
+    const fixedWidth =
+      dimensionA > 0 ? dimensionA : imageWidth > 0 ? imageWidth : 1;
+    const fixedHeight =
+      dimensionB > 0 ? dimensionB : imageHeight > 0 ? imageHeight : 1;
 
     return (
       <rect
         key={'boxShape'}
+        style={boxStyle}
         fill="rgba(255,0,0,0.75)"
         strokeWidth={1}
-        x={(offsetX + width / 2 - fixedWidth / 2) * zoomFactor}
-        y={(offsetY + height / 2 - fixedHeight / 2) * zoomFactor}
-        width={fixedWidth * zoomFactor}
-        height={fixedHeight * zoomFactor}
+        x={(offsetX + imageWidth / 2 - fixedWidth / 2) * imageZoomFactor}
+        y={(offsetY + imageHeight / 2 - fixedHeight / 2) * imageZoomFactor}
+        width={fixedWidth * imageZoomFactor}
+        height={fixedHeight * imageZoomFactor}
       />
     );
-  }
+  };
 
-  _renderCircle() {
+  const circleStyle = {
+    ...forcedCursorStyle,
+  };
+
+  const renderCircle = () => {
     const {
       dimensionA,
-      width,
-      height,
+      imageWidth,
+      imageHeight,
       offsetX,
       offsetY,
-      zoomFactor,
-    } = this.props;
+      imageZoomFactor,
+    } = props;
 
     return (
       <circle
         key={'circleShape'}
+        style={circleStyle}
         fill="rgba(255,0,0,0.75)"
         strokeWidth={1}
-        cx={(offsetX + width / 2) * zoomFactor}
-        cy={(offsetY + height / 2) * zoomFactor}
+        cx={(offsetX + imageWidth / 2) * imageZoomFactor}
+        cy={(offsetY + imageHeight / 2) * imageZoomFactor}
         r={
           (dimensionA > 0
             ? dimensionA
-            : width + height > 0
-            ? (width + height) / 4
-            : 1) * zoomFactor
+            : imageWidth + imageHeight > 0
+            ? (imageWidth + imageHeight) / 4
+            : 1) * imageZoomFactor
         }
       />
     );
-  }
+  };
 
-  _renderEdge() {
+  const edgeStyle = {
+    ...forcedCursorStyle,
+  };
+
+  const renderEdge = () => {
     const {
       dimensionA,
       dimensionB,
-      width,
-      height,
+      imageWidth,
+      imageHeight,
       offsetX,
       offsetY,
-      zoomFactor,
-    } = this.props;
+      imageZoomFactor,
+    } = props;
+
     const halfLength =
-      (dimensionA > 0 ? dimensionA : width > 0 ? width : 1) / 2;
+      (dimensionA > 0 ? dimensionA : imageWidth > 0 ? imageWidth : 1) / 2;
     const cos = Math.cos((dimensionB * Math.PI) / 180);
     const sin = Math.sin((dimensionB * Math.PI) / 180);
 
     return (
       <line
         key={'edgeShape'}
+        style={edgeStyle}
         stroke="rgba(255,0,0,0.75)"
         strokeWidth={2}
-        x1={(offsetX + width / 2 - halfLength * cos) * zoomFactor}
-        y1={(offsetY + height / 2 - halfLength * sin) * zoomFactor}
-        x2={(offsetX + width / 2 + halfLength * cos) * zoomFactor}
-        y2={(offsetY + height / 2 + halfLength * sin) * zoomFactor}
+        x1={(offsetX + imageWidth / 2 - halfLength * cos) * imageZoomFactor}
+        y1={(offsetY + imageHeight / 2 - halfLength * sin) * imageZoomFactor}
+        x2={(offsetX + imageWidth / 2 + halfLength * cos) * imageZoomFactor}
+        y2={(offsetY + imageHeight / 2 + halfLength * sin) * imageZoomFactor}
       />
     );
-  }
+  };
 
-  _renderPolygon() {
+  const renderPolygon = () => {
     const {
       vertices,
       polygonOrigin,
-      width,
-      height,
+      imageWidth,
+      imageHeight,
       offsetX,
       offsetY,
-      zoomFactor,
-    } = this.props;
+      imageZoomFactor,
+    } = props;
+
+    const pointStyle = {
+      cursor: 'move',
+      ...forcedCursorStyle,
+    };
+    const polygonStyle = {
+      ...forcedCursorStyle,
+    };
 
     return (
       <React.Fragment>
         <polygon
           key={'polygonShape'}
+          style={polygonStyle}
           fill="rgba(255,0,0,0.75)"
           strokeWidth={1}
-          filerule="evenodd"
+          fillRule="evenodd"
           points={vertices
             .map(
               vertex =>
                 `${(vertex.x +
                   offsetX +
-                  (polygonOrigin === 'Center' ? width / 2 : 0)) *
-                  zoomFactor},${(vertex.y +
+                  (polygonOrigin === 'Center' ? imageWidth / 2 : 0)) *
+                  imageZoomFactor},${(vertex.y +
                   offsetY +
-                  (polygonOrigin === 'Center' ? height / 2 : 0)) *
-                  zoomFactor}`
+                  (polygonOrigin === 'Center' ? imageHeight / 2 : 0)) *
+                  imageZoomFactor}`
             )
             .join(' ')}
         />
         {vertices.map((vertex, index) => (
           <circle
-            onPointerDown={event => this._onVertexDown(vertex, index)}
+            onPointerDown={() => onVertexDown(vertex, index)}
             key={`vertex-${index}`}
             fill="rgba(150,0,0,0.75)"
             strokeWidth={1}
-            style={{
-              cursor: 'move',
-            }}
+            style={pointStyle}
             cx={
               (vertex.x +
                 offsetX +
-                (polygonOrigin === 'Center' ? width / 2 : 0)) *
-              zoomFactor
+                (polygonOrigin === 'Center' ? imageWidth / 2 : 0)) *
+              imageZoomFactor
             }
             cy={
               (vertex.y +
                 offsetY +
-                (polygonOrigin === 'Center' ? height / 2 : 0)) *
-              zoomFactor
+                (polygonOrigin === 'Center' ? imageHeight / 2 : 0)) *
+              imageZoomFactor
             }
             r={5}
           />
         ))}
       </React.Fragment>
     );
-  }
+  };
 
-  render() {
-    const { shape } = this.props;
+  const containerStyle = {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    ...forcedCursorStyle,
+  };
 
-    return (
-      <svg
-        onPointerMove={this._onMouseMove}
-        onPointerUp={this._onMouseUp}
-        ref={svg => (this._svg = svg)}
-        width="100%"
-        height="100%"
-      >
-        {shape === 'Box' && this._renderBox()}
-        {shape === 'Circle' && this._renderCircle()}
-        {shape === 'Edge' && this._renderEdge()}
-        {shape === 'Polygon' && this._renderPolygon()}
+  const frameStyle = {
+    position: 'absolute',
+    top: props.imageOffsetTop || 0,
+    left: props.imageOffsetLeft || 0,
+    width: props.imageWidth * props.imageZoomFactor,
+    height: props.imageHeight * props.imageZoomFactor,
+    overflow: 'visible',
+    ...forcedCursorStyle,
+  };
+
+  return (
+    <div
+      style={containerStyle}
+      onPointerMove={deactivateControls ? null : onMouseMove}
+      onPointerUp={deactivateControls ? null : onMouseUp}
+    >
+      <svg style={frameStyle} ref={svgRef}>
+        {props.shape === 'Box' && renderBox()}
+        {props.shape === 'Circle' && renderCircle()}
+        {props.shape === 'Edge' && renderEdge()}
+        {props.shape === 'Polygon' && renderPolygon()}
       </svg>
-    );
-  }
-}
+    </div>
+  );
+};
+
+export default ShapePreview;

@@ -1,7 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const shell = require('shelljs');
 const workboxBuild = require('workbox-build');
-const buildPath = '../build';
+const buildPath = '../public';
+const VersionMetadata = require('../src/Version/VersionMetadata');
 
 /**
  * Remove files created by create-react-app default service worker.
@@ -28,6 +30,15 @@ const cleanBuildFiles = () => {
   });
 };
 
+const replaceInFile = (file, searchText, replacedText) => {
+  if (shell.sed('-i', searchText, replacedText, file).code !== 0) {
+    return false;
+  }
+
+  // Ensure the replaced text can be found in the file:
+  return !!shell.grep(replacedText, file).stdout.trim();
+};
+
 /**
  * Create the service worker with workbox.
  */
@@ -35,14 +46,19 @@ const buildSW = () => {
   return workboxBuild
     .injectManifest({
       swSrc: 'service-worker-template/service-worker-template.js',
-      swDest: '../build/service-worker.js',
+      swDest: '../public/service-worker.js',
       globDirectory: buildPath,
       globPatterns: [
         // Application:
-        '*.{js,css,html,png}', // Root files
+        '!(libGD)*.{js,css,html,png}', // Root files.
         'static/css/*.css',
         'static/media/*',
-        'static/js/!(locales-|local-app)*.js',
+        'static/js/locales-*.js', // Locales.
+        'static/js/!local-app*.js', // Exclude electron app.
+        'static/js/Resource3DPreview.worker.*.js', // Include the 3D preview worker
+        'static/js/BackgroundSerializer.worker.*.js', // Include the serializer worker
+        // ...But not libGD.js/wasm (there are cached with their URL
+        // query string that depends on the VersionMetadata, see below).
 
         // Resources:
         '{JsPlatform,CppPlatform,res}/**/*.png',
@@ -64,10 +80,23 @@ const buildSW = () => {
         // 'external/monaco-editor-min/vs/editor/editor.main.css',
       ],
 
-      // Increase the limit to 6mb:
-      maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      // Increase the limit to 10mb:
+      maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
     })
     .then(({ count, size, warnings }) => {
+      if (
+        !replaceInFile(
+          '../public/service-worker.js',
+          'VersionMetadata = {}',
+          'VersionMetadata = ' + JSON.stringify(VersionMetadata)
+        )
+      ) {
+        console.error(
+          'Error while trying to replace version metadata in public/service-worker.js.'
+        );
+        shell.exit(1);
+      }
+
       // Optionally, log any warnings and details.
       warnings.forEach(warning => {
         console.log(`⚠️ workbox warning: ${warning}`);

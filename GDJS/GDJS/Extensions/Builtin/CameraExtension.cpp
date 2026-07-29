@@ -4,6 +4,7 @@
  * reserved. This project is released under the MIT License.
  */
 #include "CameraExtension.h"
+
 #include "GDCore/CommonTools.h"
 #include "GDCore/Extensions/Builtin/AllBuiltinExtensions.h"
 #include "GDCore/Tools/Localization.h"
@@ -13,20 +14,45 @@ namespace gdjs {
 CameraExtension::CameraExtension() {
   gd::BuiltinExtensionsImplementer::ImplementsCameraExtension(*this);
 
-  GetAllActions()["CameraX"]
+  GetAllActions()["CameraX"]  // Deprecated
       .SetFunctionName("gdjs.evtTools.camera.setCameraX")
       .SetGetter("gdjs.evtTools.camera.getCameraX");
-  GetAllActions()["CameraY"]
+  GetAllActions()["CameraY"]  // Deprecated
       .SetFunctionName("gdjs.evtTools.camera.setCameraY")
       .SetGetter("gdjs.evtTools.camera.getCameraY");
+  GetAllActions()["SetCameraX"]  // Deprecated
+      .SetFunctionName("gdjs.evtTools.camera.setCameraX")
+      .SetGetter("gdjs.evtTools.camera.getCameraX");
+  GetAllActions()["SetCameraY"]  // Deprecated
+      .SetFunctionName("gdjs.evtTools.camera.setCameraY")
+      .SetGetter("gdjs.evtTools.camera.getCameraY");
+  GetAllActions()["SetCameraCenterX"]
+      .SetFunctionName("gdjs.evtTools.camera.setCameraX")
+      .SetGetter("gdjs.evtTools.camera.getCameraX");
+  GetAllActions()["SetCameraCenterY"]
+      .SetFunctionName("gdjs.evtTools.camera.setCameraY")
+      .SetGetter("gdjs.evtTools.camera.getCameraY");
+
   GetAllConditions()["CameraX"].SetFunctionName(
-      "gdjs.evtTools.camera.getCameraX");
+      "gdjs.evtTools.camera.getCameraX");  // Deprecated
   GetAllConditions()["CameraY"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraY");  // Deprecated
+  GetAllConditions()["CameraCenterX"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraX");
+  GetAllConditions()["CameraCenterY"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraY");
   GetAllConditions()["CameraWidth"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraWidth");
   GetAllConditions()["CameraHeight"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraHeight");
+  GetAllConditions()["CameraBorderLeft"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderLeft");
+  GetAllConditions()["CameraBorderRight"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderRight");
+  GetAllConditions()["CameraBorderTop"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderTop");
+  GetAllConditions()["CameraBorderBottom"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderBottom");
   GetAllActions()["ShowLayer"].SetFunctionName(
       "gdjs.evtTools.camera.showLayer");
   GetAllActions()["HideLayer"].SetFunctionName(
@@ -35,33 +61,60 @@ CameraExtension::CameraExtension() {
       "gdjs.evtTools.camera.layerIsVisible");
   GetAllConditions()["CameraAngle"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraRotation");
-  GetAllActions()["RotateCamera"]
+  GetAllActions()["SetCameraAngle"]
+      .SetFunctionName("gdjs.evtTools.camera.setCameraRotation")
+      .SetGetter("gdjs.evtTools.camera.getCameraRotation");
+  GetAllActions()["RotateCamera"]  // Deprecated
       .SetFunctionName("gdjs.evtTools.camera.setCameraRotation")
       .SetGetter("gdjs.evtTools.camera.getCameraRotation");
   GetAllActions()["ZoomCamera"].SetFunctionName(
       "gdjs.evtTools.camera.setCameraZoom");
+  GetAllConditions()["CameraZoom"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraZoom");
 
   GetAllExpressions()["CameraX"].SetFunctionName(
-      "gdjs.evtTools.camera.getCameraX");
+      "gdjs.evtTools.camera.getCameraX");  // Deprecated
   GetAllExpressions()["VueX"].SetFunctionName(
-      "gdjs.evtTools.camera.getCameraX");
+      "gdjs.evtTools.camera.getCameraX");  // Deprecated
   GetAllExpressions()["CameraY"].SetFunctionName(
-      "gdjs.evtTools.camera.getCameraY");
+      "gdjs.evtTools.camera.getCameraY");  // Deprecated
   GetAllExpressions()["VueY"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraY");  // Deprecated
+  GetAllExpressions()["CameraCenterY"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraY");
+  GetAllExpressions()["CameraCenterX"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraX");
+  GetAllExpressions()["CameraBorderLeft"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderLeft");
+  GetAllExpressions()["CameraBorderRight"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderRight");
+  GetAllExpressions()["CameraBorderTop"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderTop");
+  GetAllExpressions()["CameraBorderBottom"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraBorderBottom");
+  GetAllExpressions()["CameraAngle"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraRotation");
   GetAllExpressions()["CameraRotation"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraRotation");
   GetAllExpressions()["VueRotation"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraRotation");
+  GetAllExpressions()["CameraZoom"].SetFunctionName(
+      "gdjs.evtTools.camera.getCameraZoom");
   GetAllExpressions()["CameraWidth"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraWidth");
   GetAllExpressions()["CameraHeight"].SetFunctionName(
       "gdjs.evtTools.camera.getCameraHeight");
 
   GetAllActions()["FixCamera"].SetFunctionName(
-      "gdjs.evtTools.camera.centerCameraWithinLimits");
+      "gdjs.evtTools.camera.centerCameraWithinLimits");  // Deprecated
+  GetAllActions()["ClampCamera"].SetFunctionName(
+      "gdjs.evtTools.camera.clampCamera");
+  GetAllActions()["CenterCameraOnObject"].SetFunctionName(
+      "gdjs.evtTools.camera.centerCamera");
+  // Compatibility with GD <= 5.6.251
   GetAllActions()["CentreCamera"].SetFunctionName(
       "gdjs.evtTools.camera.centerCamera");
+  // End of compatibility code
 
   GetAllActions()["SetLayerEffectParameter"].SetFunctionName(
       "gdjs.evtTools.camera.setLayerEffectDoubleParameter");
@@ -80,6 +133,16 @@ CameraExtension::CameraExtension() {
       "gdjs.evtTools.camera.setLayerTimeScale");
   GetAllExpressions()["LayerTimeScale"].SetFunctionName(
       "gdjs.evtTools.camera.getLayerTimeScale");
+
+  GetAllConditions()["LayerDefaultZOrder"].SetFunctionName(
+      "gdjs.evtTools.camera.getLayerDefaultZOrder");
+  GetAllActions()["SetLayerDefaultZOrder"].SetFunctionName(
+      "gdjs.evtTools.camera.setLayerDefaultZOrder");
+  GetAllExpressions()["LayerDefaultZOrder"].SetFunctionName(
+      "gdjs.evtTools.camera.getLayerDefaultZOrder");
+
+  GetAllActions()["SetLayerAmbientLightColor"].SetFunctionName(
+      "gdjs.evtTools.camera.setLayerAmbientLightColor");
 
   StripUnimplementedInstructionsAndExpressions();  // Unimplemented things are
                                                    // listed here:
@@ -102,7 +165,7 @@ CameraExtension::CameraExtension() {
      Position ( Between 0 and 1 )"), "",true) .AddParameter("expression",
      _("Render zone: Bottom right side: Y Position ( Between 0 and 1 )"),
      "",true)
-          .SetFunctionName("AddCamera").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("AddCamera");
 
       AddAction("DeleteCamera",
                      _("Delete a camera of a layer"),
@@ -115,7 +178,7 @@ CameraExtension::CameraExtension() {
           .AddParameter("layer", _("Layer (base layer if
      empty)")).SetDefaultValue("\"\"") .AddParameter("expression", _("Camera
      number"))
-          .SetFunctionName("DeleteCamera").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("DeleteCamera");
 
       AddAction("CameraSize",
                      _("Modify the size of a camera"),
@@ -131,7 +194,7 @@ CameraExtension::CameraExtension() {
      empty)")).SetDefaultValue("\"\"") .AddParameter("expression", _("Camera
      number")) .AddParameter("expression", _("Width"))
           .AddParameter("expression", _("Height"))
-          .SetFunctionName("SetCameraSize").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("SetCameraSize");
 
       AddAction("CameraViewport",
                      _("Modify the render zone of a camera"),
@@ -151,7 +214,7 @@ CameraExtension::CameraExtension() {
           .AddParameter("expression", _("Render zone: Bottom right side: X
      Position ( Between 0 and 1 )")) .AddParameter("expression", _("Render zone:
      Bottom right side: X Position ( Between 0 and 1 )"))
-          .SetFunctionName("SetCameraViewport").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("SetCameraViewport");
 
       AddExpression("CameraViewportLeft", _("X position of the top left side
      point of a render zone"), _("X position of the top left side point of a
@@ -160,7 +223,7 @@ CameraExtension::CameraExtension() {
           .AddParameter("layer", _("Layer"))
           .AddParameter("expression", _("Camera number (default :
      0)")).SetDefaultValue("0")
-          .SetFunctionName("GetCameraViewportLeft").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("GetCameraViewportLeft");
 
 
       AddExpression("CameraViewportTop", _("Y position of the top left side
@@ -170,7 +233,7 @@ CameraExtension::CameraExtension() {
           .AddParameter("layer", _("Layer"))
           .AddParameter("expression", _("Camera number (default :
      0)")).SetDefaultValue("0")
-          .SetFunctionName("GetCameraViewportTop").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("GetCameraViewportTop");
 
 
       AddExpression("CameraViewportRight", _("X position of the bottom right
@@ -180,7 +243,7 @@ CameraExtension::CameraExtension() {
           .AddParameter("layer", _("Layer"))
           .AddParameter("expression", _("Camera number (default :
      0)")).SetDefaultValue("0")
-          .SetFunctionName("GetCameraViewportRight").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("GetCameraViewportRight");
 
 
       AddExpression("CameraViewportBottom", _("Y position of the bottom right
@@ -190,7 +253,7 @@ CameraExtension::CameraExtension() {
           .AddParameter("layer", _("Layer"))
           .AddParameter("expression", _("Camera number (default :
      0)")).SetDefaultValue("0")
-          .SetFunctionName("GetCameraViewportBottom").SetIncludeFile("GDCpp/Extensions/Builtin/RuntimeSceneCameraTools.h");
+          .SetFunctionName("GetCameraViewportBottom");
 
 
   */

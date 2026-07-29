@@ -6,6 +6,7 @@
 
 #if defined(EMSCRIPTEN)
 #include <emscripten.h>
+
 #include "GDCore/String.h"
 
 namespace gd {
@@ -25,11 +26,16 @@ gd::String GetTranslation(const char* str) {  // TODO: Inline?
         // }
         ensureCache.prepare();
 
-        var translatedStr = getTranslation(Pointer_stringify($0));
+        var translatedStr = getTranslation(UTF8ToString($0));
         return ensureString(translatedStr);
       },
       str);
   return gd::String(translatedStr);  // TODO: Is copying necessary?
 }
+
+gd::String GetTranslation(const gd::String& str) {
+  return GetTranslation(str.c_str());
+}
+
 }  // namespace gd
 #endif

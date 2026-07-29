@@ -1,6 +1,7 @@
 // @flow
-import { Trans } from '@lingui/macro';
-
+import { t, Trans } from '@lingui/macro';
+import { I18n } from '@lingui/react';
+import { type I18n as I18nType } from '@lingui/core';
 import * as React from 'react';
 import { mapFor } from '../../Utils/MapFor';
 import classNames from 'classnames';
@@ -11,6 +12,7 @@ import {
   instructionParameter,
   disabledText,
   icon,
+  warningInstruction,
 } from './ClassNames';
 import {
   type InstructionsListContext,
@@ -20,18 +22,39 @@ import InstructionsList from './InstructionsList';
 import DropIndicator from './DropIndicator';
 import ParameterRenderingService from '../ParameterRenderingService';
 import InvalidParameterValue from './InvalidParameterValue';
+import DeprecatedParameterValue from './DeprecatedParameterValue';
+import MissingParameterValue from './MissingParameterValue';
 import { makeDragSourceAndDropTarget } from '../../UI/DragAndDrop/DragSourceAndDropTarget';
-import { type ScreenType } from '../../UI/Reponsive/ScreenTypeMeasurer';
-import { type WidthType } from '../../UI/Reponsive/ResponsiveWindowMeasurer';
+import {
+  type ScreenType,
+  useScreenType,
+} from '../../UI/Responsive/ScreenTypeMeasurer';
+import { type WindowSizeType } from '../../UI/Responsive/ResponsiveWindowMeasurer';
 import PreferencesContext from '../../MainFrame/Preferences/PreferencesContext';
-const gd = global.gd;
-const instrFormatter = gd.InstructionSentenceFormatter.get();
-instrFormatter.loadTypesFormattingFromConfig();
+import { useLongTouch } from '../../Utils/UseLongTouch';
+import {
+  shouldActivate,
+  shouldValidate,
+} from '../../UI/KeyboardShortcuts/InteractionKeys';
+import AsyncIcon from '../../UI/CustomSvgIcons/Async';
+import Tooltip from '@material-ui/core/Tooltip';
+import GDevelopThemeContext from '../../UI/Theme/GDevelopThemeContext';
+import {
+  type EventsScope,
+  ProjectScopedContainersAccessor,
+} from '../../InstructionOrExpression/EventsScope';
+import { enumerateParametersUsableInExpressions } from '../ParameterFields/EnumerateFunctionParameters';
+import { getFunctionNameFromType } from '../../EventsFunctionsExtensionsLoader';
+import { ExtensionStoreContext } from '../../AssetStore/ExtensionStore/ExtensionStoreContext';
+import Warning from '../../UI/CustomSvgIcons/Warning';
+import { highlightSearchText } from '../../Utils/HighlightSearchText';
+
+const gd: libGDevelop = global.gd;
 
 const styles = {
   container: {
     whiteSpace: 'normal',
-    wordWrap: 'break-word',
+    overflowWrap: 'anywhere', // Ensure everything is wrapped on small devices (or for long expressions).
     cursor: 'pointer',
     marginBottom: 1,
   },
@@ -39,17 +62,12 @@ const styles = {
 
 export const reactDndInstructionType = 'GD_DRAGGED_INSTRUCTION';
 
-const capitalize = (str: string) => {
-  if (!str) return '';
-
-  return str[0].toUpperCase() + str.substr(1);
-};
-
 const DragSourceAndDropTarget = makeDragSourceAndDropTarget<{
   isCondition: boolean,
 }>(reactDndInstructionType);
 
 type Props = {|
+  platform: gdPlatform,
   instruction: gdInstruction,
   isCondition: boolean,
   onClick: Function,
@@ -69,9 +87,8 @@ type Props = {|
   ) => void,
   onSubInstructionClick: InstructionContext => void,
   onSubInstructionDoubleClick: InstructionContext => void,
-  onSubInstructionsListContextMenu: (
-    x: number,
-    y: number,
+  onAddSubInstructionContextMenu: (
+    button: HTMLButtonElement,
     instructionsListContext: InstructionsListContext
   ) => void,
   onSubParameterClick: Function,
@@ -84,22 +101,147 @@ type Props = {|
   renderObjectThumbnail: string => React.Node,
 
   screenType: ScreenType,
-  windowWidth: WidthType,
+  windowSize: WindowSizeType,
+
+  scope: EventsScope,
+  resourcesManager: gdResourcesContainer,
+  globalObjectsContainer: gdObjectsContainer,
+  objectsContainer: gdObjectsContainer,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
+
+  id: string,
+  highlightedSearchText?: ?string,
+  highlightedSearchMatchCase?: boolean,
 |};
 
-const Instruction = (props: Props) => {
-  const { instruction, isCondition, onClick, onMoveToInstruction } = props;
+const formatValue = ({
+  value,
+  parameterType,
+  i18n,
+}: {|
+  value: string,
+  parameterType: string,
+  i18n: I18nType,
+|}) =>
+  (value === '' || value === '""') && parameterType === 'layer'
+    ? i18n._(t`Base layer`)
+    : value;
 
+// $FlowFixMe[missing-local-annot]
+const isInstructionVisible = (scope, instructionMetadata) =>
+  (instructionMetadata.isRelevantForLayoutEvents() &&
+    (scope.layout || scope.externalEvents)) ||
+  (instructionMetadata.isRelevantForFunctionEvents() && scope.eventsFunction) ||
+  (instructionMetadata.isRelevantForAsynchronousFunctionEvents() &&
+    scope.eventsFunction &&
+    scope.eventsFunction.isAsync()) ||
+  (instructionMetadata.isRelevantForCustomObjectEvents() &&
+    scope.eventsBasedObject);
+
+const InstructionMissing = (props: {|
+  instructionType: string,
+  isCondition: boolean,
+|}) => {
+  const { hasExtensionNamed } = React.useContext(ExtensionStoreContext);
+  const { name, behaviorName, extensionName } = getFunctionNameFromType(
+    props.instructionType
+  );
+  const extensionStoreMention = hasExtensionNamed(extensionName) ? (
+    <Trans>Try installing it from the extension store.</Trans>
+  ) : (
+    ''
+  );
+
+  const functionNode = <span className="function-name">{name}</span>;
+  const behaviorNode = <span className="behavior-name">{behaviorName}</span>;
+  const extensionNode = <span className="extension-name">{extensionName}</span>;
+
+  if (behaviorName) {
+    if (props.isCondition) {
+      return (
+        <span className="instruction-missing">
+          <Trans>
+            {functionNode} condition on behavior {behaviorNode} from
+            {extensionNode} extension is missing.
+          </Trans>{' '}
+          {extensionStoreMention}
+        </span>
+      );
+    } else {
+      return (
+        <span className="instruction-missing">
+          <Trans>
+            {functionNode} action on behavior {behaviorNode} from
+            {extensionNode} extension is missing.
+          </Trans>{' '}
+          {extensionStoreMention}
+        </span>
+      );
+    }
+  } else {
+    if (props.isCondition) {
+      return (
+        <span className="instruction-missing">
+          <Trans>
+            {functionNode} condition from {extensionNode} extension is missing.
+          </Trans>{' '}
+          {extensionStoreMention}
+        </span>
+      );
+    } else {
+      return (
+        <span className="instruction-missing">
+          <Trans>
+            {functionNode} action from {extensionNode} extension is missing.
+          </Trans>{' '}
+          {extensionStoreMention}
+        </span>
+      );
+    }
+  }
+};
+
+const Instruction = (props: Props): React.Node => {
+  const {
+    platform,
+    instruction,
+    isCondition,
+    onClick,
+    onMoveToInstruction,
+    onContextMenu,
+    id,
+    scope,
+  } = props;
+  const instrFormatter = React.useMemo(
+    () => gd.InstructionSentenceFormatter.get(),
+    []
+  );
   const preferences = React.useContext(PreferencesContext);
+  const theme = React.useContext(GDevelopThemeContext);
+  const type = theme.palette.type;
+  const warningColor = theme.message.warning;
+
   const useAssignmentOperators =
     preferences.values.eventsSheetUseAssignmentOperators;
+  const showDeprecatedInstructionWarning =
+    preferences.values.showDeprecatedInstructionWarning;
 
   /**
    * Render the different parts of the text of the instruction.
    * Parameter can have formatting, be hovered and clicked. The rest
    * has not particular styling.
    */
-  const renderInstructionText = (metadata: gdInstructionMetadata) => {
+  const renderInstructionText = (
+    metadata: gdInstructionMetadata,
+    i18n: I18nType
+  ) => {
+    // Keep the call to `projectScopedContainersAccessor.get()` inside this function
+    // (and generally speaking, just before usage of `projectScopedContainers`).
+    // If it's called outside, the function could use a `projectScopedContainers`
+    // that would have been replaced in memory by the one for another instruction.
+    // (because `gd.ProjectScopedContainers.makeNewProjectScopedContainersXXX` functions
+    // are always returning the same object in memory).
+    const projectScopedContainers = props.projectScopedContainersAccessor.get();
     const { instruction, disabled, renderObjectThumbnail } = props;
     const formattedTexts = instrFormatter.getAsFormattedText(
       instruction,
@@ -112,32 +254,126 @@ const Instruction = (props: Props) => {
         className={classNames({
           [disabledText]: disabled,
         })}
+        data-instruction={instruction.getType()}
+        data-instruction-inverted={
+          instruction.isInverted() ? 'true' : undefined
+        }
       >
         {mapFor(0, formattedTexts.size(), i => {
           const formatting = formattedTexts.getTextFormatting(i);
+          const value = formattedTexts.getString(i);
           const parameterIndex = formatting.getUserData();
           const isParameter =
             parameterIndex >= 0 && parameterIndex < parametersCount;
 
           if (!isParameter) {
+            if (value === 'Unknown or unsupported instruction') {
+              return (
+                <InstructionMissing
+                  instructionType={instruction.getType()}
+                  isCondition={isCondition}
+                  key={`unknown-behavior-instruction-${i}`}
+                />
+              );
+            }
+            const deprecatedPrefix =
+              i === 0 &&
+              showDeprecatedInstructionWarning ===
+                'icon-and-deprecated-warning-text' &&
+              metadata.isHidden()
+                ? '[DEPRECATED] '
+                : '';
             return (
               <span key={i}>
-                {i === 0
-                  ? capitalize(formattedTexts.getString(i))
-                  : formattedTexts.getString(i)}
+                {deprecatedPrefix}
+                {highlightSearchText(value, props.highlightedSearchText, {
+                  matchCase: props.highlightedSearchMatchCase,
+                })}
               </span>
             );
           }
 
           const parameterMetadata = metadata.getParameter(parameterIndex);
-          const parameterType = parameterMetadata.getType();
+          // TODO Remove the ternary when all parameter declarations use
+          // 'number' instead of 'expression'.
+          const parameterType: string =
+            parameterMetadata.getType() === 'expression'
+              ? 'number'
+              : parameterMetadata.getType();
+          let expressionIsValid = true;
+          let hasDeprecationWarning = false;
+          const validationResult = gd.InstructionValidator.validateParameter(
+            platform,
+            projectScopedContainers,
+            instruction,
+            metadata,
+            parameterIndex
+          );
+          expressionIsValid = validationResult.isValid();
+          if (showDeprecatedInstructionWarning !== 'no') {
+            hasDeprecationWarning = validationResult.hasDeprecationWarning();
+          }
+          // TODO Move this code inside `InstructionValidator.isParameterValid`
+          if (expressionIsValid && parameterType === 'functionParameterName') {
+            const eventsFunction = props.scope.eventsFunction;
+            if (eventsFunction) {
+              const eventsBasedEntity =
+                props.scope.eventsBasedBehavior ||
+                props.scope.eventsBasedObject;
+              const functionsContainer = eventsBasedEntity
+                ? eventsBasedEntity.getEventsFunctions()
+                : props.scope.eventsFunctionsExtension
+                ? props.scope.eventsFunctionsExtension.getEventsFunctions()
+                : null;
+
+              if (functionsContainer) {
+                const allowedParameterTypes = parameterMetadata
+                  .getExtraInfo()
+                  .split(',');
+                const parameters = enumerateParametersUsableInExpressions(
+                  functionsContainer,
+                  eventsFunction,
+                  allowedParameterTypes
+                );
+                const functionParameterNameExpression = instruction
+                  .getParameter(parameterIndex)
+                  .getPlainString();
+                const functionParameterName = functionParameterNameExpression.substring(
+                  1,
+                  functionParameterNameExpression.length - 1
+                );
+                expressionIsValid = parameters.some(
+                  parameter => parameter.getName() === functionParameterName
+                );
+              }
+            } else {
+              // This can happen if function-dedicated instructions are
+              // copied to scene events.
+              expressionIsValid = false;
+            }
+          }
+
+          const formattedValue = formatValue({
+            value,
+            parameterType,
+            i18n,
+          });
+
           return (
             <span
               key={i}
               className={classNames({
                 [selectableArea]: true,
                 [instructionParameter]: true,
-                [parameterType]: true,
+                // Resources are string literals they use the same color as strings.
+                // $FlowFixMe[invalid-computed-prop]
+                [parameterMetadata.getValueTypeMetadata().isResource()
+                  ? 'resource'
+                  : parameterType]:
+                  // Variables, numbers and strings are expressions with syntax coloring.
+                  parameterType !== 'number' &&
+                  parameterType !== 'string' &&
+                  !parameterMetadata.getValueTypeMetadata().isVariable(),
               })}
               onClick={domEvent => {
                 props.onParameterClick(domEvent, parameterIndex);
@@ -149,7 +385,7 @@ const Instruction = (props: Props) => {
                 }
               }}
               onKeyPress={event => {
-                if (event.key === 'Enter' || event.key === ' ') {
+                if (shouldActivate(event)) {
                   props.onParameterClick(event, parameterIndex);
                   event.stopPropagation();
                   event.preventDefault();
@@ -158,11 +394,21 @@ const Instruction = (props: Props) => {
               tabIndex={0}
             >
               {ParameterRenderingService.renderInlineParameter({
-                value: formattedTexts.getString(i),
+                scope,
+                value: formattedValue,
+                expression: instruction.getParameter(parameterIndex),
+                expressionIsValid,
+                hasDeprecationWarning,
                 parameterMetadata,
                 renderObjectThumbnail,
                 InvalidParameterValue,
+                DeprecatedParameterValue,
+                MissingParameterValue,
                 useAssignmentOperators,
+                projectScopedContainersAccessor:
+                  props.projectScopedContainersAccessor,
+                highlightedSearchText: props.highlightedSearchText,
+                highlightedSearchMatchCase: props.highlightedSearchMatchCase,
               })}
             </span>
           );
@@ -171,134 +417,242 @@ const Instruction = (props: Props) => {
     );
   };
 
-  //TODO: Metadata could be cached for performance boost.
-  const metadata = isCondition
-    ? gd.MetadataProvider.getConditionMetadata(
-        gd.JsPlatform.get(),
-        instruction.getType()
-      )
-    : gd.MetadataProvider.getActionMetadata(
-        gd.JsPlatform.get(),
-        instruction.getType()
-      );
+  // Disable drag on touchscreens, because it would interfere with the
+  // scroll, and would create too much mistake/frustration.
+  const screenType = useScreenType();
+  const dragAllowed = screenType !== 'touch';
+
+  // Allow a long press to show the context menu
+  const { contextMenuProps: longTouchForContextMenuProps } = useLongTouch(
+    React.useCallback(
+      event => {
+        onContextMenu(event.clientX, event.clientY);
+      },
+      [onContextMenu]
+    ),
+    { context: 'events-tree-event-component' }
+  );
 
   return (
-    <DragSourceAndDropTarget
-      beginDrag={() => {
-        onClick(); // Select the dragged instruction
+    <I18n>
+      {({ i18n }) => (
+        <DragSourceAndDropTarget
+          beginDrag={() => {
+            onClick(); // Select the dragged instruction
 
-        // No need to save here what is being dragged,
-        // as its the entire selection that is considered to be dragged.
-        return {
-          isCondition,
-        };
-      }}
-      canDrop={draggedItem => draggedItem.isCondition === isCondition}
-      drop={() => {
-        onMoveToInstruction();
-      }}
-    >
-      {({ connectDragSource, connectDropTarget, isOver, canDrop }) => {
-        // The instruction itself can be dragged and is a target for
-        // another instruction to be dropped. It's IMPORTANT NOT to have
-        // the subinstructions list inside the connectDropTarget/connectDragSource
-        // as otherwise this can confuse react-dnd ("Expected to find a valid target")
-        // (surely due to components re-mounting/rerendering ?).
-        const instructionElement = connectDropTarget(
-          connectDragSource(
-            <div
-              style={styles.container}
-              className={classNames({
-                [selectableArea]: true,
-                [selectedArea]: props.selected,
-              })}
-              onClick={e => {
-                e.stopPropagation();
+            // No need to save here what is being dragged,
+            // as its the entire selection that is considered to be dragged.
+            return {
+              isCondition,
+            };
+          }}
+          canDrag={() => dragAllowed}
+          canDrop={draggedItem => draggedItem.isCondition === isCondition}
+          drop={() => {
+            onMoveToInstruction();
+          }}
+        >
+          {({ connectDragSource, connectDropTarget, isOver, canDrop }) => {
+            // /!\ It's important to get the metadata now so that we're sure they
+            // are valid.
+            // If the metadata is retrieved outside of the closure, it's possible
+            // that the metadata is changed in the meantime (especially on behavior
+            // properties it seems).
+            const metadata = isCondition
+              ? gd.MetadataProvider.getConditionMetadata(
+                  gd.JsPlatform.get(),
+                  instruction.getType()
+                )
+              : gd.MetadataProvider.getActionMetadata(
+                  gd.JsPlatform.get(),
+                  instruction.getType()
+                );
 
-                if (props.screenType === 'touch' && props.selected) {
-                  // On touch screens, tapping again a selected instruction should edit it.
+            const smallIconFilename = metadata.getSmallIconFilename() || '';
+            // The instruction itself can be dragged and is a target for
+            // another instruction to be dropped. It's IMPORTANT NOT to have
+            // the subinstructions list inside the connectDropTarget/connectDragSource
+            // as otherwise this can confuse react-dnd ("Expected to find a valid target")
+            // (surely due to components re-mounting/rerendering ?).
+            const isBlackIcon =
+              smallIconFilename.startsWith('data:image/svg+xml') ||
+              smallIconFilename.includes('_black');
+
+            const instructionDragSourceElement = connectDragSource(
+              <div
+                style={styles.container}
+                className={classNames({
+                  [selectableArea]: true,
+                  [selectedArea]: props.selected,
+                  [warningInstruction]:
+                    showDeprecatedInstructionWarning !== 'no' &&
+                    (!isInstructionVisible(scope, metadata) ||
+                      metadata.isHidden()),
+                })}
+                onClick={e => {
+                  e.stopPropagation();
+
+                  if (props.screenType === 'touch' && props.selected) {
+                    // On touch screens, tapping again a selected instruction should edit it.
+                    props.onDoubleClick();
+                  } else {
+                    props.onClick();
+                  }
+                }}
+                onDoubleClick={e => {
+                  e.stopPropagation();
                   props.onDoubleClick();
-                } else {
-                  props.onClick();
-                }
-              }}
-              onDoubleClick={e => {
-                e.stopPropagation();
-                props.onDoubleClick();
-              }}
-              onContextMenu={e => {
-                e.stopPropagation();
-                props.onContextMenu(e.clientX, e.clientY);
-              }}
-              onKeyPress={event => {
-                if (event.key === 'Enter') {
-                  props.onDoubleClick();
-                  event.stopPropagation();
-                  event.preventDefault();
-                } else if (event.key === ' ') {
-                  props.onClick();
-                  event.stopPropagation();
-                  event.preventDefault();
-                }
-              }}
-              tabIndex={0}
-            >
-              {instruction.isInverted() && (
+                }}
+                onContextMenu={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onContextMenu(e.clientX, e.clientY);
+                }}
+                {...longTouchForContextMenuProps}
+                onKeyPress={event => {
+                  if (shouldValidate(event)) {
+                    props.onDoubleClick();
+                    event.stopPropagation();
+                    event.preventDefault();
+                  } else if (shouldActivate(event)) {
+                    props.onClick();
+                    event.stopPropagation();
+                    event.preventDefault();
+                  }
+                }}
+                tabIndex={0}
+                id={id}
+              >
+                {showDeprecatedInstructionWarning !== 'no' &&
+                metadata.isHidden() ? (
+                  <Tooltip
+                    title={
+                      metadata.getDeprecationMessage() ? (
+                        <>
+                          {props.isCondition ? (
+                            <Trans>Deprecated condition</Trans>
+                          ) : (
+                            <Trans>Deprecated action</Trans>
+                          )}
+                          {': '}
+                          {metadata.getDeprecationMessage()}
+                        </>
+                      ) : props.isCondition ? (
+                        <Trans>Deprecated condition</Trans>
+                      ) : (
+                        <Trans>Deprecated action</Trans>
+                      )
+                    }
+                    fontSize="small"
+                  >
+                    <Warning
+                      style={{ color: warningColor }}
+                      className={classNames({
+                        [icon]: true,
+                      })}
+                    />
+                  </Tooltip>
+                ) : null}
+                {instruction.isInverted() && (
+                  <img
+                    className={classNames({
+                      [icon]: true,
+                    })}
+                    src="res/contraire.png"
+                    alt="Condition is negated"
+                  />
+                )}
+                {metadata.isAsync() &&
+                  (!metadata.isOptionallyAsync() ||
+                    instruction.isAwaited()) && (
+                    <Tooltip
+                      title={
+                        <Trans>
+                          Next actions (and sub-events) will wait for this
+                          action to be finished before running.
+                        </Trans>
+                      }
+                      placement="top"
+                    >
+                      <AsyncIcon
+                        className={classNames({
+                          [icon]: true,
+                        })}
+                      />
+                    </Tooltip>
+                  )}
                 <img
                   className={classNames({
                     [icon]: true,
                   })}
-                  src="res/contraire.png"
-                  alt="Condition is negated"
+                  src={smallIconFilename}
+                  alt=""
+                  style={{
+                    filter:
+                      type === 'dark' && isBlackIcon
+                        ? 'grayscale(1) invert(1)'
+                        : undefined,
+                  }}
                 />
-              )}
-              <img
-                className={classNames({
-                  [icon]: true,
-                })}
-                src={metadata.getSmallIconFilename()}
-                alt=""
-              />
-              {renderInstructionText(metadata)}
-            </div>
-          )
-        );
+                {renderInstructionText(metadata, i18n)}
+              </div>
+            );
 
-        return (
-          <React.Fragment>
-            {isOver && <DropIndicator canDrop={canDrop} />}
-            {instructionElement}
-            {metadata.canHaveSubInstructions() && (
-              <InstructionsList
-                style={
-                  {} /* TODO: Use a new object to force update - somehow updates are not always propagated otherwise */
-                }
-                className={subInstructionsContainer}
-                instrsList={instruction.getSubInstructions()}
-                areConditions={props.isCondition}
-                selection={props.selection}
-                onAddNewInstruction={props.onAddNewSubInstruction}
-                onPasteInstructions={props.onPasteSubInstructions}
-                onMoveToInstruction={props.onMoveToSubInstruction}
-                onMoveToInstructionsList={props.onMoveToSubInstructionsList}
-                onInstructionClick={props.onSubInstructionClick}
-                onInstructionDoubleClick={props.onSubInstructionDoubleClick}
-                onInstructionContextMenu={props.onSubInstructionContextMenu}
-                onInstructionsListContextMenu={
-                  props.onSubInstructionsListContextMenu
-                }
-                onParameterClick={props.onSubParameterClick}
-                addButtonLabel={<Trans>Add a sub-condition</Trans>}
-                disabled={props.disabled}
-                renderObjectThumbnail={props.renderObjectThumbnail}
-                screenType={props.screenType}
-                windowWidth={props.windowWidth}
-              />
-            )}
-          </React.Fragment>
-        );
-      }}
-    </DragSourceAndDropTarget>
+            const instructionDragSourceDropTargetElement = instructionDragSourceElement
+              ? connectDropTarget(instructionDragSourceElement)
+              : null;
+
+            return (
+              <React.Fragment>
+                {isOver && <DropIndicator canDrop={canDrop} />}
+                {instructionDragSourceDropTargetElement}
+                {metadata.canHaveSubInstructions() && (
+                  <InstructionsList
+                    platform={props.platform}
+                    style={
+                      {} /* TODO: Use a new object to force update - somehow updates are not always propagated otherwise */
+                    }
+                    className={subInstructionsContainer}
+                    instrsList={instruction.getSubInstructions()}
+                    areConditions={props.isCondition}
+                    selection={props.selection}
+                    onAddNewInstruction={props.onAddNewSubInstruction}
+                    onPasteInstructions={props.onPasteSubInstructions}
+                    onMoveToInstruction={props.onMoveToSubInstruction}
+                    onMoveToInstructionsList={props.onMoveToSubInstructionsList}
+                    onInstructionClick={props.onSubInstructionClick}
+                    onInstructionDoubleClick={props.onSubInstructionDoubleClick}
+                    onInstructionContextMenu={props.onSubInstructionContextMenu}
+                    onAddInstructionContextMenu={
+                      props.onAddSubInstructionContextMenu
+                    }
+                    onParameterClick={props.onSubParameterClick}
+                    addButtonLabel={<Trans>Add a sub-condition</Trans>}
+                    addButtonId="add-sub-condition-button"
+                    disabled={props.disabled}
+                    renderObjectThumbnail={props.renderObjectThumbnail}
+                    screenType={props.screenType}
+                    windowSize={props.windowSize}
+                    scope={props.scope}
+                    resourcesManager={props.resourcesManager}
+                    globalObjectsContainer={props.globalObjectsContainer}
+                    objectsContainer={props.objectsContainer}
+                    projectScopedContainersAccessor={
+                      props.projectScopedContainersAccessor
+                    }
+                    idPrefix={props.id}
+                    highlightedSearchText={props.highlightedSearchText}
+                    highlightedSearchMatchCase={
+                      props.highlightedSearchMatchCase
+                    }
+                  />
+                )}
+              </React.Fragment>
+            );
+          }}
+        </DragSourceAndDropTarget>
+      )}
+    </I18n>
   );
 };
 

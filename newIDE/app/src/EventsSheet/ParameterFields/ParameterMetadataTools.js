@@ -1,6 +1,7 @@
 // @flow
 import { type ExpressionParameters } from './ParameterFieldCommons';
-const gd = global.gd;
+import { type ExpressionAutocompletion } from '../../ExpressionAutocompletion';
+const gd: libGDevelop = global.gd;
 
 /**
  * Given an instruction or an expression and a parameter number,
@@ -22,7 +23,7 @@ export const getLastObjectParameterValue = ({
   expressionMetadata: ?gdExpressionMetadata,
   expression: ?ExpressionParameters,
   parameterIndex: ?number,
-|}): ?string => {
+|}): string | null => {
   if (parameterIndex === undefined || parameterIndex == null) {
     // No parameter index given: the parameter is not even in a list of parameters
     return null;
@@ -38,7 +39,9 @@ export const getLastObjectParameterValue = ({
       objectParameterIndex >= 0 &&
       objectParameterIndex < instruction.getParametersCount()
     ) {
-      objectName = instruction.getParameter(objectParameterIndex);
+      objectName = instruction
+        .getParameter(objectParameterIndex)
+        .getPlainString();
     }
   } else if (expressionMetadata && expression) {
     const objectParameterIndex = gd.ParameterMetadataTools.getObjectParameterIndexFor(
@@ -54,4 +57,117 @@ export const getLastObjectParameterValue = ({
   }
 
   return objectName;
+};
+
+export const getLastObjectParameter = (
+  parameters: gdParameterMetadataContainer,
+  parameterIndex: number
+): gdParameterMetadata | null => {
+  const objectParameterIndex = gd.ParameterMetadataTools.getObjectParameterIndexFor(
+    parameters,
+    parameterIndex
+  );
+  if (
+    objectParameterIndex < 0 ||
+    objectParameterIndex >= parameters.getParametersCount()
+  ) {
+    return null;
+  }
+
+  return parameters.getParameterAt(objectParameterIndex);
+};
+
+export const getLastObjectParameterObjectType = (
+  parameters: gdParameterMetadataContainer,
+  parameterIndex: number
+): string => {
+  const objectParameter = getLastObjectParameter(parameters, parameterIndex);
+  return objectParameter ? objectParameter.getExtraInfo() : '';
+};
+
+/**
+ * Given an instruction or an expression and a parameter number,
+ * return the value of the previous parameter.
+ */
+export const getPreviousParameterValue = ({
+  instruction,
+  expression,
+  parameterIndex,
+}: {|
+  instruction: ?gdInstruction,
+  expression: ?ExpressionParameters,
+  parameterIndex: ?number,
+|}): ?string => {
+  if (parameterIndex === undefined || parameterIndex == null) {
+    // No parameter index given: the parameter is not even in a list of parameters
+    return null;
+  }
+
+  if (instruction) {
+    if (
+      parameterIndex >= 1 &&
+      parameterIndex < instruction.getParametersCount()
+    ) {
+      return instruction.getParameter(parameterIndex - 1).getPlainString();
+    }
+  } else if (expression) {
+    if (
+      parameterIndex >= 1 &&
+      parameterIndex < expression.getParametersCount()
+    ) {
+      return expression.getParameter(parameterIndex - 1);
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Try to extract the value of a string literal, or null. Result is not guaranteed to be valid.
+ * - for `"Hello"`, this returns `Hello`.
+ * - for `"Hello`, this returns null.
+ * - for `"H" + "O"`, this returns `H" + "O`.
+ */
+export const tryExtractStringLiteralContent = (
+  parameterValue: ?string
+): ?string => {
+  if (!parameterValue) return null;
+
+  const trimmedParameterValue = parameterValue.trim();
+  if (
+    trimmedParameterValue.length >= 2 &&
+    trimmedParameterValue[0] === '"' &&
+    trimmedParameterValue[trimmedParameterValue.length - 1] === '"'
+  ) {
+    return trimmedParameterValue.substr(1, trimmedParameterValue.length - 2);
+  }
+
+  return null;
+};
+
+export const getParameterChoiceAutocompletions = (
+  parameterMetadata: ?gdParameterMetadata
+): Array<ExpressionAutocompletion> =>
+  getParameterChoiceValues(parameterMetadata).map(choice => ({
+    kind: 'Text',
+    completion: `"${choice}"`,
+  }));
+
+export const getParameterChoiceValues = (
+  parameterMetadata: ?gdParameterMetadata
+): Array<string> => {
+  if (!parameterMetadata) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(parameterMetadata.getExtraInfo());
+  } catch (exception) {
+    console.error(
+      'The parameter seems misconfigured, as an array of choices could not be extracted - verify that your properly wrote a list of choices in JSON format. Full exception is:',
+      exception
+    );
+  }
+
+  return [];
 };

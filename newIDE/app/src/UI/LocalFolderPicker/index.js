@@ -4,12 +4,13 @@ import { I18n } from '@lingui/react';
 import { t } from '@lingui/macro';
 import { type I18n as I18nType } from '@lingui/core';
 
-import React, { PureComponent } from 'react';
+import * as React from 'react';
 import TextField from '../TextField';
-import RaisedButton from '../RaisedButton';
-import optionalRequire from '../../Utils/OptionalRequire.js';
+import optionalRequire from '../../Utils/OptionalRequire';
+import FlatButton from '../FlatButton';
 const electron = optionalRequire('electron');
-const dialog = electron ? electron.remote.dialog : null;
+const remote = optionalRequire('@electron/remote');
+const dialog = remote ? remote.dialog : null;
 
 const styles = {
   container: {
@@ -26,7 +27,7 @@ const styles = {
 };
 
 type Props = {|
-  type: 'export' | 'create-game',
+  type: 'export' | 'create-game' | 'default-workspace',
   value: string,
   onChange: string => void,
   defaultPath?: string,
@@ -34,81 +35,94 @@ type Props = {|
 |};
 
 type TitleAndMessage = {|
-  title: ?string,
-  message: ?string,
+  title: string,
+  message: string,
 |};
 
-export default class LocalFolderPicker extends PureComponent<Props, {||}> {
-  _onChooseFolder = ({ title, message }: TitleAndMessage) => {
+const LocalFolderPicker = ({
+  type,
+  value,
+  onChange,
+  defaultPath,
+  fullWidth,
+}: Props): React.Node => {
+  // Use an internal state to avoid validating the value when the user
+  // is typing in the text field. This allows typing a "/" without the
+  // formatting kicking in.
+  const [textValue, setTextValue] = React.useState(value);
+  const onChooseFolder = async ({ title, message }: TitleAndMessage) => {
     if (!dialog || !electron) return;
 
-    const browserWindow = electron.remote.getCurrentWindow();
-    dialog.showOpenDialog(
-      browserWindow,
-      {
-        title,
-        properties: ['openDirectory', 'createDirectory'],
-        message,
-        defaultPath: this.props.defaultPath,
-      },
-      paths => {
-        if (!paths || !paths.length) return;
+    const browserWindow = remote.getCurrentWindow();
+    const { filePaths } = await dialog.showOpenDialog(browserWindow, {
+      title,
+      properties: ['openDirectory', 'createDirectory'],
+      message,
+      defaultPath: defaultPath,
+    });
 
-        this.props.onChange(paths[0]);
-      }
-    );
+    if (!filePaths || !filePaths.length) return;
+
+    const filePath = filePaths[0];
+    onChange(filePath);
+    setTextValue(filePath);
   };
 
-  _getTitleAndMessage = (i18n: I18nType): TitleAndMessage => {
-    const { type } = this.props;
+  const onBlur = () => {
+    onChange(textValue);
+  };
+
+  const getTitleAndMessage = (i18n: I18nType): TitleAndMessage => {
     if (type === 'export') {
       return {
         title: i18n._(t`Choose an export folder`),
         message: i18n._(t`Choose where to export the game`),
       };
-    } else if (type === 'create-game') {
+    }
+    if (type === 'default-workspace') {
       return {
-        title: i18n._(t`Choose a folder for the new game`),
-        message: i18n._(t`Choose where to create the game`),
+        title: i18n._(t`Choose a workspace folder`),
+        message: i18n._(t`Choose where to create your projects`),
       };
     }
-
     return {
-      title: undefined,
-      message: undefined,
+      title: i18n._(t`Choose a folder for the new game`),
+      message: i18n._(t`Choose where to create the game`),
     };
   };
 
-  render() {
-    return (
-      <I18n>
-        {({ i18n }) => {
-          const titleAndMessage = this._getTitleAndMessage(i18n);
-          return (
-            <div
-              style={{
-                ...styles.container,
-                width: this.props.fullWidth ? '100%' : undefined,
-              }}
-            >
-              <TextField
-                margin="dense"
-                style={styles.textField}
-                type="text"
-                hintText={titleAndMessage.title}
-                value={this.props.value}
-                onChange={(event, value) => this.props.onChange(value)}
-              />
-              <RaisedButton
-                label={<Trans>Choose folder</Trans>}
-                primary={false}
-                style={styles.button}
-                onClick={() => this._onChooseFolder(titleAndMessage)}
-              />
-            </div>
-          );
-        }}
-      </I18n>
-    );
-  }
-}
+  return (
+    <I18n>
+      {({ i18n }) => {
+        const titleAndMessage = getTitleAndMessage(i18n);
+        return (
+          <div
+            style={{
+              ...styles.container,
+              width: fullWidth ? '100%' : undefined,
+            }}
+          >
+            {/* $FlowFixMe[incompatible-type] */}
+            <TextField
+              margin="dense"
+              style={styles.textField}
+              type="text"
+              hintText={titleAndMessage.title}
+              value={textValue}
+              onChange={(event, value) => setTextValue(value)}
+              onBlur={onBlur}
+            />
+            <FlatButton
+              label={<Trans>Choose folder</Trans>}
+              // $FlowFixMe[incompatible-type]
+              style={styles.button}
+              onClick={() => onChooseFolder(titleAndMessage)}
+            />
+          </div>
+        );
+      }}
+    </I18n>
+  );
+};
+
+export default LocalFolderPicker;

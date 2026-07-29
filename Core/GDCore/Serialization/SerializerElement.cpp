@@ -1,6 +1,9 @@
 #include "GDCore/Serialization/SerializerElement.h"
 
+#include <cmath>
 #include <iostream>
+
+#include "GDCore/Tools/Log.h"
 
 namespace gd {
 
@@ -56,7 +59,16 @@ SerializerElement& SerializerElement::SetAttribute(const gd::String& name,
                       // support code using attributes. Make sure that any
                       // existing child with this name is removed (otherwise it
                       // would erase the attribute at serialization).
-  attributes[name].SetDouble(value);
+
+  if (std::isnan(value)) {
+    gd::LogError("Attribute \"" + name +
+                 "\" was set to NaN - this is not allowed (would not be "
+                 "serialized correctly to JSON). Defaulting to 0.");
+    attributes[name].SetDouble(0);
+  } else {
+    attributes[name].SetDouble(value);
+  }
+
   return *this;
 }
 
@@ -77,8 +89,6 @@ bool SerializerElement::GetBoolAttribute(const gd::String& name,
     }
   }
 
-  std::cout << "Bool attribute \"" << name << "\" not found, returning "
-            << defaultValue;
   return defaultValue;
 }
 
@@ -210,8 +220,7 @@ SerializerElement& SerializerElement::GetChild(
   for (size_t i = 0; i < children.size(); ++i) {
     if (children[i].second == std::shared_ptr<SerializerElement>()) continue;
 
-    if (children[i].first == name ||
-        (isArray && children[i].first.empty()) ||
+    if (children[i].first == name || (isArray && children[i].first.empty()) ||
         (!deprecatedName.empty() && children[i].first == deprecatedName)) {
       if (index == currentIndex)
         return *children[i].second;
@@ -223,6 +232,15 @@ SerializerElement& SerializerElement::GetChild(
   std::cout << "Child " << name << " not found in SerializerElement::GetChild"
             << std::endl;
   return nullElement;
+}
+
+SerializerElement &
+SerializerElement::GetOrCreateChild(gd::String name,
+                                    gd::String deprecatedName) {
+  if (!HasChild(name)) {
+    AddChild(name);
+  }
+  return GetChild(name, 0, deprecatedName);
 }
 
 std::size_t SerializerElement::GetChildrenCount(
@@ -244,8 +262,7 @@ std::size_t SerializerElement::GetChildrenCount(
   for (size_t i = 0; i < children.size(); ++i) {
     if (children[i].second == std::shared_ptr<SerializerElement>()) continue;
 
-    if (children[i].first == name ||
-        (isArray && children[i].first.empty()) ||
+    if (children[i].first == name || (isArray && children[i].first.empty()) ||
         (!deprecatedName.empty() && children[i].first == deprecatedName))
       currentIndex++;
   }
@@ -275,6 +292,19 @@ void SerializerElement::RemoveChild(const gd::String& name) {
   }
 }
 
+void SerializerElement::Clear() {
+  children.clear();
+  attributes.clear();
+}
+
+bool SerializerElement::IsEmpty() {
+  return children.empty() && attributes.empty();
+}
+
+void SerializerElement::RemoveAttribute(const gd::String& name) {
+  attributes.erase(name);
+}
+
 void SerializerElement::Init(const gd::SerializerElement& other) {
   valueUndefined = other.valueUndefined;
   elementValue = other.elementValue;
@@ -291,6 +321,33 @@ void SerializerElement::Init(const gd::SerializerElement& other) {
   isArray = other.isArray;
   arrayOf = other.arrayOf;
   deprecatedArrayOf = other.deprecatedArrayOf;
+}
+
+void SerializerElement::SetMultilineStringValue(const gd::String& value) {
+  if (value.find('\n') == gd::String::npos) {
+    SetStringValue(value);
+    return;
+  }
+
+  std::vector<gd::String> lines = value.Split('\n');
+  children.clear();
+  ConsiderAsArrayOf("");
+  for (const auto& line : lines) {
+    AddChild("").SetStringValue(line);
+  }
+}
+
+gd::String SerializerElement::GetMultilineStringValue() {
+  if (!ConsideredAsArray()) {
+    return GetValue().GetString();
+  }
+
+  gd::String value;
+  for (const auto& child : children) {
+    if (!value.empty()) value += "\n";
+    value += child.second->GetStringValue();
+  }
+  return value;
 }
 
 }  // namespace gd

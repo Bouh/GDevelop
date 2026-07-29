@@ -7,8 +7,6 @@
 
 namespace gd {
 
-EffectMetadata::EffectMetadata(const gd::String& type_) : type(type_) {}
-
 EffectMetadata& EffectMetadata::SetIncludeFile(const gd::String& includeFile) {
   includeFiles.clear();
   includeFiles.push_back(includeFile);

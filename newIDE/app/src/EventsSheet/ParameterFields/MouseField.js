@@ -1,56 +1,70 @@
+// @flow
+import * as React from 'react';
 import { Trans } from '@lingui/macro';
 import { t } from '@lingui/macro';
+import {
+  type ParameterFieldProps,
+  type ParameterFieldInterface,
+  type FieldFocusFunction,
+} from './ParameterFieldCommons';
 import { type ParameterInlineRendererProps } from './ParameterInlineRenderer.flow';
-import React, { Component } from 'react';
-import SelectField from '../../UI/SelectField';
+import SelectField, { type SelectFieldInterface } from '../../UI/SelectField';
 import SelectOption from '../../UI/SelectOption';
 
-export default class MouseField extends Component {
-  focus() {}
+export default (React.forwardRef<ParameterFieldProps, ParameterFieldInterface>(
+  function MouseField(props: ParameterFieldProps, ref) {
+    const field = React.useRef<?SelectFieldInterface>(null);
+    const focus: FieldFocusFunction = options => {
+      if (field.current) field.current.focus(options);
+    };
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
 
-  render() {
-    const { parameterMetadata, value } = this.props;
+    const { parameterMetadata, value } = props;
     const description = parameterMetadata
       ? parameterMetadata.getDescription()
       : undefined;
 
     return (
       <SelectField
-        margin={this.props.isInline ? 'none' : 'dense'}
+        margin={props.isInline ? 'none' : 'dense'}
         fullWidth
         floatingLabelText={description}
         helperMarkdownText={
           parameterMetadata ? parameterMetadata.getLongDescription() : undefined
         }
         value={value}
-        ref={field => (this._field = field)}
-        onChange={(e, i, value) => this.props.onChange(value)}
-        errorText={value ? undefined : <Trans>You must select a button</Trans>}
+        ref={field}
+        onChange={(e, i, value) => props.onChange(value)}
+        translatableHintText={t`Choose a mouse button`}
       >
-        <SelectOption value="Left" primaryText={t`Left (primary)`} />
-        <SelectOption value="Right" primaryText={t`Right (secondary)`} />
+        <SelectOption value="Left" label={t`Left (primary)`} />
+        <SelectOption value="Right" label={t`Right (secondary)`} />
         <SelectOption
           value="Middle"
-          primaryText={t`Middle (Auxiliary button, usually the wheel button)`}
-        />
-        {/* TODO: Add support for these buttons in the game engine
-         <SelectOption
-          value="XButton1"
-          primaryText={t`Special button #1`}
+          label={t`Middle (Auxiliary button, usually the wheel button)`}
         />
         <SelectOption
-          value="XButton2"
-          primaryText={t`Special button #2`}
-        /> */}
+          value="Back"
+          label={t`Back (Additional button, typically the Browser Back button)`}
+        />
+        <SelectOption
+          value="Forward"
+          label={t`Forward (Additional button, typically the Browser Forward button)`}
+        />
       </SelectField>
     );
   }
-}
+): React.ComponentType<{
+  ...ParameterFieldProps,
+  +ref?: React.RefSetter<ParameterFieldInterface>,
+}>);
 
 export const renderInlineMouse = ({
   value,
   InvalidParameterValue,
-}: ParameterInlineRendererProps) => {
+}: ParameterInlineRendererProps): string | React.MixedElement => {
   return value ? (
     value
   ) : (

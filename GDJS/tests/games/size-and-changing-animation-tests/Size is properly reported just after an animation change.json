@@ -32,6 +32,8 @@
     "loadingScreen": {
       "showGDevelopSplash": true
     },
+    "authorIds": [],
+    "authorUsernames": [],
     "extensions": [
       {
         "name": "BuiltinObject"
@@ -187,6 +189,7 @@
           "updateIfNotVisible": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "animations": [
             {
               "name": "Square",

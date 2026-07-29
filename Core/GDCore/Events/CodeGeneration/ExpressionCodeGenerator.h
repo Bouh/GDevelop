@@ -9,7 +9,6 @@
 
 #include <memory>
 #include <vector>
-#include "GDCore/Events/Parsers/ExpressionParser2.h"
 #include "GDCore/Events/Parsers/ExpressionParser2Node.h"
 #include "GDCore/Events/Parsers/ExpressionParser2NodeWorker.h"
 #include "GDCore/String.h"
@@ -35,9 +34,11 @@ namespace gd {
  */
 class GD_CORE_API ExpressionCodeGenerator : public ExpressionParser2NodeWorker {
  public:
-  ExpressionCodeGenerator(EventsCodeGenerator& codeGenerator_,
+  ExpressionCodeGenerator(const gd::String &rootType_,
+                          const gd::String &rootObjectName_,
+                          EventsCodeGenerator& codeGenerator_,
                           EventsCodeGenerationContext& context_)
-      : codeGenerator(codeGenerator_), context(context_){};
+      : rootType(rootType_), rootObjectName(rootObjectName_), codeGenerator(codeGenerator_), context(context_){};
   virtual ~ExpressionCodeGenerator(){};
 
   /**
@@ -57,13 +58,9 @@ class GD_CORE_API ExpressionCodeGenerator : public ExpressionParser2NodeWorker {
   static gd::String GenerateExpressionCode(EventsCodeGenerator& codeGenerator,
                                            EventsCodeGenerationContext& context,
                                            const gd::String& type,
-                                           const gd::String& expression,
-                                           const gd::String& objectName = "");
-
-  static void UseOldExpressionParser(bool enable) {
-    useOldExpressionParser = enable;
-  };
-  static bool IsUsingOldExpressionParser() { return useOldExpressionParser; };
+                                           const gd::Expression& expression,
+                                           const gd::String& objectName = "",
+                                           const gd::String& extraInfo = "");
 
   const gd::String& GetOutput() { return output; };
 
@@ -78,7 +75,8 @@ class GD_CORE_API ExpressionCodeGenerator : public ExpressionParser2NodeWorker {
   void OnVisitVariableBracketAccessorNode(
       VariableBracketAccessorNode& node) override;
   void OnVisitIdentifierNode(IdentifierNode& node) override;
-  void OnVisitFunctionNode(FunctionNode& node) override;
+  void OnVisitObjectFunctionNameNode(ObjectFunctionNameNode& node) override;
+  void OnVisitFunctionCallNode(FunctionCallNode& node) override;
   void OnVisitEmptyNode(EmptyNode& node) override;
 
  private:
@@ -105,10 +103,11 @@ class GD_CORE_API ExpressionCodeGenerator : public ExpressionParser2NodeWorker {
       const std::vector<std::unique_ptr<ExpressionNode>>& parameters);
 
   gd::String output;
+  gd::String objectNameToUseForVariableAccessor;
   EventsCodeGenerator& codeGenerator;
   EventsCodeGenerationContext& context;
-
-  static bool useOldExpressionParser;
+  const gd::String rootType;
+  const gd::String rootObjectName;
 };
 
 }  // namespace gd

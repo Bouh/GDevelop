@@ -1,18 +1,9 @@
-<!-- GDevelop.js core -->
-<script src="/libGD.js"></script>
-
-<!-- Monaco Editor support -->
-<script src="/external/monaco-editor-min/vs/loader.js"></script>
+<!-- Log the time of start -->
 <script>
-    amdRequire = require;
-    amdRequire.config({
-        paths: {
-        "vs": "vs"
-        }
-    });
-    window.MonacoEnvironment = {
-        getWorkerUrl: function (workerId, label) {
-        return "external/monaco-editor-min/vs/base/worker/workerMain.js";
-        }
-    };
+  window['GD_STARTUP_TIMES'] = [
+    ['previewHeadHtmlFirstScriptStarted', performance.now()],
+  ];
 </script>
+
+<!-- GDevelop.js core -->
+<script src="./libGD.js"></script>

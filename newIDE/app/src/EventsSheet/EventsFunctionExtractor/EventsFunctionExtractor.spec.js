@@ -1,7 +1,7 @@
 // @flow
 import { setupFunctionFromEvents } from '.';
 import { makeTestProject } from '../../fixtures/TestProject';
-const gd = global.gd;
+const gd: libGDevelop = global.gd;
 
 const serializedEvents = [
   {
@@ -9,8 +9,8 @@ const serializedEvents = [
     folded: false,
     type: 'BuiltinCommonInstructions::Standard',
     conditions: [
-      // Condition refering to a group, with a behavior:
-      // 1) The group will be refered as such in the parameters
+      // Condition referring to a group, with a behavior:
+      // 1) The group will be referred as such in the parameters
       //    (because no object of the group is used directly in the rest of events)
       // 2) The behavior will be the next parameter after the group.
       {
@@ -20,13 +20,13 @@ const serializedEvents = [
       },
     ],
     actions: [
-      // Action refering directly to MySpriteObject
+      // Action referring directly to MySpriteObject
       {
         type: { inverted: false, value: 'ChangeAnimation' },
         parameters: ['MySpriteObject', '=', '1'],
         subInstructions: [],
       },
-      // Action refering to GroupOfObjects, which contains MySpriteObject and MyTextObject.
+      // Action referring to GroupOfObjects, which contains MySpriteObject and MyTextObject.
       // As MySpriteObject is used separately, the group will be expanded.
       {
         type: { inverted: false, value: 'Montre' },
@@ -39,31 +39,31 @@ const serializedEvents = [
 ];
 
 describe('EventsFunctionExtractor', () => {
-  const { project, testLayout } = makeTestProject(gd);
-
   it('configures the events function with the proper parameters', () => {
+    const { project, testLayout } = makeTestProject(gd);
     const eventsFunction = new gd.EventsFunction();
 
     setupFunctionFromEvents({
       project,
-      globalObjectsContainer: project,
-      objectsContainer: testLayout,
+      scope: { project, layout: testLayout },
+      globalObjectsContainer: project.getObjects(),
+      objectsContainer: testLayout.getObjects(),
       serializedEvents,
       eventsFunction,
     });
 
-    expect(eventsFunction.getParameters().size()).toBe(4);
+    expect(eventsFunction.getParameters().getParametersCount()).toBe(4);
     // The "GroupOfSpriteObjectsWithBehaviors" group (not expanded) and its behavior:
     expect(
       eventsFunction
         .getParameters()
-        .at(0)
+        .getParameterAt(0)
         .getName()
     ).toBe('GroupOfSpriteObjectsWithBehaviors');
     expect(
       eventsFunction
         .getParameters()
-        .at(1)
+        .getParameterAt(1)
         .getName()
     ).toBe('PlatformerObject');
     // The "GroupOfObjects" group, expanded into MySpriteObject and MyTextObject
@@ -71,13 +71,13 @@ describe('EventsFunctionExtractor', () => {
     expect(
       eventsFunction
         .getParameters()
-        .at(2)
+        .getParameterAt(2)
         .getName()
     ).toBe('MySpriteObject');
     expect(
       eventsFunction
         .getParameters()
-        .at(3)
+        .getParameterAt(3)
         .getName()
     ).toBe('MyTextObject');
   });

@@ -2,19 +2,19 @@
 import React from 'react';
 import MainFrame from './MainFrame';
 import Window from './Utils/Window';
-import ExportDialog from './Export/ExportDialog';
-import CreateProjectDialog from './ProjectCreation/CreateProjectDialog';
-import Authentification from './Utils/GDevelopServices/Authentification';
-import './UI/iconmoon-font.css'; // Styles for Iconmoon font.
+import ShareDialog from './ExportAndShare/ShareDialog';
+import Authentication from './Utils/GDevelopServices/Authentication';
+import './UI/icomoon-font.css'; // Styles for Icomoon font.
 
 // Import for Electron powered IDE.
-import ExternalEditor from './ExternalEditor';
-import LocalExamples from './ProjectCreation/LocalExamples';
-import LocalStarters from './ProjectCreation/LocalStarters';
 import localResourceSources from './ResourcesList/LocalResourceSources';
 import localResourceExternalEditors from './ResourcesList/LocalResourceExternalEditors';
-import LocalPreviewLauncher from './Export/LocalExporters/LocalPreviewLauncher';
-import { getLocalExporters } from './Export/LocalExporters';
+import LocalPreviewLauncher from './ExportAndShare/LocalExporters/LocalPreviewLauncher';
+import {
+  localAutomatedExporters,
+  localManualExporters,
+  localOnlineWebExporter,
+} from './ExportAndShare/LocalExporters';
 import ElectronMainMenu from './MainFrame/ElectronMainMenu';
 import makeExtensionsLoader from './JsExtensionsLoader/LocalJsExtensionsLoader';
 import { makeLocalEventsFunctionCodeWriter } from './EventsFunctionsExtensionsLoader/CodeWriters/LocalEventsFunctionCodeWriter';
@@ -25,119 +25,115 @@ import LocalEventsFunctionsExtensionWriter from './EventsFunctionsExtensionsLoad
 import LocalEventsFunctionsExtensionOpener from './EventsFunctionsExtensionsLoader/Storage/LocalEventsFunctionsExtensionOpener';
 import ProjectStorageProviders from './ProjectsStorage/ProjectStorageProviders';
 import LocalFileStorageProvider from './ProjectsStorage/LocalFileStorageProvider';
-import {LocalGDJSDevelopmentWatcher} from './GameEngineFinder/LocalGDJSDevelopmentWatcher';
-const gd = global.gd;
+import { LocalGDJSDevelopmentWatcher } from './GameEngineFinder/LocalGDJSDevelopmentWatcher';
+import { useCliCommandRunner } from './MainFrame/LocalCliCommandRunner';
+import { exportLocalHtml5Headless } from './ExportAndShare/Headless/ExportLocalHtml5Headless';
+import CloudStorageProvider from './ProjectsStorage/CloudStorageProvider';
+import UrlStorageProvider from './ProjectsStorage/UrlStorageProvider';
+import LocalResourceMover from './ProjectsStorage/ResourceMover/LocalResourceMover';
+import LocalResourceFetcher from './ProjectsStorage/ResourceFetcher/LocalResourceFetcher';
+import LocalLoginProvider from './LoginProvider/LocalLoginProvider';
 
-export const create = (authentification: Authentification) => {
+const gd: libGDevelop = global.gd;
+
+export const create = (authentication: Authentication): React.Node => {
   Window.setUpContextMenu();
+  const loginProvider = new LocalLoginProvider(authentication.auth);
+  authentication.setLoginProvider(loginProvider);
 
-  let app = null;
   const appArguments = Window.getArguments();
   const isDev = Window.isDev();
 
-  if (appArguments['server-port']) {
-    app = (
-      <Providers
-        authentification={authentification}
-        disableCheckForUpdates={!!appArguments['disable-update-check']}
-        eventsFunctionCodeWriter={null}
-        eventsFunctionsExtensionWriter={null}
-        eventsFunctionsExtensionOpener={null}
-      >
-        {({ i18n, eventsFunctionsExtensionsState }) => (
-          <ProjectStorageProviders
-            appArguments={appArguments}
-            storageProviders={[]}
-          >
-            {({
-              currentStorageProviderOperations,
-              useStorageProvider,
-              storageProviders,
-              initialFileMetadataToOpen,
-            }) => (
-              <ExternalEditor
-                serverPort={appArguments['server-port']}
-                isIntegrated={appArguments['mode'] === 'integrated'}
-                editor={appArguments['editor']}
-                editedElementName={appArguments['edited-element-name']}
-              >
-                <MainFrame
-                  i18n={i18n}
-                  eventsFunctionsExtensionsState={
-                    eventsFunctionsExtensionsState
-                  }
-                  resourceSources={localResourceSources}
-                  storageProviders={storageProviders}
-                  useStorageProvider={useStorageProvider}
-                  storageProviderOperations={currentStorageProviderOperations}
-                  resourceExternalEditors={localResourceExternalEditors}
-                  initialFileMetadataToOpen={initialFileMetadataToOpen}
+  return (
+    <Providers
+      authentication={authentication}
+      disableCheckForUpdates={!!appArguments['disable-update-check']}
+      makeEventsFunctionCodeWriter={makeLocalEventsFunctionCodeWriter}
+      // $FlowFixMe[incompatible-type]
+      // $FlowFixMe[incompatible-exact]
+      eventsFunctionsExtensionWriter={LocalEventsFunctionsExtensionWriter}
+      // $FlowFixMe[incompatible-type]
+      // $FlowFixMe[incompatible-exact]
+      eventsFunctionsExtensionOpener={LocalEventsFunctionsExtensionOpener}
+    >
+      {({ i18n }) => (
+        <ProjectStorageProviders
+          appArguments={appArguments}
+          storageProviders={[
+            LocalFileStorageProvider,
+            UrlStorageProvider,
+            CloudStorageProvider,
+          ]}
+          defaultStorageProvider={LocalFileStorageProvider}
+        >
+          {({
+            getStorageProviderOperations,
+            getStorageProviderResourceOperations,
+            storageProviders,
+            initialFileMetadataToOpen,
+            getStorageProvider,
+          }) => (
+            <MainFrame
+              i18n={i18n}
+              useCliCommandRunner={useCliCommandRunner}
+              onExportHtml5External={async (project, i18n) => {
+                await exportLocalHtml5Headless({ project, i18n });
+              }}
+              renderMainMenu={(props, callbacks, extraCallbacks) => (
+                <ElectronMainMenu
+                  props={props}
+                  callbacks={callbacks}
+                  extraCallbacks={extraCallbacks}
                 />
-              </ExternalEditor>
-            )}
-          </ProjectStorageProviders>
-        )}
-      </Providers>
-    );
-  } else {
-    app = (
-      <Providers
-        authentification={authentification}
-        disableCheckForUpdates={!!appArguments['disable-update-check']}
-        eventsFunctionCodeWriter={makeLocalEventsFunctionCodeWriter()}
-        eventsFunctionsExtensionWriter={LocalEventsFunctionsExtensionWriter}
-        eventsFunctionsExtensionOpener={LocalEventsFunctionsExtensionOpener}
-      >
-        {({ i18n, eventsFunctionsExtensionsState }) => (
-          <ProjectStorageProviders
-            appArguments={appArguments}
-            storageProviders={[LocalFileStorageProvider]}
-            defaultStorageProvider={LocalFileStorageProvider}
-          >
-            {({
-              currentStorageProviderOperations,
-              useStorageProvider,
-              storageProviders,
-              initialFileMetadataToOpen,
-            }) => (
-              <ElectronMainMenu i18n={i18n}>
-                <MainFrame
-                  i18n={i18n}
-                  eventsFunctionsExtensionsState={
-                    eventsFunctionsExtensionsState
-                  }
-                  renderPreviewLauncher={(props, ref) => <LocalPreviewLauncher {...props} ref={ref} />}
-                  renderExportDialog={props => (
-                    <ExportDialog {...props} exporters={getLocalExporters()} />
-                  )}
-                  renderCreateDialog={props => (
-                    <CreateProjectDialog
-                      {...props}
-                      examplesComponent={LocalExamples}
-                      startersComponent={LocalStarters}
-                    />
-                  )}
-                  renderGDJSDevelopmentWatcher={isDev ? () => <LocalGDJSDevelopmentWatcher /> : null}
-                  storageProviders={storageProviders}
-                  useStorageProvider={useStorageProvider}
-                  storageProviderOperations={currentStorageProviderOperations}
-                  resourceSources={localResourceSources}
-                  resourceExternalEditors={localResourceExternalEditors}
-                  extensionsLoader={makeExtensionsLoader({
-                    gd,
-                    objectsEditorService: ObjectsEditorService,
-                    objectsRenderingService: ObjectsRenderingService,
-                    filterExamples: !isDev,
-                  })}
-                  initialFileMetadataToOpen={initialFileMetadataToOpen}
+              )}
+              renderPreviewLauncher={(props, ref) => (
+                // $FlowFixMe[incompatible-type]
+                <LocalPreviewLauncher {...props} ref={ref} />
+              )}
+              renderShareDialog={props => (
+                <ShareDialog
+                  project={props.project}
+                  onSaveProject={props.onSaveProject}
+                  isSavingProject={props.isSavingProject}
+                  onChangeSubscription={props.onChangeSubscription}
+                  onClose={props.onClose}
+                  automatedExporters={localAutomatedExporters}
+                  manualExporters={localManualExporters}
+                  onlineWebExporter={localOnlineWebExporter}
+                  fileMetadata={props.fileMetadata}
+                  storageProvider={props.storageProvider}
+                  initialTab={props.initialTab}
+                  gamesList={props.gamesList}
                 />
-              </ElectronMainMenu>
-            )}
-          </ProjectStorageProviders>
-        )}
-      </Providers>
-    );
-  }
-
-  return app;
+              )}
+              quickPublishOnlineWebExporter={localOnlineWebExporter}
+              renderGDJSDevelopmentWatcher={
+                isDev ? ({ onGDJSUpdated }) => <LocalGDJSDevelopmentWatcher onGDJSUpdated={onGDJSUpdated} /> : null
+              }
+              storageProviders={storageProviders}
+              resourceMover={LocalResourceMover}
+              resourceFetcher={LocalResourceFetcher}
+              getStorageProviderOperations={getStorageProviderOperations}
+              getStorageProviderResourceOperations={
+                getStorageProviderResourceOperations
+              }
+              getStorageProvider={getStorageProvider}
+              resourceSources={localResourceSources}
+              resourceExternalEditors={localResourceExternalEditors}
+              extensionsLoader={makeExtensionsLoader({
+                gd,
+                objectsEditorService: ObjectsEditorService,
+                objectsRenderingService: ObjectsRenderingService,
+                filterExamples: !isDev,
+              })}
+              initialFileMetadataToOpen={initialFileMetadataToOpen}
+              initialExampleSlugToOpen={
+                appArguments['create-from-example'] || null
+              }
+            />
+          )}
+        </ProjectStorageProviders>
+      )}
+    </Providers>
+  );
 };

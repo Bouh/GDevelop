@@ -1,14 +1,18 @@
 // @flow
 import * as React from 'react';
-import Paper from '@material-ui/core/Paper';
+import { dataObjectToProps, type HTMLDataset } from '../Utils/HTMLDataset';
+import Paper from './Paper';
 
 type Props = {|
+  data?: HTMLDataset,
   children: React.Node,
+  showOnTop?: boolean,
 |};
 
-export default (props: Props) => {
+const PlaceholderMessage = (props: Props): React.MixedElement => {
   return (
     <div
+      {...dataObjectToProps(props.data)}
       style={{
         position: 'absolute',
         top: 0,
@@ -19,17 +23,23 @@ export default (props: Props) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        zIndex: props.showOnTop ? 9999 : undefined, // Ensure it's above most things
+        pointerEvents: 'all',
       }}
     >
       <Paper
         elevation={3}
         style={{
           padding: 10,
-          margin: 5,
+          width: '100%', // Make it take full width, especially on mobile.
+          maxWidth: 600, // But not too big for desktop.
         }}
+        background="dark"
       >
         {props.children}
       </Paper>
     </div>
   );
 };
+
+export default PlaceholderMessage;

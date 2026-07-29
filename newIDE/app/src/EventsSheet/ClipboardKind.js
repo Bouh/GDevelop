@@ -1,53 +1,110 @@
 // @flow
 import Clipboard from '../Utils/Clipboard';
+import { SafeExtractor } from '../Utils/SafeExtractor';
 import {
   type SelectionState,
   getSelectedEvents,
-  hasEventSelected,
-  getSelectedEventContexts,
   hasInstructionSelected,
   hasInstructionsListSelected,
   getSelectedInstructionsContexts,
-  getSelectedInstructionsListsContexts,
   type InstructionsListContext,
+  getLastSelectedEventContext,
+  getLastSelectedInstructionContext,
+  getLastSelectedInstructionsListsContext,
 } from './SelectionHandler';
 import {
   serializeToJSObject,
   unserializeFromJSObject,
 } from '../Utils/Serializer';
-const gd = global.gd;
+const gd: libGDevelop = global.gd;
 
 export const CLIPBOARD_KIND = 'EventsAndInstructions';
 
-export const hasClipboardEvents = () => {
-  return (
-    Clipboard.has(CLIPBOARD_KIND) &&
-    Clipboard.get(CLIPBOARD_KIND).eventsCount > 0
+export const hasClipboardEvents = (): boolean => {
+  if (!Clipboard.has(CLIPBOARD_KIND)) return false;
+  const clipboardContent = Clipboard.get(CLIPBOARD_KIND);
+  const eventsCount = SafeExtractor.extractNumberProperty(
+    clipboardContent,
+    'eventsCount'
   );
+  if (eventsCount === null) return false;
+
+  return eventsCount > 0;
 };
 
-export const hasClipboardConditions = () => {
-  return (
-    Clipboard.has(CLIPBOARD_KIND) &&
-    Clipboard.get(CLIPBOARD_KIND).conditionsCount > 0
+export const hasClipboardConditions = (): boolean => {
+  if (!Clipboard.has(CLIPBOARD_KIND)) return false;
+  const clipboardContent = Clipboard.get(CLIPBOARD_KIND);
+  const conditionsCount = SafeExtractor.extractNumberProperty(
+    clipboardContent,
+    'conditionsCount'
   );
+  if (conditionsCount === null) return false;
+
+  return conditionsCount > 0;
 };
 
-export const hasClipboardActions = () => {
-  return (
-    Clipboard.has(CLIPBOARD_KIND) &&
-    Clipboard.get(CLIPBOARD_KIND).actionsCount > 0
+export const hasClipboardActions = (): boolean => {
+  if (!Clipboard.has(CLIPBOARD_KIND)) return false;
+  const clipboardContent = Clipboard.get(CLIPBOARD_KIND);
+  const actionsCount = SafeExtractor.extractNumberProperty(
+    clipboardContent,
+    'actionsCount'
   );
+  if (actionsCount === null) return false;
+
+  return actionsCount > 0;
 };
 
-export const copySelectionToClipboard = (selection: SelectionState) => {
+const addAllSubEvents = (
+  event: gdBaseEvent,
+  events: Set<gdBaseEvent>
+): void => {
+  const subEvents = event.getSubEvents();
+  for (let i = 0; i < subEvents.getEventsCount(); i++) {
+    const subEvent = subEvents.getEventAt(i);
+    events.add(subEvent);
+    addAllSubEvents(subEvent, events);
+  }
+};
+
+const excludeEventsChildren = (
+  events: Array<gdBaseEvent>
+): Array<gdBaseEvent> => {
+  const filteredEvents: Array<gdBaseEvent> = [];
+  const allChildren = new Set<gdBaseEvent>();
+  // Children may come first because the selection is ordered by selection time.
+  for (const event of events) {
+    if (!allChildren.has(event)) {
+      addAllSubEvents(event, allChildren);
+    }
+  }
+  for (const event of events) {
+    if (!allChildren.has(event)) {
+      filteredEvents.push(event);
+    }
+  }
+  return filteredEvents;
+};
+
+export const copySelectionToClipboard = (
+  selection: SelectionState,
+  getIndexes: (Array<gdBaseEvent>) => Array<number>
+) => {
   const eventsList = new gd.EventsList();
   const actionsList = new gd.InstructionsList();
   const conditionsList = new gd.InstructionsList();
 
-  getSelectedEvents(selection).forEach(event =>
-    eventsList.insertEvent(event, eventsList.getEventsCount())
-  );
+  const unorderedEvents = excludeEventsChildren(getSelectedEvents(selection));
+  const eventIndexes = getIndexes(unorderedEvents);
+  const sortedEvents = unorderedEvents
+    .map((event, i) => ({ event, index: eventIndexes[i] }))
+    .sort((a, b) => a.index - b.index);
+
+  for (const { event } of sortedEvents) {
+    eventsList.insertEvent(event, eventsList.getEventsCount());
+  }
+
   getSelectedInstructionsContexts(selection).forEach(instructionContext => {
     if (instructionContext.isCondition) {
       conditionsList.insert(
@@ -77,23 +134,30 @@ export const pasteEventsFromClipboardInSelection = (
   project: gdProject,
   selection: SelectionState
 ): boolean => {
-  if (!hasEventSelected(selection) || !hasClipboardEvents()) return false;
+  const lastSelectEventContext = getLastSelectedEventContext(selection);
+  if (!lastSelectEventContext || !hasClipboardEvents()) return false;
+
+  const clipboardContent = Clipboard.get(CLIPBOARD_KIND);
+  const eventsListContent = SafeExtractor.extractArrayProperty(
+    clipboardContent,
+    'eventsList'
+  );
+  if (!eventsListContent) return false;
 
   const eventsList = new gd.EventsList();
   unserializeFromJSObject(
     eventsList,
-    Clipboard.get(CLIPBOARD_KIND).eventsList,
+    eventsListContent,
     'unserializeFrom',
     project
   );
-  getSelectedEventContexts(selection).forEach(eventContext => {
-    eventContext.eventsList.insertEvents(
-      eventsList,
-      0,
-      eventsList.getEventsCount(),
-      eventContext.indexInList
-    );
-  });
+
+  lastSelectEventContext.eventsList.insertEvents(
+    eventsList,
+    0,
+    eventsList.getEventsCount(),
+    lastSelectEventContext.indexInList
+  );
   eventsList.delete();
 
   return true;
@@ -111,56 +175,71 @@ export const pasteInstructionsFromClipboardInSelection = (
     return false;
 
   const clipboardContent = Clipboard.get(CLIPBOARD_KIND);
+  const actionsListContent = SafeExtractor.extractArrayProperty(
+    clipboardContent,
+    'actionsList'
+  );
+  const conditionsListContent = SafeExtractor.extractArrayProperty(
+    clipboardContent,
+    'conditionsList'
+  );
+  if (!actionsListContent || !conditionsListContent) return false;
+
   const actionsList = new gd.InstructionsList();
   const conditionsList = new gd.InstructionsList();
   unserializeFromJSObject(
     actionsList,
-    clipboardContent.actionsList,
+    actionsListContent,
     'unserializeFrom',
     project
   );
   unserializeFromJSObject(
     conditionsList,
-    clipboardContent.conditionsList,
+    conditionsListContent,
     'unserializeFrom',
     project
   );
-  getSelectedInstructionsContexts(selection).forEach(instructionContext => {
-    if (instructionContext.isCondition) {
-      instructionContext.instrsList.insertInstructions(
+
+  const lastSelectedInstructionContext = getLastSelectedInstructionContext(
+    selection
+  );
+  if (lastSelectedInstructionContext) {
+    if (lastSelectedInstructionContext.isCondition) {
+      lastSelectedInstructionContext.instrsList.insertInstructions(
         conditionsList,
         0,
         conditionsList.size(),
-        instructionContext.indexInList
+        lastSelectedInstructionContext.indexInList
       );
     } else {
-      instructionContext.instrsList.insertInstructions(
+      lastSelectedInstructionContext.instrsList.insertInstructions(
         actionsList,
         0,
         actionsList.size(),
-        instructionContext.indexInList
+        lastSelectedInstructionContext.indexInList
       );
     }
-  });
-  getSelectedInstructionsListsContexts(selection).forEach(
-    instructionsListContext => {
-      if (instructionsListContext.isCondition) {
-        instructionsListContext.instrsList.insertInstructions(
-          conditionsList,
-          0,
-          conditionsList.size(),
-          instructionsListContext.instrsList.size()
-        );
-      } else {
-        instructionsListContext.instrsList.insertInstructions(
-          actionsList,
-          0,
-          actionsList.size(),
-          instructionsListContext.instrsList.size()
-        );
-      }
-    }
+  }
+  const lastSelectedInstructionsListsContext = getLastSelectedInstructionsListsContext(
+    selection
   );
+  if (lastSelectedInstructionsListsContext) {
+    if (lastSelectedInstructionsListsContext.isCondition) {
+      lastSelectedInstructionsListsContext.instrsList.insertInstructions(
+        conditionsList,
+        0,
+        conditionsList.size(),
+        lastSelectedInstructionsListsContext.instrsList.size()
+      );
+    } else {
+      lastSelectedInstructionsListsContext.instrsList.insertInstructions(
+        actionsList,
+        0,
+        actionsList.size(),
+        lastSelectedInstructionsListsContext.instrsList.size()
+      );
+    }
+  }
   conditionsList.delete();
   actionsList.delete();
 
@@ -170,21 +249,31 @@ export const pasteInstructionsFromClipboardInSelection = (
 export const pasteInstructionsFromClipboardInInstructionsList = (
   project: gdProject,
   instructionsListContext: InstructionsListContext
-) => {
+): void | boolean => {
   if (!hasClipboardConditions() && !hasClipboardActions()) return false;
 
   const clipboardContent = Clipboard.get(CLIPBOARD_KIND);
+  const actionsListContent = SafeExtractor.extractArrayProperty(
+    clipboardContent,
+    'actionsList'
+  );
+  const conditionsListContent = SafeExtractor.extractArrayProperty(
+    clipboardContent,
+    'conditionsList'
+  );
+  if (!actionsListContent || !conditionsListContent) return;
+
   const actionsList = new gd.InstructionsList();
   const conditionsList = new gd.InstructionsList();
   unserializeFromJSObject(
     actionsList,
-    clipboardContent.actionsList,
+    actionsListContent,
     'unserializeFrom',
     project
   );
   unserializeFromJSObject(
     conditionsList,
-    clipboardContent.conditionsList,
+    conditionsListContent,
     'unserializeFrom',
     project
   );

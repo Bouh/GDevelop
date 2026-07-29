@@ -8,7 +8,6 @@
 #define GDCORE_SERIALIZER_H
 #include <string>
 #include "GDCore/Serialization/SerializerElement.h"
-class TiXmlElement;
 
 namespace gd {
 
@@ -19,31 +18,70 @@ namespace gd {
 class GD_CORE_API Serializer {
  public:
 /** \name XML serialization.
- * Serialize a SerializerElement from/to XML.
+ * Convert a gd::SerializerElement from/to XML.
  */
 ///@{
-#if !defined(EMSCRIPTEN)
-  static void ToXML(SerializerElement& element, TiXmlElement* xmlElement);
-  static void FromXML(SerializerElement& element,
-                      const TiXmlElement* xmlElement);
-#endif
+
+  /**
+   * \brief Escape a string for inclusion in a XML tag
+   */
+  static gd::String ToEscapedXMLString(const gd::String& str);
   ///@}
 
   /** \name JSON serialization.
-   * Serialize a SerializerElement from/to JSON.
+   * Convert a gd::SerializerElement from/to JSON.
+   * This uses RapidJSON for fast parsing and stringification.
+   * See https://github.com/miloyip/nativejson-benchmark
    */
   ///@{
+  /**
+   * \brief Serialize a gd::SerializerElement to a JSON string.
+   */
   static gd::String ToJSON(const SerializerElement& element);
-  static SerializerElement FromJSON(const std::string& json);
+
+  /**
+   * \brief Construct a gd::SerializerElement from a JSON string.
+   */
+  static SerializerElement FromJSON(const char* json);
+
+  /**
+   * \brief Construct a gd::SerializerElement from a JSON string.
+   */
   static SerializerElement FromJSON(const gd::String& json) {
-    return FromJSON(json.ToUTF8());
+    return FromJSON(json.c_str());
   }
+  ///@}
+
+  /** \name Canonical serialization mode.
+   * When enabled, ToJSON writes object keys in alphabetical order and
+   * various SerializeTo helpers write default values (false, "", []) for
+   * properties that would otherwise be omitted.
+   *
+   * This makes git diffs minimal and shift-free when toggling boolean
+   * flags or adding/removing optional sub-structures (e.g. sub-events,
+   * local variables).
+   */
+  ///@{
+  /**
+   * \brief Enable/disable canonical serialization mode globally.
+   *
+   * Affects ToJSON (alphabetical key order) and various SerializeTo helpers
+   * (always writing default values for optional properties).
+   */
+  static void SetCanonicalMode(bool canonical) { canonicalMode = canonical; }
+
+  /**
+   * \brief Returns true if canonical serialization mode is currently active.
+   */
+  static bool IsCanonicalMode() { return canonicalMode; }
   ///@}
 
   virtual ~Serializer(){};
 
  private:
   Serializer(){};
+
+  static bool canonicalMode;
 };
 
 }  // namespace gd

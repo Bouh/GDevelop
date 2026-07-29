@@ -4,12 +4,13 @@
  * reserved. This project is released under the MIT License.
  */
 #include "GDCore/IDE/Events/ExpressionsRenamer.h"
+
 #include <map>
 #include <memory>
 #include <vector>
+
 #include "GDCore/Events/Event.h"
 #include "GDCore/Events/EventsList.h"
-#include "GDCore/Events/Parsers/ExpressionParser2.h"
 #include "GDCore/Events/Parsers/ExpressionParser2NodePrinter.h"
 #include "GDCore/Events/Parsers/ExpressionParser2NodeWorker.h"
 #include "GDCore/Extensions/Metadata/MetadataProvider.h"
@@ -22,22 +23,20 @@
 namespace gd {
 
 /**
- * \brief Go through the nodes and change the given object name to a new one.
+ * \brief Go through the nodes and change the given function name to a new name.
  *
  * \see gd::ExpressionParser2
  */
 class GD_CORE_API ExpressionFunctionRenamer
     : public ExpressionParser2NodeWorker {
  public:
-  ExpressionFunctionRenamer(const gd::ObjectsContainer& globalObjectsContainer_,
-                            const gd::ObjectsContainer& objectsContainer_,
+  ExpressionFunctionRenamer(const gd::ProjectScopedContainers& projectScopedContainers_,
                             const gd::String& behaviorType_,
                             const gd::String& objectType_,
                             const gd::String& oldFunctionName_,
                             const gd::String& newFunctionName_)
       : hasDoneRenaming(false),
-        globalObjectsContainer(globalObjectsContainer_),
-        objectsContainer(objectsContainer_),
+        projectScopedContainers(projectScopedContainers_),
         behaviorType(behaviorType_),
         objectType(objectType_),
         oldFunctionName(oldFunctionName_),
@@ -70,26 +69,56 @@ class GD_CORE_API ExpressionFunctionRenamer
     node.expression->Visit(*this);
     if (node.child) node.child->Visit(*this);
   }
-  void OnVisitIdentifierNode(IdentifierNode& node) override {}
-  void OnVisitFunctionNode(FunctionNode& node) override {
+  void OnVisitIdentifierNode(IdentifierNode& node) override {
+    // Nothing to do as this is either a variable, an object variable a property or something else
+    // but not an expression.
+  }
+  void OnVisitObjectFunctionNameNode(ObjectFunctionNameNode& node) override {
+    if (!node.behaviorFunctionName.empty()) {
+      // Behavior function name
+      if (!behaviorType.empty() &&
+          node.behaviorFunctionName == oldFunctionName) {
+        const gd::String& thisBehaviorType = projectScopedContainers
+          .GetObjectsContainersList().GetTypeOfBehavior(
+            node.objectFunctionOrBehaviorName);
+        if (thisBehaviorType == behaviorType) {
+          node.behaviorFunctionName = newFunctionName;
+          hasDoneRenaming = true;
+        }
+      }
+    } else {
+      // Object function name
+      if (behaviorType.empty() && !objectType.empty() &&
+          node.objectFunctionOrBehaviorName == oldFunctionName) {
+        const gd::String& thisObjectType = projectScopedContainers
+            .GetObjectsContainersList().GetTypeOfObject(node.objectName);
+        if (thisObjectType == objectType) {
+          node.objectFunctionOrBehaviorName = newFunctionName;
+          hasDoneRenaming = true;
+        }
+      }
+    }
+  }
+  void OnVisitFunctionCallNode(FunctionCallNode& node) override {
     if (node.functionName == oldFunctionName) {
-      if (!objectType.empty() && !node.objectName.empty()) {
+      if (behaviorType.empty() && !objectType.empty() &&
+          !node.objectName.empty()) {
         // Replace an object function
-        const gd::String& thisObjectType = gd::GetTypeOfObject(
-            globalObjectsContainer, objectsContainer, node.objectName);
-        if (thisObjectType == behaviorType) {
+        const gd::String& thisObjectType = projectScopedContainers
+            .GetObjectsContainersList().GetTypeOfObject(node.objectName);
+        if (thisObjectType == objectType) {
           node.functionName = newFunctionName;
           hasDoneRenaming = true;
         }
       } else if (!behaviorType.empty() && !node.behaviorName.empty()) {
         // Replace a behavior function
-        const gd::String& thisBehaviorType = gd::GetTypeOfBehavior(
-            globalObjectsContainer, objectsContainer, node.behaviorName);
+        const gd::String& thisBehaviorType = projectScopedContainers
+            .GetObjectsContainersList().GetTypeOfBehavior(node.behaviorName);
         if (thisBehaviorType == behaviorType) {
           node.functionName = newFunctionName;
           hasDoneRenaming = true;
         }
-      } else {
+      } else if (behaviorType.empty() && objectType.empty()) {
         // Replace a free function
         node.functionName = newFunctionName;
         hasDoneRenaming = true;
@@ -103,41 +132,33 @@ class GD_CORE_API ExpressionFunctionRenamer
 
  private:
   bool hasDoneRenaming;
-  const gd::ObjectsContainer& globalObjectsContainer;
-  const gd::ObjectsContainer& objectsContainer;
+  const gd::ProjectScopedContainers& projectScopedContainers;
   const gd::String& behaviorType;  // The behavior type for which the expression
-                                   // must be replaced (optional)
+                                   // must be replaced (optional).
   const gd::String& objectType;    // The object type for which the expression
-                                   // must be replaced (optional)
+                                   // must be replaced (optional). If
+                                   // `behaviorType` is not empty, it takes
+                                   // precedence over `objectType`.
   const gd::String& oldFunctionName;
   const gd::String& newFunctionName;
 };
 
 bool ExpressionsRenamer::DoVisitInstruction(gd::Instruction& instruction,
                                             bool isCondition) {
-  auto& metadata = isCondition ? gd::MetadataProvider::GetConditionMetadata(
-                                     platform, instruction.GetType())
-                               : gd::MetadataProvider::GetActionMetadata(
-                                     platform, instruction.GetType());
+  const auto& metadata = isCondition
+                             ? gd::MetadataProvider::GetConditionMetadata(
+                                   platform, instruction.GetType())
+                             : gd::MetadataProvider::GetActionMetadata(
+                                   platform, instruction.GetType());
 
-  for (std::size_t pNb = 0; pNb < metadata.parameters.size() &&
+  for (std::size_t pNb = 0; pNb < metadata.parameters.GetParametersCount() &&
                             pNb < instruction.GetParametersCount();
        ++pNb) {
-    const gd::String& type = metadata.parameters[pNb].type;
-    const gd::String& expression =
-        instruction.GetParameter(pNb).GetPlainString();
+    const gd::Expression& expression = instruction.GetParameter(pNb);
 
-    gd::ExpressionParser2 parser(
-        platform, GetGlobalObjectsContainer(), GetObjectsContainer());
-
-    auto node = gd::ParameterMetadata::IsExpression("number", type)
-                    ? parser.ParseExpression("number", expression)
-                    : (gd::ParameterMetadata::IsExpression("string", type)
-                           ? parser.ParseExpression("string", expression)
-                           : std::unique_ptr<gd::ExpressionNode>());
+    auto node = expression.GetRootNode();
     if (node) {
-      ExpressionFunctionRenamer renamer(GetGlobalObjectsContainer(),
-                                        GetObjectsContainer(),
+      ExpressionFunctionRenamer renamer(GetProjectScopedContainers(),
                                         behaviorType,
                                         objectType,
                                         oldFunctionName,

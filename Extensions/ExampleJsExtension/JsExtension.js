@@ -1,8 +1,10 @@
+//@ts-check
+/// <reference path="../JsExtensionTypes.d.ts" />
 /**
  * This is a declaration of an extension for GDevelop 5.
  *
- * ℹ️ Run `node import-GDJS-Runtime.js` (in newIDE/app/scripts) if you make any change
- * to this extension file or to any other *.js file that you reference inside.
+ * ℹ️ Changes in this file are watched and automatically imported if the editor
+ * is running. You can also manually run `node import-GDJS-Runtime.js` (in newIDE/app/scripts).
  *
  * The file must be named "JsExtension.js", otherwise GDevelop won't load it.
  * ⚠️ If you make a change and the extension is not loaded, open the developer console
@@ -10,58 +12,89 @@
  *
  * More information on https://github.com/4ian/GDevelop/blob/master/newIDE/README-extensions.md
  */
+
+/** @type {ExtensionModule} */
 module.exports = {
-  createExtension: function(_, gd) {
+  createExtension: function (_, gd) {
     const extension = new gd.PlatformExtension();
-    extension.setExtensionInformation(
-      'MyDummyExtension',
-      _('My Dummy Extension'),
-      _('An example of a declaration of an extension'),
-      'Florian Rival',
-      'MIT'
-    );
+    extension
+      .setExtensionInformation(
+        'MyDummyExtension',
+        _('My Dummy Extension'),
+        _('An example of a declaration of an extension'),
+        'Florian Rival',
+        'MIT'
+      )
+      .setShortDescription(
+        'Example/dummy extension for testing extension declaration patterns.'
+      );
+    extension
+      .addInstructionOrExpressionGroupMetadata(_('My Dummy Extension'))
+      .setIcon('CppPlatform/Extensions/topdownmovementicon.png');
+
+    // Register Properties
+    extension
+      .registerProperty('DummyPropertyString')
+      .setLabel(_('Dummy Property Name'))
+      .setDescription('Type in anything :)')
+      .setType('string');
+
+    extension
+      .registerProperty('DummyPropertyNumber')
+      .setLabel(_('Dummy Numeric Property Name'))
+      .setDescription('Only numbers here ;)')
+      .setType('number');
+
+    extension
+      .registerProperty('DummyPropertyBoolean')
+      .setDescription(_('A boolean property'))
+      .setType('boolean');
+
+    // Register Cordova/NPM dependencies
+    extension
+      .addDependency()
+      .setName('Thirteen Checker')
+      .setDependencyType('npm')
+      .setExportName('is-thirteen')
+      .setVersion('2.0.0');
 
     // Declare effects:
-    const dumyEffect = extension
+    const dummyEffect = extension
       .addEffect('DummyEffect')
       .setFullName(_('Dummy effect example'))
       .setDescription(
         _(
-          'This is an example of an effect ("shader") with an [external link to the wiki](http://wiki.compilgames.net/doku.php/gdevelop5/) and **bold letters**.'
+          'This is an example of an effect ("shader") with an [external link to the wiki](https://wiki.gdevelop.io/gdevelop5/) and **bold letters**.'
         )
       )
       .addIncludeFile('Extensions/ExampleJsExtension/dummyeffect.js');
-    const dumyEffectProperties = dumyEffect.getProperties();
-    dumyEffectProperties.set(
-      'opacity',
-      new gd.PropertyDescriptor(/* defaultValue= */ '1')
-        .setLabel(_('Opacity of the effect (between 0 and 1)'))
-        .setType('number')
-        .setDescription(_('This is an optional description.'))
-    );
-    dumyEffectProperties.set(
-      'someImage',
-      new gd.PropertyDescriptor(/* defaultValue= */ '')
-        .setLabel(
-          _("Image resource (won't be used, just for demonstration purpose)")
-        )
-        .setType('resource')
-        .addExtraInfo('image')
-    );
-    dumyEffectProperties.set(
-      'someColor',
-      new gd.PropertyDescriptor(/* defaultValue= */ '#0022FF')
-        .setLabel(_("Color (won't be used, just for demonstration purpose)"))
-        .setType('color')
-        .setDescription(_('Another optional description.'))
-    );
-    dumyEffectProperties.set(
-      'someBoolean',
-      new gd.PropertyDescriptor(/* defaultValue= */ 'true')
-        .setLabel(_('Some setting to enable or not for the effect'))
-        .setType('boolean')
-        .setDescription(_('And some *optional* description.'))
-    );
+    const dummyEffectProperties = dummyEffect.getProperties();
+    dummyEffectProperties
+      .getOrCreate('opacity')
+      .setValue('1')
+      .setLabel(_('Opacity of the effect (between 0 and 1)'))
+      .setType('number')
+      .setDescription(_('This is an optional description.'));
+    dummyEffectProperties
+      .getOrCreate('someImage')
+      .setValue('')
+      .setLabel(
+        _("Image resource (won't be used, just for demonstration purpose)")
+      )
+      .setType('resource')
+      .addExtraInfo('image');
+    dummyEffectProperties
+      .getOrCreate('someColor')
+      .setValue('255;3;62')
+      .setLabel(_("Color (won't be used, just for demonstration purpose)"))
+      .setType('color')
+      .setDescription(_('Another optional description.'));
+    dummyEffectProperties
+      .getOrCreate('someBoolean')
+      .setValue('true')
+      .setLabel(_('Some setting to enable or not for the effect'))
+      .setType('boolean')
+      .setDescription(_('And some *optional* description.'));
 
     // Declare conditions, actions or expressions:
     extension
@@ -72,7 +105,7 @@ module.exports = {
           'This is an example of a condition displayed in the events sheet. Will return true if the number is less than 10 and the length of the text is less than 5.'
         ),
         _('Call the example condition with _PARAM0_ and _PARAM1_'),
-        _('Dummy Extension'),
+        '',
         'res/conditions/camera24.png',
         'res/conditions/camera.png'
       )
@@ -89,7 +122,7 @@ module.exports = {
         'DummyExpression',
         _('Dummy expression example'),
         _('This is an example of an expression'),
-        _('Dummy Extension'),
+        '',
         'res/actions/camera.png'
       )
       .addParameter('expression', _('Maximum'), '', false)
@@ -101,7 +134,7 @@ module.exports = {
         'DummyStrExpression',
         _('Dummy string expression example'),
         _('This is an example of an expression returning a string'),
-        _('Dummy Extension'),
+        '',
         'res/actions/camera.png'
       )
       .getCodeExtraInformation()
@@ -116,7 +149,7 @@ module.exports = {
     // Everything that is stored inside the behavior is in "behaviorContent" and is automatically
     // saved/loaded to JSON.
     var dummyBehavior = new gd.BehaviorJsImplementation();
-    dummyBehavior.updateProperty = function(
+    dummyBehavior.updateProperty = function (
       behaviorContent,
       propertyName,
       newValue
@@ -132,25 +165,23 @@ module.exports = {
 
       return false;
     };
-    dummyBehavior.getProperties = function(behaviorContent) {
+    dummyBehavior.getProperties = function (behaviorContent) {
       var behaviorProperties = new gd.MapStringPropertyDescriptor();
 
-      behaviorProperties.set(
-        'My first property',
-        new gd.PropertyDescriptor(
-          behaviorContent.getStringAttribute('property1')
-        )
-      );
-      behaviorProperties.set(
-        'My other property',
-        new gd.PropertyDescriptor(
+      behaviorProperties
+        .getOrCreate('My first property')
+        .setValue(behaviorContent.getStringAttribute('property1'));
+      behaviorProperties
+        .getOrCreate('My other property')
+        .setValue(
           behaviorContent.getBoolAttribute('property2') ? 'true' : 'false'
-        ).setType('Boolean')
-      );
+        )
+        .setType('Boolean')
+        .setGroup(_('Look and Feel'));
 
       return behaviorProperties;
     };
-    dummyBehavior.initializeContent = function(behaviorContent) {
+    dummyBehavior.initializeContent = function (behaviorContent) {
       behaviorContent.setStringAttribute('property1', 'Initial value 1');
       behaviorContent.setBoolAttribute('property2', true);
     };
@@ -159,10 +190,11 @@ module.exports = {
         'DummyBehavior',
         _('Dummy behavior for testing'),
         'DummyBehavior',
-        _('This dummy behavior does nothing'),
+        _('Do nothing.'),
         '',
         'CppPlatform/Extensions/topdownmovementicon.png',
         'DummyBehavior',
+        //@ts-ignore The class hierarchy is incorrect leading to a type error, but this is valid.
         dummyBehavior,
         new gd.BehaviorsSharedData()
       )
@@ -177,7 +209,7 @@ module.exports = {
     // Create a new gd.BehaviorSharedDataJsImplementation object and implement the methods
     // that are called to get and set the properties of the shared data.
     var dummyBehaviorWithSharedData = new gd.BehaviorJsImplementation();
-    dummyBehaviorWithSharedData.updateProperty = function(
+    dummyBehaviorWithSharedData.updateProperty = function (
       behaviorContent,
       propertyName,
       newValue
@@ -189,24 +221,21 @@ module.exports = {
 
       return false;
     };
-    dummyBehaviorWithSharedData.getProperties = function(behaviorContent) {
+    dummyBehaviorWithSharedData.getProperties = function (behaviorContent) {
       var behaviorProperties = new gd.MapStringPropertyDescriptor();
 
-      behaviorProperties.set(
-        'My behavior property',
-        new gd.PropertyDescriptor(
-          behaviorContent.getStringAttribute('property1')
-        )
-      );
+      behaviorProperties
+        .getOrCreate('My behavior property')
+        .setValue(behaviorContent.getStringAttribute('property1'));
 
       return behaviorProperties;
     };
-    dummyBehaviorWithSharedData.initializeContent = function(behaviorContent) {
+    dummyBehaviorWithSharedData.initializeContent = function (behaviorContent) {
       behaviorContent.setStringAttribute('property1', 'Initial value 1');
     };
 
     var sharedData = new gd.BehaviorSharedDataJsImplementation();
-    sharedData.updateProperty = function(
+    sharedData.updateProperty = function (
       sharedContent,
       propertyName,
       newValue
@@ -218,19 +247,16 @@ module.exports = {
 
       return false;
     };
-    sharedData.getProperties = function(sharedContent) {
+    sharedData.getProperties = function (sharedContent) {
       var sharedProperties = new gd.MapStringPropertyDescriptor();
 
-      sharedProperties.set(
-        'My shared property',
-        new gd.PropertyDescriptor(
-          sharedContent.getStringAttribute('sharedProperty1')
-        )
-      );
+      sharedProperties
+        .getOrCreate('My shared property')
+        .setValue(sharedContent.getStringAttribute('sharedProperty1'));
 
       return sharedProperties;
     };
-    sharedData.initializeContent = function(behaviorContent) {
+    sharedData.initializeContent = function (behaviorContent) {
       behaviorContent.setStringAttribute(
         'sharedProperty1',
         'Initial shared value 1'
@@ -242,10 +268,11 @@ module.exports = {
         'DummyBehaviorWithSharedData',
         _('Dummy behavior with shared data for testing'),
         'DummyBehaviorWithSharedData',
-        _('This dummy behavior uses shared data and does nothing'),
+        _('Do nothing but use shared data.'),
         '',
         'CppPlatform/Extensions/topdownmovementicon.png',
         'DummyBehaviorWithSharedData',
+        //@ts-ignore The class hierarchy is incorrect leading to a type error, but this is valid.
         dummyBehaviorWithSharedData,
         sharedData
       )
@@ -264,11 +291,9 @@ module.exports = {
     // Everything that is stored inside the object is in "content" and is automatically
     // saved/loaded to JSON.
     var dummyObject = new gd.ObjectJsImplementation();
-    dummyObject.updateProperty = function(
-      objectContent,
-      propertyName,
-      newValue
-    ) {
+    dummyObject.updateProperty = function (propertyName, newValue) {
+      const objectContent = this.content;
+
       if (propertyName === 'My first property') {
         objectContent.property1 = newValue;
         return true;
@@ -288,85 +313,65 @@ module.exports = {
 
       return false;
     };
-    dummyObject.getProperties = function(objectContent) {
+    dummyObject.getProperties = function () {
       var objectProperties = new gd.MapStringPropertyDescriptor();
+      const objectContent = this.content;
 
-      objectProperties.set(
-        'My first property',
-        new gd.PropertyDescriptor(objectContent.property1)
-      );
-      objectProperties.set(
-        'My other property',
-        new gd.PropertyDescriptor(
-          objectContent.property2 ? 'true' : 'false'
-        ).setType('boolean')
-      );
-      objectProperties.set(
-        'My third property',
-        new gd.PropertyDescriptor(objectContent.property3.toString()).setType(
-          'number'
-        )
-      );
-      objectProperties.set(
-        'myImage',
-        new gd.PropertyDescriptor(objectContent.myImage)
-          .setType('resource')
-          .addExtraInfo('image')
-          .setLabel(
-            _("Image resource (won't be shown, just for demonstration purpose)")
-          )
-      );
+      objectProperties
+        .getOrCreate('My first property')
+        .setValue(objectContent.property1);
+      objectProperties
+        .getOrCreate('My other property')
+        .setValue(objectContent.property2 ? 'true' : 'false')
+        .setType('boolean');
+      objectProperties
+        .getOrCreate('My third property')
+        .setValue(objectContent.property3.toString())
+        .setType('number');
+      objectProperties
+        .getOrCreate('myImage')
+        .setValue(objectContent.myImage)
+        .setType('resource')
+        .addExtraInfo('image')
+        .setLabel(
+          _("Image resource (won't be shown, just for demonstration purpose)")
+        );
 
       return objectProperties;
     };
-    dummyObject.setRawJSONContent(
-      JSON.stringify({
-        property1: 'Hello world',
-        property2: true,
-        property3: 123,
-        myImage: '',
-      })
-    );
+    dummyObject.content = {
+      property1: 'Hello world',
+      property2: true,
+      property3: 123,
+      myImage: '',
+    };
 
-    dummyObject.updateInitialInstanceProperty = function(
-      objectContent,
+    dummyObject.updateInitialInstanceProperty = function (
       instance,
       propertyName,
-      newValue,
-      project,
-      layout
+      newValue
     ) {
       if (propertyName === 'My instance property') {
         instance.setRawStringProperty('instanceprop1', newValue);
         return true;
       }
       if (propertyName === 'My other instance property') {
-        instance.setRawFloatProperty('instanceprop2', parseFloat(newValue));
+        instance.setRawDoubleProperty('instanceprop2', parseFloat(newValue));
         return true;
       }
 
       return false;
     };
-    dummyObject.getInitialInstanceProperties = function(
-      content,
-      instance,
-      project,
-      layout
-    ) {
+    dummyObject.getInitialInstanceProperties = function (instance) {
       var instanceProperties = new gd.MapStringPropertyDescriptor();
 
-      instanceProperties.set(
-        'My instance property',
-        new gd.PropertyDescriptor(
-          instance.getRawStringProperty('instanceprop1')
-        )
-      );
-      instanceProperties.set(
-        'My other instance property',
-        new gd.PropertyDescriptor(
-          instance.getRawFloatProperty('instanceprop2').toString()
-        ).setType('number')
-      );
+      instanceProperties
+        .getOrCreate('My instance property')
+        .setValue(instance.getRawStringProperty('instanceprop1'));
+      instanceProperties
+        .getOrCreate('My other instance property')
+        .setValue(instance.getRawDoubleProperty('instanceprop2').toString())
+        .setType('number');
 
       return instanceProperties;
     };
@@ -382,7 +387,8 @@ module.exports = {
       .setIncludeFile('Extensions/ExampleJsExtension/dummyruntimeobject.js')
       .addIncludeFile(
         'Extensions/ExampleJsExtension/dummyruntimeobject-pixi-renderer.js'
-      );
+      )
+      .setCategory('Testing');
 
     object
       .addAction(
@@ -406,16 +412,15 @@ module.exports = {
   },
   /**
    * You can optionally add sanity tests that will check the basic working
-   * of your extension behaviors/objects by instanciating behaviors/objects
+   * of your extension behaviors/objects by instantiating behaviors/objects
    * and setting the property to a given value.
    *
-   * If you don't have any tests, you can simply return an empty array like this:
-   * `runExtensionSanityTests: function(gd, extension) { return []; }`
+   * If you don't have any tests, you can simply return an empty array.
    *
    * But it is recommended to create tests for the behaviors/objects properties you created
    * to avoid mistakes.
    */
-  runExtensionSanityTests: function(gd, extension) {
+  runExtensionSanityTests: function (gd, extension) {
     const dummyBehavior = extension
       .getBehaviorMetadata('MyDummyExtension::DummyBehavior')
       .get();
@@ -440,7 +445,7 @@ module.exports = {
    *
    * ℹ️ Run `node import-GDJS-Runtime.js` (in newIDE/app/scripts) if you make any change.
    */
-  registerEditorConfigurations: function(objectsEditorService) {
+  registerEditorConfigurations: function (objectsEditorService) {
     objectsEditorService.registerEditorConfiguration(
       'MyDummyExtension::DummyObject',
       objectsEditorService.getDefaultObjectJsImplementationPropertiesEditor({
@@ -453,95 +458,89 @@ module.exports = {
    *
    * ℹ️ Run `node import-GDJS-Runtime.js` (in newIDE/app/scripts) if you make any change.
    */
-  registerInstanceRenderers: function(objectsRenderingService) {
+  registerInstanceRenderers: function (objectsRenderingService) {
     const RenderedInstance = objectsRenderingService.RenderedInstance;
     const PIXI = objectsRenderingService.PIXI;
 
     /**
      * Renderer for instances of DummyObject inside the IDE.
-     *
-     * @extends RenderedInstance
-     * @class RenderedDummyObjectInstance
-     * @constructor
      */
-    function RenderedDummyObjectInstance(
-      project,
-      layout,
-      instance,
-      associatedObject,
-      pixiContainer,
-      pixiResourcesLoader
-    ) {
-      RenderedInstance.call(
-        this,
+    class RenderedDummyObjectInstance extends RenderedInstance {
+      constructor(
         project,
-        layout,
         instance,
-        associatedObject,
+        associatedObjectConfiguration,
         pixiContainer,
         pixiResourcesLoader
-      );
+      ) {
+        super(
+          project,
+          instance,
+          associatedObjectConfiguration,
+          pixiContainer,
+          pixiResourcesLoader
+        );
 
-      //Setup the PIXI object:
-      this._pixiObject = new PIXI.Text('This is a dummy object', {
-        align: 'left',
-      });
-      this._pixiObject.anchor.x = 0.5;
-      this._pixiObject.anchor.y = 0.5;
-      this._pixiContainer.addChild(this._pixiObject);
-      this.update();
+        //Setup the PIXI object:
+        this._pixiObject = new PIXI.Text('This is a dummy object', {
+          align: 'left',
+        });
+        this._pixiObject.anchor.x = 0.5;
+        this._pixiObject.anchor.y = 0.5;
+        this._pixiContainer.addChild(this._pixiObject);
+        this.update();
+      }
+
+      onRemovedFromScene() {
+        super.onRemovedFromScene();
+        this._pixiObject.destroy(true);
+      }
+
+      /**
+       * Return the path to the thumbnail of the specified object.
+       */
+      static getThumbnail(project, resourcesLoader, objectConfiguration) {
+        return 'CppPlatform/Extensions/texticon24.png';
+      }
+
+      /**
+       * This is called to update the PIXI object on the scene editor
+       */
+      update() {
+        const object = gd.castObject(
+          this._associatedObjectConfiguration,
+          gd.ObjectJsImplementation
+        );
+
+        // Read a property from the object
+        this._pixiObject.text = object.content.property1;
+
+        // Read position and angle from the instance
+        this._pixiObject.position.x =
+          this._instance.getX() + this._pixiObject.width / 2;
+        this._pixiObject.position.y =
+          this._instance.getY() + this._pixiObject.height / 2;
+        this._pixiObject.rotation = RenderedInstance.toRad(
+          this._instance.getAngle()
+        );
+        // Custom size can be read in this.getCustomWidth() and
+        // this.getCustomHeight()
+      }
+
+      /**
+       * Return the width of the instance, when it's not resized.
+       */
+      getDefaultWidth() {
+        return this._pixiObject.width;
+      }
+
+      /**
+       * Return the height of the instance, when it's not resized.
+       */
+      getDefaultHeight() {
+        return this._pixiObject.height;
+      }
     }
-    RenderedDummyObjectInstance.prototype = Object.create(
-      RenderedInstance.prototype
-    );
-
-    /**
-     * Return the path to the thumbnail of the specified object.
-     */
-    RenderedDummyObjectInstance.getThumbnail = function(
-      project,
-      resourcesLoader,
-      object
-    ) {
-      return 'CppPlatform/Extensions/texticon24.png';
-    };
-
-    /**
-     * This is called to update the PIXI object on the scene editor
-     */
-    RenderedDummyObjectInstance.prototype.update = function() {
-      // Read a property from the object
-      const property1Value = this._associatedObject
-        .getProperties(this.project)
-        .get('My first property')
-        .getValue();
-      this._pixiObject.text = property1Value;
-
-      // Read position and angle from the instance
-      this._pixiObject.position.x =
-        this._instance.getX() + this._pixiObject.width / 2;
-      this._pixiObject.position.y =
-        this._instance.getY() + this._pixiObject.height / 2;
-      this._pixiObject.rotation = RenderedInstance.toRad(
-        this._instance.getAngle()
-      );
-      // Custom size can be read in instance.getCustomWidth() and
-      // instance.getCustomHeight()
-    };
-
-    /**
-     * Return the width of the instance, when it's not resized.
-     */
-    RenderedDummyObjectInstance.prototype.getDefaultWidth = function() {
-      return this._pixiObject.width;
-    };
-
-    /**
-     * Return the height of the instance, when it's not resized.
-     */
-    RenderedDummyObjectInstance.prototype.getDefaultHeight = function() {
-      return this._pixiObject.height;
-    };
 
     objectsRenderingService.registerInstanceRenderer(
       'MyDummyExtension::DummyObject',

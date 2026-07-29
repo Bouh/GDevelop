@@ -32,6 +32,8 @@
     "loadingScreen": {
       "showGDevelopSplash": true
     },
+    "authorIds": [],
+    "authorUsernames": [],
     "extensions": [
       {
         "name": "BuiltinObject"
@@ -290,6 +292,7 @@
               "value": "3"
             }
           ],
+          "effects": [],
           "behaviors": [
             {
               "name": "TopDownMovement",
@@ -384,6 +387,7 @@
           "updateIfNotVisible": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "animations": [
             {
               "name": "",
@@ -481,6 +485,7 @@
           "updateIfNotVisible": false,
           "variables": [],
           "behaviors": [],
+          "effects": [],
           "animations": [
             {
               "name": "",

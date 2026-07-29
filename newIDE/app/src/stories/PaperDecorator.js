@@ -1,14 +1,20 @@
 // @flow
 import React from 'react';
-import Paper from '@material-ui/core/Paper';
 import { type StoryDecorator } from '@storybook/react';
+import Paper from '../UI/Paper';
 
 const style = {
   padding: 10,
 };
 
-const paperDecorator: StoryDecorator = (story, context) => (
-  <Paper style={style}>{story(context)}</Paper>
+export const getPaperDecorator = (
+  background: 'medium' | 'dark'
+): StoryDecorator => (Story, context) => (
+  <Paper background={background} style={style}>
+    <Story />
+  </Paper>
 );
 
-export default paperDecorator;
+const defaultPaperDecorator: StoryDecorator = getPaperDecorator('dark');
+
+export default defaultPaperDecorator;

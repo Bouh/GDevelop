@@ -8,6 +8,7 @@
 #define GDCORE_WHILEEVENT_H
 #include "GDCore/Events/Event.h"
 #include "GDCore/Events/EventsList.h"
+#include "GDCore/Project/VariablesContainer.h"
 namespace gd {
 class Instruction;
 class Project;
@@ -25,21 +26,33 @@ namespace gd {
  */
 class GD_CORE_API WhileEvent : public gd::BaseEvent {
  public:
-  WhileEvent() : infiniteLoopWarning(true), justCreatedByTheUser(true){};
+  WhileEvent()
+      : infiniteLoopWarning(true),
+        justCreatedByTheUser(true),
+        variables(gd::VariablesContainer::SourceType::Local){};
   virtual ~WhileEvent(){};
-  virtual gd::WhileEvent* Clone() const { return new WhileEvent(*this); }
+  virtual gd::WhileEvent* Clone() const override { return new WhileEvent(*this); }
 
-  virtual bool IsExecutable() const { return true; }
+  virtual bool IsExecutable() const override { return true; }
 
-  virtual bool CanHaveSubEvents() const { return true; }
-  virtual const gd::EventsList& GetSubEvents() const { return events; };
-  virtual gd::EventsList& GetSubEvents() { return events; };
+  virtual bool CanHaveSubEvents() const override { return true; }
+  virtual const gd::EventsList& GetSubEvents() const override { return events; };
+  virtual gd::EventsList& GetSubEvents() override { return events; };
+
+  virtual bool CanHaveVariables() const override { return true; }
+  virtual const gd::VariablesContainer& GetVariables() const override {
+    return variables;
+  };
+  virtual gd::VariablesContainer& GetVariables() override { return variables; };
 
   const gd::InstructionsList& GetConditions() const { return conditions; };
   gd::InstructionsList& GetConditions() { return conditions; };
 
   const gd::InstructionsList& GetActions() const { return actions; };
   gd::InstructionsList& GetActions() { return actions; };
+
+  virtual gd::InstructionsList* GetInstructionList(const gd::String& label) override;
+  virtual const gd::InstructionsList* GetInstructionList(const gd::String& label) const override;
 
   const gd::InstructionsList& GetWhileConditions() const {
     return whileConditions;
@@ -51,15 +64,18 @@ class GD_CORE_API WhileEvent : public gd::BaseEvent {
 
   bool HasInfiniteLoopWarning() const { return infiniteLoopWarning; }
 
-  virtual std::vector<gd::InstructionsList*> GetAllConditionsVectors();
-  virtual std::vector<gd::InstructionsList*> GetAllActionsVectors();
-  virtual std::vector<const gd::InstructionsList*> GetAllConditionsVectors()
-      const;
-  virtual std::vector<const gd::InstructionsList*> GetAllActionsVectors() const;
+  const gd::String& GetLoopIndexVariableName() const { return loopIndexVariableName; }
+  void SetLoopIndexVariableName(const gd::String& name) { loopIndexVariableName = name; }
 
-  virtual void SerializeTo(SerializerElement& element) const;
+  virtual std::vector<gd::InstructionsList*> GetAllConditionsVectors() override;
+  virtual std::vector<gd::InstructionsList*> GetAllActionsVectors() override;
+  virtual std::vector<const gd::InstructionsList*> GetAllConditionsVectors()
+      const override;
+  virtual std::vector<const gd::InstructionsList*> GetAllActionsVectors() const override;
+
+  virtual void SerializeTo(SerializerElement& element) const override;
   virtual void UnserializeFrom(gd::Project& project,
-                               const SerializerElement& element);
+                               const SerializerElement& element) override;
 
  private:
   gd::InstructionsList whileConditions;
@@ -71,8 +87,8 @@ class GD_CORE_API WhileEvent : public gd::BaseEvent {
   bool justCreatedByTheUser;  ///< Used so as not to show message box to
                               ///< de/activate infinite loop warning when the
                               ///< user create the event
-
-  mutable unsigned int whileConditionsHeight;
+  gd::VariablesContainer variables;
+  gd::String loopIndexVariableName;
 
   int GetConditionsHeight() const;
   int GetActionsHeight() const;

@@ -4,10 +4,16 @@
  * reserved. This project is released under the MIT License.
  */
 #include "InstructionMetadata.h"
+
 #include <algorithm>
+
 #include "GDCore/CommonTools.h"
+#include "GDCore/Extensions/PlatformExtension.h"
+#include "GDCore/Project/ParameterMetadataContainer.h"
 #include "GDCore/Serialization/SerializerElement.h"
 #include "GDCore/Tools/Localization.h"
+#include "GDCore/Tools/Log.h"
+#include "ParameterMetadata.h"
 
 namespace gd {
 InstructionMetadata::InstructionMetadata()
@@ -43,81 +49,109 @@ InstructionMetadata::InstructionMetadata(const gd::String& extensionNamespace_,
       usageComplexity(5),
       isPrivate(false),
       isObjectInstruction(false),
-      isBehaviorInstruction(false) {}
-
-ParameterMetadata::ParameterMetadata() : optional(false), codeOnly(false) {}
+      isBehaviorInstruction(false),
+      relevantContext("Any") {}
 
 InstructionMetadata& InstructionMetadata::AddParameter(
     const gd::String& type,
     const gd::String& description,
-    const gd::String& optionalObjectType,
+    const gd::String& supplementaryInformation,
     bool parameterIsOptional) {
   ParameterMetadata info;
-  info.type = type;
+  info.SetType(type);
   info.description = description;
   info.codeOnly = false;
-  info.optional = parameterIsOptional;
-  info.supplementaryInformation =
+  info.SetOptional(parameterIsOptional);
+  info.SetExtraInfo(
       // For objects/behavior, the supplementary information
       // parameter is an object/behavior type...
-      (gd::ParameterMetadata::IsObject(type) ||
-       gd::ParameterMetadata::IsBehavior(type))
-          ? (optionalObjectType.empty()
-                 ? ""
-                 : extensionNamespace +
-                       optionalObjectType  //... so prefix it with the extension
-                                           // namespace.
-             )
-          : optionalObjectType;  // Otherwise don't change anything
+      ((gd::ParameterMetadata::IsObject(type) ||
+        gd::ParameterMetadata::IsBehavior(type))
+               // Prefix with the namespace if it's not already there.
+               && (supplementaryInformation.find(
+                       PlatformExtension::GetNamespaceSeparator()) == gd::String::npos)
+           ? (supplementaryInformation.empty()
+                  ? ""
+                  : extensionNamespace + supplementaryInformation)
+           : supplementaryInformation));
 
-  // TODO: Assert against optionalObjectType === "emsc" (when running with
+  // TODO: Assert against supplementaryInformation === "emsc" (when running with
   // Emscripten), and warn about a missing argument when calling addParameter.
 
-  parameters.push_back(info);
+  parameters.AddParameter(info);
   return *this;
 }
 
 InstructionMetadata& InstructionMetadata::AddCodeOnlyParameter(
     const gd::String& type, const gd::String& supplementaryInformation) {
   ParameterMetadata info;
-  info.type = type;
+  info.SetType(type);
   info.codeOnly = true;
-  info.supplementaryInformation = supplementaryInformation;
+  info.SetExtraInfo(supplementaryInformation);
 
-  parameters.push_back(info);
+  parameters.AddParameter(info);
   return *this;
 }
 
 InstructionMetadata& InstructionMetadata::UseStandardOperatorParameters(
-    const gd::String& type) {
-  SetManipulatedType(type);
+    const gd::String& type, const ParameterOptions &options) {
+  const gd::String& expressionValueType =
+      gd::ValueTypeMetadata::GetPrimitiveValueType(type);
+  SetManipulatedType(expressionValueType);
 
-  AddParameter("operator", _("Modification's sign"));
-  AddParameter(type == "number" ? "expression" : type, _("Value"));
-  size_t operatorParamIndex = parameters.size() - 2;
-  size_t valueParamIndex = parameters.size() - 1;
+  if (type == "boolean") {
+    AddParameter(
+        "yesorno",
+        options.description.empty() ? _("New value") : options.description);
+    size_t valueParamIndex = parameters.GetParametersCount() - 1;
 
-  if (isObjectInstruction || isBehaviorInstruction) {
-    gd::String templateSentence =
-        _("Change <subject> of _PARAM0_: <operator> <value>");
+    if (isObjectInstruction || isBehaviorInstruction) {
+      gd::String templateSentence = _("Set _PARAM0_ as <subject>: <value>");
 
-    sentence =
-        templateSentence.FindAndReplace("<subject>", sentence)
-            .FindAndReplace(
-                "<operator>",
-                "_PARAM" + gd::String::From(operatorParamIndex) + "_")
-            .FindAndReplace("<value>",
-                            "_PARAM" + gd::String::From(valueParamIndex) + "_");
+      sentence =
+          templateSentence
+              .FindAndReplace("<subject>", sentence)
+              .FindAndReplace("<value>",
+                              "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    } else {
+      gd::String templateSentence = _("Change <subject>: <value>");
+
+      sentence =
+          templateSentence
+              .FindAndReplace("<subject>", sentence)
+              .FindAndReplace("<value>",
+                              "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    }
   } else {
-    gd::String templateSentence = _("Change <subject>: <operator> <value>");
+    AddParameter("operator", _("Modification's sign"), expressionValueType);
+    AddParameter(type,
+                 options.description.empty() ? _("Value") : options.description,
+                 options.typeExtraInfo);
 
-    sentence =
-        templateSentence.FindAndReplace("<subject>", sentence)
-            .FindAndReplace(
-                "<operator>",
-                "_PARAM" + gd::String::From(operatorParamIndex) + "_")
-            .FindAndReplace("<value>",
-                            "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    size_t operatorParamIndex = parameters.GetParametersCount() - 2;
+    size_t valueParamIndex = parameters.GetParametersCount() - 1;
+
+    if (isObjectInstruction || isBehaviorInstruction) {
+      gd::String templateSentence = _("Change <subject> of _PARAM0_: <operator> <value>");
+
+      sentence =
+          templateSentence.FindAndReplace("<subject>", sentence)
+              .FindAndReplace(
+                  "<operator>",
+                  "_PARAM" + gd::String::From(operatorParamIndex) + "_")
+              .FindAndReplace("<value>",
+                              "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    } else {
+      gd::String templateSentence = _("Change <subject>: <operator> <value>");
+
+      sentence =
+          templateSentence.FindAndReplace("<subject>", sentence)
+              .FindAndReplace(
+                  "<operator>",
+                  "_PARAM" + gd::String::From(operatorParamIndex) + "_")
+              .FindAndReplace("<value>",
+                              "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    }
   }
 
   return *this;
@@ -125,59 +159,69 @@ InstructionMetadata& InstructionMetadata::UseStandardOperatorParameters(
 
 InstructionMetadata&
 InstructionMetadata::UseStandardRelationalOperatorParameters(
-    const gd::String& type) {
-  SetManipulatedType(type);
+    const gd::String& type, const ParameterOptions &options) {
+  const gd::String& expressionValueType =
+      gd::ValueTypeMetadata::GetPrimitiveValueType(type);
+  SetManipulatedType(expressionValueType);
 
-  AddParameter("relationalOperator", _("Sign of the test"));
-  AddParameter(type == "number" ? "expression" : type, _("Value to compare"));
-  size_t operatorParamIndex = parameters.size() - 2;
-  size_t valueParamIndex = parameters.size() - 1;
+  if (type == "boolean") {
+    if (isObjectInstruction || isBehaviorInstruction) {
+      gd::String templateSentence = _("_PARAM0_ is <subject>");
 
-  if (isObjectInstruction || isBehaviorInstruction) {
-    gd::String templateSentence = _("<subject> of _PARAM0_ <operator> <value>");
+      sentence =
+          templateSentence
+              .FindAndReplace("<subject>", sentence);
+    } else {
+      gd::String templateSentence = _("<subject>");
 
-    sentence =
-        templateSentence.FindAndReplace("<subject>", sentence)
-            .FindAndReplace(
-                "<operator>",
-                "_PARAM" + gd::String::From(operatorParamIndex) + "_")
-            .FindAndReplace("<value>",
-                            "_PARAM" + gd::String::From(valueParamIndex) + "_");
+      sentence =
+          templateSentence.FindAndReplace("<subject>", sentence);
+    }
   } else {
-    gd::String templateSentence = _("<subject> <operator> <value>");
+    AddParameter("relationalOperator", _("Sign of the test"), expressionValueType);
+    AddParameter(type,
+                 options.description.empty() ? _("Value to compare") : options.description,
+                 options.typeExtraInfo);
+    size_t operatorParamIndex = parameters.GetParametersCount() - 2;
+    size_t valueParamIndex = parameters.GetParametersCount() - 1;
 
-    sentence =
-        templateSentence.FindAndReplace("<subject>", sentence)
-            .FindAndReplace(
-                "<operator>",
-                "_PARAM" + gd::String::From(operatorParamIndex) + "_")
-            .FindAndReplace("<value>",
-                            "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    if (isObjectInstruction || isBehaviorInstruction) {
+      gd::String templateSentence = _("<subject> of _PARAM0_ <operator> <value>");
+
+      sentence =
+          templateSentence.FindAndReplace("<subject>", sentence.CapitalizeFirstLetter())
+              .FindAndReplace(
+                  "<operator>",
+                  "_PARAM" + gd::String::From(operatorParamIndex) + "_")
+              .FindAndReplace("<value>",
+                              "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    } else {
+      gd::String templateSentence = _("<subject> <operator> <value>");
+
+      sentence =
+          templateSentence.FindAndReplace("<subject>", sentence.CapitalizeFirstLetter())
+              .FindAndReplace(
+                  "<operator>",
+                  "_PARAM" + gd::String::From(operatorParamIndex) + "_")
+              .FindAndReplace("<value>",
+                              "_PARAM" + gd::String::From(valueParamIndex) + "_");
+    }
   }
 
   return *this;
 }
 
-void ParameterMetadata::SerializeTo(SerializerElement& element) const {
-  element.SetAttribute("type", type);
-  element.SetAttribute("supplementaryInformation", supplementaryInformation);
-  element.SetAttribute("optional", optional);
-  element.SetAttribute("description", description);
-  element.SetAttribute("longDescription", longDescription);
-  element.SetAttribute("codeOnly", codeOnly);
-  element.SetAttribute("defaultValue", defaultValue);
-  element.SetAttribute("name", name);
+InstructionMetadata& InstructionMetadata::SetRequiresBaseObjectCapability(
+    const gd::String& capability) {
+  if (!IsObjectInstruction() && !IsBehaviorInstruction()) {
+    gd::LogError("Tried to add capability \"" + capability +
+                 "\" to instruction named \"" + fullname +
+                 "\", which is not an object or behavior instruction.");
+    return *this;
+  }
+
+  requiredBaseObjectCapability = capability;
+  return *this;
 }
 
-void ParameterMetadata::UnserializeFrom(const SerializerElement& element) {
-  type = element.GetStringAttribute("type");
-  supplementaryInformation =
-      element.GetStringAttribute("supplementaryInformation");
-  optional = element.GetBoolAttribute("optional");
-  description = element.GetStringAttribute("description");
-  longDescription = element.GetStringAttribute("longDescription");
-  codeOnly = element.GetBoolAttribute("codeOnly");
-  defaultValue = element.GetStringAttribute("defaultValue");
-  name = element.GetStringAttribute("name");
-}
 }  // namespace gd

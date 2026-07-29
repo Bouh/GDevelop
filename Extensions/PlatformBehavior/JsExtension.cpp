@@ -4,8 +4,8 @@ GDevelop - Platform Behavior Extension
 Copyright (c) 2014-2016 Florian Rival (Florian.Rival@gmail.com)
 This project is released under the MIT License.
 */
-#if defined(GD_IDE_ONLY)
 #include "GDCore/Extensions/PlatformExtension.h"
+#include "GDCore/Tools/Localization.h"
 
 #include "GDCore/Tools/Localization.h"
 
@@ -29,13 +29,28 @@ class PlatformBehaviorJsExtension : public gd::PlatformExtension {
         .SetIncludeFile(
             "Extensions/PlatformBehavior/platformruntimebehavior.js")
         .AddIncludeFile(
-            "Extensions/PlatformBehavior/platformerobjectruntimebehavior.js");
+            "Extensions/PlatformBehavior/platformerobjectruntimebehavior.js")
+        .AddIncludeFile(
+            "Extensions/PlatformBehavior/platformtools.js");
 
     GetBehaviorMetadata("PlatformBehavior::PlatformerObjectBehavior")
         .SetIncludeFile(
             "Extensions/PlatformBehavior/platformruntimebehavior.js")
         .AddIncludeFile(
-            "Extensions/PlatformBehavior/platformerobjectruntimebehavior.js");
+            "Extensions/PlatformBehavior/platformerobjectruntimebehavior.js")
+        .AddIncludeFile(
+            "Extensions/PlatformBehavior/platformtools.js");
+
+    std::map<gd::String, gd::InstructionMetadata>& extConditions =
+        GetAllConditions();
+    extConditions["PlatformBehavior::IsObjectOnGivenFloor"].SetFunctionName(
+        "gdjs.evtTools.platform.isOnPlatform")
+    .AddIncludeFile(
+        "Extensions/PlatformBehavior/platformruntimebehavior.js")
+    .AddIncludeFile(
+        "Extensions/PlatformBehavior/platformerobjectruntimebehavior.js")
+    .AddIncludeFile(
+        "Extensions/PlatformBehavior/platformtools.js");
 
     {
       std::map<gd::String, gd::InstructionMetadata>& autActions =
@@ -49,6 +64,8 @@ class PlatformBehaviorJsExtension : public gd::PlatformExtension {
               "PlatformBehavior::PlatformerObjectBehavior");
 
       autConditions["PlatformBehavior::IsMoving"].SetFunctionName("isMoving");
+      autConditions["PlatformBehavior::PlatformerObjectBehavior::IsMovingEvenALittle"]
+          .SetFunctionName("isMovingEvenALittle");
       autConditions["PlatformBehavior::IsOnFloor"].SetFunctionName("isOnFloor");
       autConditions["PlatformBehavior::IsOnLadder"].SetFunctionName(
           "isOnLadder");
@@ -70,6 +87,12 @@ class PlatformBehaviorJsExtension : public gd::PlatformExtension {
       autExpressions["MaxFallingSpeed"].SetFunctionName("getMaxFallingSpeed");
       autConditions["PlatformBehavior::Acceleration"].SetFunctionName(
           "getAcceleration");
+      autActions["PlatformBehavior::LadderClimbingSpeed"]
+          .SetFunctionName("setLadderClimbingSpeed")
+          .SetGetter("getLadderClimbingSpeed");
+      autExpressions["LadderClimbingSpeed"].SetFunctionName("getLadderClimbingSpeed");
+      autConditions["PlatformBehavior::LadderClimbingSpeed"].SetFunctionName(
+          "getLadderClimbingSpeed");
       autActions["PlatformBehavior::Acceleration"]
           .SetFunctionName("setAcceleration")
           .SetGetter("getAcceleration");
@@ -92,8 +115,37 @@ class PlatformBehaviorJsExtension : public gd::PlatformExtension {
           .SetFunctionName("setJumpSpeed")
           .SetGetter("getJumpSpeed");
       autExpressions["JumpSpeed"].SetFunctionName("getJumpSpeed");
-
+      autConditions["PlatformBehavior::JumpSustainTime"].SetFunctionName(
+          "getJumpSustainTime");
+      autActions["PlatformBehavior::JumpSustainTime"]
+          .SetFunctionName("setJumpSustainTime")
+          .SetGetter("getJumpSustainTime");
+      autExpressions["JumpSustainTime"].SetFunctionName("getJumpSustainTime");
+      autActions["PlatformBehavior::PlatformerObjectBehavior::SetCurrentFallSpeed"]
+          .SetFunctionName("setCurrentFallSpeed")
+          .SetGetter("getCurrentFallSpeed");
+      autConditions["PlatformBehavior::CurrentFallSpeed"].SetFunctionName(
+          "getCurrentFallSpeed");
+      autExpressions["CurrentFallSpeed"].SetFunctionName("getCurrentFallSpeed");
+      autActions["PlatformBehavior::PlatformerObjectBehavior::SetCurrentSpeed"]
+          .SetFunctionName("setCurrentSpeed")
+          .SetGetter("getCurrentSpeed");
+      autConditions["PlatformBehavior::CurrentSpeed"].SetFunctionName(
+          "getCurrentSpeed");
+      autExpressions["CurrentSpeed"].SetFunctionName("getCurrentSpeed");
+      autActions["PlatformBehavior::CanGrabPlatforms"]
+          .SetFunctionName("setCanGrabPlatforms")
+          .SetGetter("canGrabPlatforms");
+      autConditions["PlatformBehavior::CanGrabPlatforms"].SetFunctionName(
+          "canGrabPlatforms");
+      autConditions["PlatformBehavior::CurrentJumpSpeed"].SetFunctionName(
+          "getCurrentJumpSpeed");
+      autExpressions["CurrentJumpSpeed"].SetFunctionName("getCurrentJumpSpeed");
       autActions["PlatformBehavior::SetCanJump"].SetFunctionName("setCanJump");
+      autActions["PlatformBehavior::PlatformerObjectBehavior::SetCanNotAirJump"].SetFunctionName("setCanNotAirJump");
+      autActions["PlatformBehavior::PlatformerObjectBehavior::AbortJump"].SetFunctionName("abortJump");
+      autConditions["PlatformBehavior::CanJump"].SetFunctionName(
+          "canJump");
       autActions["PlatformBehavior::SimulateLeftKey"].SetFunctionName(
           "simulateLeftKey");
       autActions["PlatformBehavior::SimulateRightKey"].SetFunctionName(
@@ -104,12 +156,19 @@ class PlatformBehaviorJsExtension : public gd::PlatformExtension {
           "simulateDownKey");
       autActions["PlatformBehavior::SimulateLadderKey"].SetFunctionName(
           "simulateLadderKey");
+      autActions["PlatformBehavior::SimulateReleaseLadderKey"].SetFunctionName(
+          "simulateReleaseLadderKey");
       autActions["PlatformBehavior::SimulateJumpKey"].SetFunctionName(
           "simulateJumpKey");
+      // deprecated release platform key.
       autActions["PlatformBehavior::SimulateReleaseKey"].SetFunctionName(
-          "simulateReleaseKey");
+          "simulateReleasePlatformKey");
+      autActions["PlatformBehavior::SimulateReleasePlatformKey"].SetFunctionName(
+          "simulateReleasePlatformKey");
       autActions["PlatformBehavior::SimulateControl"].SetFunctionName(
           "simulateControl");
+      autConditions["PlatformBehavior::PlatformerObjectBehavior::IsUsingControl"].SetFunctionName(
+          "isUsingControl");
       autActions["PlatformBehavior::IgnoreDefaultControls"].SetFunctionName(
           "ignoreDefaultControls");
     }
@@ -137,6 +196,4 @@ extern "C" gd::PlatformExtension* CreateGDJSPlatformBehaviorExtension() {
 extern "C" gd::PlatformExtension* GD_EXTENSION_API CreateGDJSExtension() {
   return new PlatformBehaviorJsExtension;
 }
-#endif
-
 #endif

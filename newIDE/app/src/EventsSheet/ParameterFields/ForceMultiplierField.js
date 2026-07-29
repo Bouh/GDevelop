@@ -1,47 +1,41 @@
 // @flow
+import * as React from 'react';
 import { Trans } from '@lingui/macro';
 import { type ParameterInlineRendererProps } from './ParameterInlineRenderer.flow';
-import React, { Component } from 'react';
 import RaisedButton from '../../UI/RaisedButton';
+import { type ButtonInterface } from '../../UI/Button';
 import { Line, Column } from '../../UI/Grid';
-import { makeNonBreakable } from '../../Utils/StringHelpers';
-import { type ParameterFieldProps } from './ParameterFieldCommons';
+import {
+  type ParameterFieldProps,
+  type ParameterFieldInterface,
+  type FieldFocusFunction,
+} from './ParameterFieldCommons';
 import GenericExpressionField from './GenericExpressionField';
 import BackgroundText from '../../UI/BackgroundText';
 import { focusButton } from '../../UI/Button';
 import Text from '../../UI/Text';
 
-type State = {|
-  showDeprecatedNumericValue: boolean,
-|};
+export default (React.forwardRef<ParameterFieldProps, ParameterFieldInterface>(
+  function ForceMultiplierField(props: ParameterFieldProps, ref) {
+    const button = React.useRef<?ButtonInterface>(null);
+    const focus: FieldFocusFunction = options => {
+      if (button.current) focusButton(button.current);
+    };
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
+    const showDeprecatedNumericValue =
+      props.value !== '' && props.value !== '1' && props.value !== '0';
 
-export default class ForceMultiplierField extends Component<
-  ParameterFieldProps,
-  State
-> {
-  _instantButton = React.createRef<RaisedButton>();
-  state = {
-    showDeprecatedNumericValue:
-      this.props.value !== '' &&
-      this.props.value !== '1' &&
-      this.props.value !== '0',
-  };
-
-  focus() {
-    focusButton(this._instantButton);
-  }
-
-  render() {
-    const { showDeprecatedNumericValue } = this.state;
     return (
       <Column expand noMargin>
         <Line expand alignItems="center">
           <Column>
             <RaisedButton
-              label={makeNonBreakable('Instant')}
-              primary={this.props.value === '' || this.props.value === '0'}
-              onClick={() => this.props.onChange('0')}
-              ref={this._instantButton}
+              label={<Trans>Instant</Trans>}
+              primary={props.value === '' || props.value === '0'}
+              onClick={() => props.onChange('0')}
+              ref={button}
             />
           </Column>
           <Column>
@@ -58,8 +52,8 @@ export default class ForceMultiplierField extends Component<
           <Column>
             <RaisedButton
               label={<Trans>Permanent</Trans>}
-              primary={this.props.value === '1'}
-              onClick={() => this.props.onChange('1')}
+              primary={props.value === '1'}
+              onClick={() => props.onChange('1')}
             />
           </Column>
           <Column>
@@ -80,10 +74,7 @@ export default class ForceMultiplierField extends Component<
             </BackgroundText>
             <Line expand>
               <Column expand>
-                <GenericExpressionField
-                  expressionType="number"
-                  {...this.props}
-                />
+                <GenericExpressionField expressionType="number" {...props} />
               </Column>
             </Line>
             <BackgroundText>
@@ -97,13 +88,16 @@ export default class ForceMultiplierField extends Component<
       </Column>
     );
   }
-}
+): React.ComponentType<{
+  ...ParameterFieldProps,
+  +ref?: React.RefSetter<ParameterFieldInterface>,
+}>);
 
 export const renderInlineForceMultiplier = ({
   value,
-}: ParameterInlineRendererProps) => {
-  if (value === '1') return 'a permanent';
-  else if (value === '0' || value === '') return 'an instant';
+}: ParameterInlineRendererProps): string | React.Node => {
+  if (value === '1') return <Trans>{`a permanent`}</Trans>;
+  else if (value === '0' || value === '') return <Trans>{`an instant`}</Trans>;
 
   return 'a (multiplier: ' + value + ')';
 };

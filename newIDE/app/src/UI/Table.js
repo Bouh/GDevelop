@@ -6,8 +6,26 @@ import MUITableCell from '@material-ui/core/TableCell';
 import MUITableHead from '@material-ui/core/TableHead';
 import MUITableRow from '@material-ui/core/TableRow';
 
+type TableCellCommonProps = {|
+  children?: React.Node, // Content for the cell
+  style?: {|
+    height?: number,
+    width?: number | string,
+    paddingLeft?: number,
+    paddingRight?: number,
+    textAlign?: string,
+    wordBreak?: 'break-word',
+    verticalAlign?: string,
+    overflow?: string,
+  |},
+|};
+
 type TableProps = {|
   children: React.Node, // Should be TableHeader, TableBody or TableFooter
+  style?: {|
+    tableLayout?: string,
+    width?: string | number,
+  |},
 |};
 
 /**
@@ -15,7 +33,7 @@ type TableProps = {|
  * See https://material-ui.com/components/tables/
  */
 export class Table extends React.Component<TableProps, {||}> {
-  render() {
+  render(): any {
     return <MUITable size="small" {...this.props} />;
   }
 }
@@ -28,7 +46,7 @@ type TableBodyProps = {|
  * A TableBody based on Material-UI TableBody.
  */
 export class TableBody extends React.Component<TableBodyProps, {||}> {
-  render() {
+  render(): any {
     return <MUITableBody {...this.props} />;
   }
 }
@@ -41,17 +59,14 @@ type TableHeaderProps = {|
  * A TableHeader based on Material-UI TableHead.
  */
 export class TableHeader extends React.Component<TableHeaderProps, {||}> {
-  render() {
+  render(): any {
     return <MUITableHead {...this.props} />;
   }
 }
 
 type TableHeaderColumnProps = {|
-  children?: React.Node, // Text of the column
-  style?: {|
-    textAlign: 'left' | 'right',
-    paddingRight: number,
-  |},
+  ...TableCellCommonProps,
+  padding?: 'none',
 |};
 
 /**
@@ -61,7 +76,7 @@ export class TableHeaderColumn extends React.Component<
   TableHeaderColumnProps,
   {||}
 > {
-  render() {
+  render(): any {
     return <MUITableCell {...this.props} />;
   }
 }
@@ -71,32 +86,30 @@ type TableRowProps = {|
   style?: {|
     backgroundColor: string,
   |},
+  onPointerEnter?: () => void,
+  onPointerLeave?: () => void,
+  onClick?: () => void,
 |};
 
 /**
  * A TableRow based on Material-UI TableRow.
  */
 export class TableRow extends React.Component<TableRowProps, {||}> {
-  render() {
+  render(): any {
     return <MUITableRow {...this.props} />;
   }
 }
 
 type TableRowColumnProps = {|
-  children?: React.Node, // Content for the cell
-  style?: {|
-    width?: number,
-    paddingLeft?: number,
-    paddingRight?: number,
-    textAlign?: string,
-  |},
+  ...TableCellCommonProps,
+  padding?: 'none',
 |};
 
 /**
  * A TableRowColumn based on Material-UI TableRowColumn.
  */
 export class TableRowColumn extends React.Component<TableRowColumnProps, {||}> {
-  render() {
+  render(): any {
     return <MUITableCell {...this.props} />;
   }
 }

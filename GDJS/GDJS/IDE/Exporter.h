@@ -9,13 +9,19 @@
 #include <set>
 #include <string>
 #include <vector>
+
 #include "GDCore/String.h"
 namespace gd {
 class Project;
 class Layout;
 class ExternalLayout;
 class AbstractFileSystem;
+class SerializerElement;
 }  // namespace gd
+namespace gdjs {
+struct PreviewExportOptions;
+struct ExportOptions;
+}
 
 namespace gdjs {
 
@@ -30,50 +36,20 @@ class Exporter {
   virtual ~Exporter();
 
   /**
-   * \brief Create a preview for the specified layout.
+   * \brief Create a preview for the specified options.
    * \note The preview is not launched, it is the caller responsibility to open
    * a browser pointing to the preview.
    *
-   * \param layout The layout to be previewed.
-   * \param exportDir The directory where the preview must be created.
-   * \return true if export was successful.
+   * \param options The options to generate the preview.
    */
-  bool ExportLayoutForPixiPreview(gd::Project& project,
-                                  gd::Layout& layout,
-                                  gd::String exportDir);
-
-  /**
-   * \brief Create a preview for the specified external layout and layout.
-   * \note The preview is not launched, it is the caller responsibility to open
-   * a browser pointing to the preview.
-   *
-   * \param layout The layout to be previewed.
-   * \param externalLayout The external layout with objects to be created at
-   * scene startup. \param exportDir The directory where the preview must be
-   * created. \return true if export was successful.
-   */
-  bool ExportExternalLayoutForPixiPreview(gd::Project& project,
-                                          gd::Layout& layout,
-                                          gd::ExternalLayout& externalLayout,
-                                          gd::String exportDir);
+  bool ExportProjectForPixiPreview(const PreviewExportOptions& options);
 
   /**
    * \brief Export the specified project, using Pixi.js.
    *
    * Called by ShowProjectExportDialog if the user clicked on Ok.
    */
-  bool ExportWholePixiProject(gd::Project& project,
-                              gd::String exportDir,
-                              std::map<gd::String, bool>& exportOptions);
-
-  /**
-   * \brief Export the specified project, using Cocos2d.
-   *
-   * Called by ShowProjectExportDialog if the user clicked on Ok.
-   */
-  bool ExportWholeCocos2dProject(gd::Project& project,
-                                 bool debugMode,
-                                 gd::String exportDir);
+  bool ExportWholePixiProject(const ExportOptions& options);
 
   /**
    * \brief Return the error that occurred during the last export.
@@ -89,7 +65,33 @@ class Exporter {
     codeOutputDir = codeOutputDir_;
   }
 
- private:
+  /**
+   * \brief Serialize a project without its events to JSON
+   *
+   * \param project The project to be exported
+   * \param options The content of the extra configuration
+   * \param projectDataElement The element where the project data is serialized
+   */
+  void SerializeProjectData(const gd::Project &project,
+                            const PreviewExportOptions &options,
+                            gd::SerializerElement &projectDataElement);
+
+  /**
+   * \brief Serialize the content of the extra configuration to store
+   * in gdjs.runtimeGameOptions to JSON
+   *
+   * \warning `ExportProjectForPixiPreview` must be called first to serialize
+   * the list of scripts files.
+   *
+   * \param options The content of the extra configuration
+   * \param runtimeGameOptionsElement The element where the game options are
+   * serialized
+   */
+  void
+  SerializeRuntimeGameOptions(const PreviewExportOptions &options,
+                              gd::SerializerElement &runtimeGameOptionsElement);
+
+private:
   gd::AbstractFileSystem&
       fs;  ///< The abstract file system to be used for exportation.
   gd::String lastError;  ///< The last error that occurred.
@@ -97,6 +99,8 @@ class Exporter {
       gdjsRoot;  ///< The root directory of GDJS, used to copy runtime files.
   gd::String codeOutputDir;  ///< The directory where JS code is outputted. Will
                              ///< be then copied to the final output directory.
+  std::vector<gd::String>
+      includesFiles; ///< The list of scripts files - useful for hot-reloading
 };
 
 }  // namespace gdjs

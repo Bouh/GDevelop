@@ -1,51 +1,140 @@
 // @flow
-import React, { Component } from 'react';
-import { type ParameterFieldProps } from './ParameterFieldCommons';
-import SemiControlledAutoComplete from '../../UI/SemiControlledAutoComplete';
+import React from 'react';
+import GenericExpressionField from './GenericExpressionField';
 import { enumerateLayouts } from '../../ProjectManager/EnumerateProjectItems';
+import {
+  type ParameterFieldProps,
+  type ParameterFieldInterface,
+  type FieldFocusFunction,
+} from './ParameterFieldCommons';
+import FlatButton from '../../UI/FlatButton';
+import TypeCursorSelect from '../../UI/CustomSvgIcons/TypeCursorSelect';
+import { t, Trans } from '@lingui/macro';
+import Functions from '@material-ui/icons/Functions';
+import RaisedButton from '../../UI/RaisedButton';
+import SelectOption from '../../UI/SelectOption';
+import { TextFieldWithButtonLayout } from '../../UI/Layout';
+import SelectField, { type SelectFieldInterface } from '../../UI/SelectField';
 
-export default class SceneNameField extends Component<
-  ParameterFieldProps,
-  {||}
-> {
-  _field: ?SemiControlledAutoComplete;
+export default (React.forwardRef<ParameterFieldProps, ParameterFieldInterface>(
+  function SceneNameField(props: ParameterFieldProps, ref) {
+    const field = React.useRef<?(
+      | GenericExpressionField
+      | SelectFieldInterface
+    )>(null);
+    const focus: FieldFocusFunction = options => {
+      if (field.current) field.current.focus(options);
+    };
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
 
-  focus() {
-    if (this._field) this._field.focus();
-  }
-
-  render() {
-    const {
-      value,
-      onChange,
-      isInline,
-      project,
-      parameterMetadata,
-    } = this.props;
-    const layoutNames = project
-      ? enumerateLayouts(project).map(layout => layout.getName())
+    // The list is not kept with a memo because scenes could be added by
+    // another component without this one to know.
+    const layoutNames = props.project
+      ? enumerateLayouts(props.project).map(layout => layout.getName())
       : [];
 
+    const isCurrentValueInLayoutsList = !!layoutNames.find(
+      layoutName => `"${layoutName}"` === props.value
+    );
+
+    // If the current value is not in the list of scenes, display an expression field.
+    const [isExpressionField, setIsExpressionField] = React.useState(
+      (!!props.value && !isCurrentValueInLayoutsList) ||
+        props.scope.eventsFunctionsExtension
+    );
+
+    const switchFieldType = () => {
+      setIsExpressionField(!isExpressionField);
+    };
+
+    // $FlowFixMe[missing-local-annot]
+    const onChangeSelectValue = (event, value) => {
+      props.onChange(event.target.value);
+    };
+
+    const onChangeTextValue = (value: string) => {
+      props.onChange(value);
+    };
+
+    const fieldLabel = props.parameterMetadata
+      ? props.parameterMetadata.getDescription()
+      : undefined;
+
+    const selectOptions = layoutNames.map(layoutName => (
+      <SelectOption
+        key={layoutName}
+        value={`"${layoutName}"`}
+        label={layoutName}
+        shouldNotTranslate
+      />
+    ));
+
     return (
-      <SemiControlledAutoComplete
-        margin={this.props.isInline ? 'none' : 'dense'}
-        floatingLabelText={
-          parameterMetadata ? parameterMetadata.getDescription() : undefined
+      <TextFieldWithButtonLayout
+        renderTextField={() =>
+          !isExpressionField ? (
+            <SelectField
+              ref={field}
+              id={
+                props.parameterIndex !== undefined
+                  ? `parameter-${props.parameterIndex}-scene-field`
+                  : undefined
+              }
+              value={props.value}
+              onChange={onChangeSelectValue}
+              margin={props.isInline ? 'none' : 'dense'}
+              fullWidth
+              floatingLabelText={fieldLabel}
+              translatableHintText={t`Choose a scene`}
+              helperMarkdownText={
+                (props.parameterMetadata &&
+                  props.parameterMetadata.getLongDescription()) ||
+                null
+              }
+            >
+              {selectOptions}
+            </SelectField>
+          ) : (
+            <GenericExpressionField
+              ref={field}
+              id={
+                props.parameterIndex !== undefined
+                  ? `parameter-${props.parameterIndex}-scene-field`
+                  : undefined
+              }
+              expressionType="string"
+              {...props}
+              onChange={onChangeTextValue}
+            />
+          )
         }
-        helperMarkdownText={
-          parameterMetadata ? parameterMetadata.getLongDescription() : undefined
+        renderButton={style =>
+          isExpressionField ? (
+            <FlatButton
+              id="switch-expression-select"
+              leftIcon={<TypeCursorSelect />}
+              style={style}
+              primary
+              label={<Trans>Select</Trans>}
+              onClick={switchFieldType}
+            />
+          ) : (
+            <RaisedButton
+              id="switch-expression-select"
+              icon={<Functions />}
+              style={style}
+              primary
+              label={<Trans>Use an expression</Trans>}
+              onClick={switchFieldType}
+            />
+          )
         }
-        fullWidth
-        value={value}
-        onChange={onChange}
-        openOnFocus={isInline}
-        dataSource={layoutNames.map(layoutName => ({
-          text: `"${layoutName}"`,
-          value: `"${layoutName}"`,
-        }))}
-        hintText={'""'}
-        ref={field => (this._field = field)}
       />
     );
   }
-}
+): React.ComponentType<{
+  ...ParameterFieldProps,
+  +ref?: React.RefSetter<ParameterFieldInterface>,
+}>);

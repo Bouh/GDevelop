@@ -3,8 +3,7 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef GDCORE_EFFECT_H
-#define GDCORE_EFFECT_H
+#pragma once
 #include <map>
 namespace gd {
 class SerializerElement;
@@ -21,8 +20,8 @@ namespace gd {
  */
 class GD_CORE_API Effect {
  public:
-  Effect(){};
-  virtual ~Effect(){};
+  Effect() : folded(false) {};
+  virtual ~Effect() {};
 
   void SetName(const gd::String& name_) { name = name_; }
   const gd::String& GetName() const { return name; }
@@ -32,28 +31,51 @@ class GD_CORE_API Effect {
   }
   const gd::String& GetEffectType() const { return effectType; }
 
-  void SetDoubleParameter(const gd::String& name, double value) {
+  void SetFolded(bool fold = true) { folded = fold; }
+  bool IsFolded() const { return folded; }
+
+  void SetEnabled(bool isEnabled_) {
+    isEnabled = isEnabled_;
+  }
+  bool IsEnabled() const { return isEnabled; }
+
+  void SetDoubleParameter(const gd::String &name, double value) {
     doubleParameters[name] = value;
   }
 
-  double GetDoubleParameter(const gd::String& name) {
-    return doubleParameters[name];
+  double GetDoubleParameter(const gd::String &name) const {
+    auto itr = doubleParameters.find(name);
+    return itr == doubleParameters.end() ? 0 : itr->second;
   }
 
-  void SetStringParameter(const gd::String& name, const gd::String& value) {
+  bool HasDoubleParameter(const gd::String &name) const {
+    return doubleParameters.find(name) != doubleParameters.end();
+  }
+
+  void SetStringParameter(const gd::String &name, const gd::String &value) {
     stringParameters[name] = value;
   }
 
-  const gd::String& GetStringParameter(const gd::String& name) {
-    return stringParameters[name];
+  const gd::String &GetStringParameter(const gd::String &name) const {
+    auto itr = stringParameters.find(name);
+    return itr == stringParameters.end() ? badStringParameterValue : itr->second;
   }
 
-  void SetBooleanParameter(const gd::String& name, bool value) {
+  bool HasStringParameter(const gd::String &name) const {
+    return stringParameters.find(name) != stringParameters.end();
+  }
+
+  void SetBooleanParameter(const gd::String &name, bool value) {
     booleanParameters[name] = value;
   }
 
-  bool GetBooleanParameter(const gd::String& name) {
-    return booleanParameters[name];
+  bool GetBooleanParameter(const gd::String &name) const {
+    auto itr = booleanParameters.find(name);
+    return itr == booleanParameters.end() ? false : itr->second;
+  }
+
+  bool HasBooleanParameter(const gd::String &name) const {
+    return booleanParameters.find(name) != booleanParameters.end();
   }
 
   const std::map<gd::String, double>& GetAllDoubleParameters() const {
@@ -74,12 +96,10 @@ class GD_CORE_API Effect {
     booleanParameters.clear();
   }
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Serialize layer.
    */
   void SerializeTo(SerializerElement& element) const;
-#endif
 
   /**
    * \brief Unserialize the layer.
@@ -87,12 +107,16 @@ class GD_CORE_API Effect {
   void UnserializeFrom(const SerializerElement& element);
 
  private:
+  bool folded;
   gd::String name;        ///< The name of the layer.
   gd::String effectType;  ///< The name of the effect to apply.
+  bool isEnabled = true; ///< Enable the effect at the beginning of the scene, at its object creation or in the editor.
   std::map<gd::String, double> doubleParameters; ///< Values of parameters being doubles, keyed by names.
   std::map<gd::String, gd::String> stringParameters; ///< Values of parameters being strings, keyed by names.
   std::map<gd::String, bool> booleanParameters; ///< Values of parameters being booleans, keyed by names.
+
+  static gd::String badStringParameterValue;  ///< Empty string returned by
+                                              ///< GeStringParameter
 };
 
 }  // namespace gd
-#endif

@@ -25,7 +25,11 @@ type Props = {|
 /**
  * Display information about latest releases.
  */
-const ChangelogRenderer = ({ releases, error, currentReleaseName }: Props) => {
+const ChangelogRenderer = ({
+  releases,
+  error,
+  currentReleaseName,
+}: Props): React.Node => {
   const openReleaseNote = () =>
     Window.openExternalURL('https://github.com/4ian/GDevelop/releases');
 
@@ -68,7 +72,7 @@ const ChangelogRenderer = ({ releases, error, currentReleaseName }: Props) => {
     !!currentRelease && hasBreakingChange(currentRelease);
 
   return (
-    <Column>
+    <Column noMargin>
       {currentVersionHasBreakingChange && (
         <AlertMessage kind="warning">
           This version of GDevelop has a breaking change. Please make sure to
@@ -93,7 +97,7 @@ const ChangelogRenderer = ({ releases, error, currentReleaseName }: Props) => {
       )}
       <Line justifyContent="center">
         <FlatButton
-          label={<Trans>See all the releases notes</Trans>}
+          label={<Trans>See all the release notes</Trans>}
           onClick={openReleaseNote}
         />
       </Line>

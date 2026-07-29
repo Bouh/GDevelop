@@ -1,0 +1,370 @@
+/**
+ * This is the styling applied to an EventsSheet.
+ * This also overwrite the default react-sortable-tree css.
+ */
+
+.gd-events-sheet .events-tree {
+  font-family: var(--gdevelop-classic-font-family) !important;
+  background: var(--event-sheet-event-tree-background-color);
+}
+
+/**
+ * Ensure scroll is only on Y direction, preventing the display
+ * of horizontal scrollbar.
+ */
+.gd-events-sheet .rst__virtualScrollOverride {
+  overflow-x: hidden !important;
+}
+
+/**
+ * Draggable handle on the left of an event
+ */
+.gd-events-sheet .move-handle {
+  background: var(--event-sheet-rst-move-handle-background-color);
+}
+
+.gd-events-sheet .move-handle:hover {
+  background-color: var(--event-sheet-rst-move-handle-hover-background-color);
+}
+
+.gd-events-sheet .ai-generated-event-move-handle {
+  border-left: 1px solid;
+  border-image: linear-gradient(
+      to bottom,
+      var(--event-sheet-rst-ai-generated-event-move-handle-gradient-color-1),
+      var(--event-sheet-rst-ai-generated-event-move-handle-gradient-color-2),
+      var(--event-sheet-rst-ai-generated-event-move-handle-gradient-color-3)
+    )
+    1;
+}
+
+/**
+ * Scaffolding lines on the left
+ */
+.gd-events-sheet .rst__lineHalfHorizontalRight::before,
+.gd-events-sheet .rst__lineFullVertical::after,
+.gd-events-sheet .rst__lineHalfVerticalTop::after,
+.gd-events-sheet .rst__lineHalfVerticalBottom::after {
+  background-color: var(--event-sheet-rst-line-background-color);
+}
+
+/**
+ * Background and default text color of content of an event
+ */
+.gd-events-sheet .rst__rowContents {
+  background-color: var(--event-sheet-rst-row-contents-background-color);
+  color: var(--event-sheet-rst-row-contents-color);
+}
+
+/**
+ * Selectable area (instructions)
+ */
+.gd-events-sheet .selectable:hover {
+  background-color: var(--event-sheet-selectable-background-color);
+}
+
+.gd-events-sheet .selectable.selected {
+  background-color: var(--event-sheet-selectable-background-color);
+  border: var(--event-sheet-selectable-selected-border) !important;
+}
+
+/**
+ * Large selectable area (events)
+ */
+.gd-events-sheet .large-selectable {
+  border: var(--event-sheet-selectable-border) !important;
+  border-radius: 0 2px 2px 0;
+}
+
+.gd-events-sheet .large-selectable.large-selected {
+  border: var(--event-sheet-selectable-selected-border) !important;
+  border-radius: 0 2px 2px 0;
+}
+
+/**
+ * Conditions and actions containers
+ */
+.gd-events-sheet .conditions-container {
+  background: var(--event-sheet-conditions-background-color);
+  border: var(--event-sheet-conditions-border);
+  color: var(--event-sheet-conditions-color);
+  border-right-color: var(--event-sheet-conditions-border-right-color);
+  padding-left: 5px;
+  padding-right: 5px;
+  /* Prevent container to growing outside its parent - and still don't have a ridiculously small size */
+  min-width: 100px;
+}
+
+.gd-events-sheet .conditions-container.small-width-container {
+  border-right-color: var(--event-sheet-conditions-border-color);
+  border-bottom-color: var(--event-sheet-conditions-border-color);
+}
+
+.gd-events-sheet .local-variables-container {
+  background: var(--event-sheet-actions-background-color);
+  color: var(--event-sheet-actions-color);
+  padding-left: 4px;
+  padding-right: 4px;
+  /* Prevent container to growing outside its parent. We don't have a way to prevent an infinitely
+     * small variables column, but responsive design should avoid the problem on small screens. */
+  min-width: 0;
+}
+
+.gd-events-sheet .actions-container {
+  background: var(--event-sheet-actions-background-color);
+  color: var(--event-sheet-actions-color);
+  padding-left: 5px;
+  padding-right: 5px;
+  border-radius: 0 2px 2px 0;
+  /* Prevent container to growing outside its parent. We don't have a way to prevent an infinitely
+     * small action column, but responsive design should avoid the problem on small screens. */
+  min-width: 0;
+}
+
+.gd-events-sheet .actions-container.small-width-container {
+  padding-left: 20px;
+}
+
+.gd-events-sheet .sub-instructions-container {
+  margin-left: 9px;
+  margin-top: 1px;
+  border-right: none;
+  border-left: var(--event-sheet-sub-instructions-border);
+}
+
+.gd-events-sheet .warning-instruction {
+  background-color: var(--event-sheet-warning-instruction-background-color);
+}
+
+/**
+ * Instructions parameters color scheme
+ */
+.gd-events-sheet .instruction-parameter {
+  color: var(--event-sheet-instruction-parameter-base-color);
+}
+
+.gd-events-sheet .instruction-parameter.string,
+.gd-events-sheet .instruction-parameter.resource,
+.gd-events-sheet .instruction-parameter.mouse {
+  color: var(--event-sheet-instruction-parameter-base-color);
+}
+
+.gd-events-sheet .instruction-parameter.number {
+  color: var(--event-sheet-instruction-parameter-number-color);
+}
+
+.gd-events-sheet .instruction-missing {
+  text-decoration: var(--event-sheet-instruction-parameter-error-color)
+    underline wavy;
+}
+
+.gd-events-sheet .instruction-missing .function-name {
+  color: var(--event-sheet-instruction-parameter-error-color);
+  font-weight: bold;
+}
+.gd-events-sheet .instruction-missing .behavior-name {
+  color: var(--event-sheet-instruction-parameter-error-color);
+  font-weight: bold;
+}
+.gd-events-sheet .instruction-missing .extension-name {
+  user-select: all;
+  font-weight: bold;
+}
+
+.gd-events-sheet .instruction-parameter.object,
+.gd-events-sheet .instruction-parameter.objectPtr,
+.gd-events-sheet .instruction-parameter.objectList,
+.gd-events-sheet .instruction-parameter.objectListOrEmptyIfJustDeclared,
+.gd-events-sheet .instruction-parameter.objectListOrEmptyWithoutPicking {
+  color: var(--event-sheet-instruction-parameter-object-color);
+  font-weight: bold;
+}
+
+.gd-events-sheet .instruction-parameter.objectInExpression {
+  color: var(--event-sheet-instruction-parameter-object-color);
+}
+
+.gd-events-sheet .instruction-parameter.behavior {
+  color: var(--event-sheet-instruction-parameter-behavior-color);
+}
+
+.gd-events-sheet .instruction-parameter.operator,
+.gd-events-sheet .instruction-parameter.relationalOperator,
+.gd-events-sheet .instruction-parameter.yesorno,
+.gd-events-sheet .instruction-parameter.trueorfalse {
+  color: var(--event-sheet-instruction-parameter-operator-color);
+}
+
+.gd-events-sheet .instruction-parameter.objectvar {
+  color: var(--event-sheet-instruction-parameter-var-color);
+}
+
+.gd-events-sheet .instruction-parameter.scenevar {
+  color: var(--event-sheet-instruction-parameter-var-color);
+}
+
+.gd-events-sheet .instruction-parameter.globalvar {
+  color: var(--event-sheet-instruction-parameter-var-color);
+}
+
+.gd-events-sheet .instruction-parameter.variable {
+  color: var(--event-sheet-instruction-parameter-var-color);
+}
+
+.gd-events-sheet .instruction-parameter.variableOrProperty {
+  color: var(--event-sheet-instruction-parameter-var-color);
+}
+
+.gd-events-sheet .instruction-parameter.variableOrPropertyOrParameter {
+  color: var(--event-sheet-instruction-parameter-var-color);
+}
+
+.gd-events-sheet .instruction-parameter .instruction-invalid-parameter {
+  color: var(--event-sheet-instruction-parameter-error-color);
+  text-decoration: var(--event-sheet-instruction-parameter-error-color)
+    underline wavy;
+}
+
+.gd-events-sheet .instruction-parameter .instruction-warning-parameter {
+  color: var(--event-sheet-instruction-parameter-warning-color);
+  text-decoration: var(--event-sheet-instruction-parameter-warning-color)
+    underline wavy;
+}
+
+.gd-events-sheet .instruction-parameter .instruction-deprecated-parameter {
+  color: var(--event-sheet-instruction-parameter-warning-color);
+  text-decoration: var(--event-sheet-instruction-parameter-warning-color)
+    underline wavy;
+}
+
+.gd-events-sheet .instruction-parameter .instruction-missing-parameter {
+  display: inline-flex;
+  background-color: var(
+    --event-sheet-instruction-parameter-error-background-color
+  );
+  border-bottom: 1px dashed var(--event-sheet-instruction-parameter-error-color);
+  min-width: var(--instruction-missing-parameter-min-width);
+}
+
+.gd-events-sheet .instruction-parameter .instruction-missing-parameter::before {
+  content: "";
+  display: inline-block;
+  height: 1em;
+}
+
+.gd-events-sheet .else-text-container {
+  padding-left: 5px;
+}
+
+.gd-events-sheet .invalid-else {
+  padding-left: 1px;
+  color: var(--event-sheet-instruction-parameter-warning-color);
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.gd-events-sheet .event-label {
+  margin-left: 5px;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+/**
+ * Search results highlight
+ */
+.gd-events-sheet .with-search-results .rst__rowSearchMatch {
+  outline: none;
+}
+.gd-events-sheet .with-search-results .rst__rowSearchMatch .move-handle {
+  background: var(--event-sheet-events-highlighted-color);
+}
+.gd-events-sheet .with-search-results .rst__rowSearchMatch .move-handle:hover {
+  filter: brightness(120%);
+}
+.gd-events-sheet
+  .with-search-results
+  .rst__rowSearchMatch
+  .conditions-container {
+  outline: none;
+  background-color: var(--event-sheet-events-highlighted-background-color);
+}
+.gd-events-sheet .with-search-results .rst__rowSearchMatch .actions-container {
+  outline: none;
+  background-color: var(--event-sheet-events-highlighted-background-color);
+}
+.gd-events-sheet
+  .with-search-results
+  .rst__rowSearchMatch
+  .local-variables-container {
+  outline: none;
+  background-color: var(--event-sheet-events-highlighted-background-color);
+}
+
+.gd-events-sheet .with-search-results .rst__rowSearchFocus .move-handle {
+  width: 15px;
+}
+
+/**
+* Drag'n'drop indicator (events - instructions)
+*/
+.gd-events-sheet .drop-indicator {
+  border-top: 2px solid
+    var(--event-sheet-drop-indicator-can-drop-border-top-color);
+  height: 0;
+  margin-top: -1px;
+  margin-bottom: -1px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gd-events-sheet .cant-drop-indicator {
+  border-top: 2px solid
+    var(--event-sheet-drop-indicator-can-drop-border-top-color);
+  height: 0;
+  margin-top: -1px;
+  margin-bottom: -1px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/**
+* Skinning the "Link" event
+*/
+.gd-events-sheet .link-container {
+  background: var(--event-sheet-link-container-background-color);
+}
+.gd-events-sheet-dark-theme .link-container span {
+  color: var(--event-sheet-link-container-color);
+}
+.gd-events-sheet .link-container .instruction-invalid-parameter {
+  color: var(--event-sheet-instruction-parameter-error-color);
+  text-decoration: var(--event-sheet-instruction-parameter-error-color)
+    underline wavy;
+}
+
+.gd-events-sheet .link-container .selectable {
+  color: var(--event-sheet-link-selectable-link-color);
+  font-weight: bold;
+  /* It avoids the warning underlying to get cut. */
+  line-height: 1.6em;
+}
+
+/* Theming icons */
+.gd-events-sheet .icon {
+  padding-right: 2px;
+  width: 16px;
+  height: 16px;
+}
+
+.gd-events-sheet .link-container .icon {
+  padding-right: 3px;
+  width: 24px;
+  height: 24px;
+}
+
+@media only screen and (max-width: 750px) {
+  .gd-events-sheet .large-selectable,
+  .gd-events-sheet .large-selectable.large-selected {
+    border-radius: 0 1px 1px 0;
+  }
+}

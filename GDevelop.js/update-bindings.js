@@ -9,14 +9,13 @@ var debug = false; //If true, add additional checks in bindings files.
 var fs = require('fs');
 var exec = require('child_process').exec;
 
-if (!process.env.EMSCRIPTEN) {
-  console.error('EMSCRIPTEN env. variable is not set');
+if (!process.env.EMSDK) {
+  console.error('EMSDK env. variable is not set');
   console.log(
     'Please set Emscripten environment by launching `emsdk_env` script'
   );
 }
-var emscriptenPath = process.env.EMSCRIPTEN;
-var webIdlBinderPath = emscriptenPath + '/tools/webidl_binder.py';
+var webIdlBinderPath = process.env.EMSDK + '/upstream/emscripten/tools/webidl_binder.py';
 
 generateGlueFromBinding(function(err) {
   if (err) return fatalError(err);
@@ -65,11 +64,14 @@ function patchGlueCppFile(cb) {
     'BehaviorJsImplementation',
     'ObjectJsImplementation',
     'BehaviorSharedDataJsImplementation',
+    'ReadOnlyArbitraryEventsWorkerWithContextJS',
   ];
   var functionsToErase = [
     'emscripten_bind_ArbitraryResourceWorkerJS_ExposeImage_1',
     'emscripten_bind_ArbitraryResourceWorkerJS_ExposeShader_1',
     'emscripten_bind_ArbitraryResourceWorkerJS_ExposeFile_1',
+    'emscripten_bind_ReadOnlyArbitraryEventsWorkerWithContextJS_DoVisitEvent_1',
+    'emscripten_bind_ReadOnlyArbitraryEventsWorkerWithContextJS_DoVisitInstruction_3',
   ];
   fs.readFile(file, function(err, data) {
     if (err) cb(err);
@@ -117,13 +119,13 @@ function patchGlueCppFile(cb) {
           var name = line.substring(freeCallPos + 11, nameEndPos);
           var startOfLine = line.substring(0, freeCallPos);
           var endOfLine = line.substring(nameEndPos + 1, line.length);
-          var hasOtherParamers = endOfLine[0] !== ')';
+          var hasOtherParameters = endOfLine[0] !== ')';
 
           line =
             startOfLine +
             name +
             '(*self' +
-            (hasOtherParamers ? ', ' : '') +
+            (hasOtherParameters ? ', ' : '') +
             endOfLine;
         }
 

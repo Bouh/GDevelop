@@ -32,10 +32,7 @@ class TiledSpriteObjectJsExtension : public gd::PlatformExtension {
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js")
         .AddIncludeFile(
             "Extensions/TiledSpriteObject/"
-            "tiledspriteruntimeobject-pixi-renderer.js")
-        .AddIncludeFile(
-            "Extensions/TiledSpriteObject/"
-            "tiledspriteruntimeobject-cocos-renderer.js");
+            "tiledspriteruntimeobject-pixi-renderer.js");
 
     GetAllActionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::SetOpacity"]
@@ -81,16 +78,26 @@ class TiledSpriteObjectJsExtension : public gd::PlatformExtension {
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
     GetAllActionsForObject(
+        "TiledSpriteObject::TiledSprite")["TiledSpriteObject::SetSize"]
+        .SetFunctionName("setSize")
+        .SetIncludeFile(
+            "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+
+    // Deprecated: now available for all objects.
+    GetAllActionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::Angle"]
         .SetFunctionName("setAngle")
         .SetGetter("getAngle")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+
+    // Deprecated: now available for all objects.
     GetAllConditionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::Angle"]
         .SetFunctionName("getAngle")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+
     GetAllActionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::XOffset"]
         .SetFunctionName("setXOffset")
@@ -99,6 +106,11 @@ class TiledSpriteObjectJsExtension : public gd::PlatformExtension {
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
     GetAllConditionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::XOffset"]
+        .SetFunctionName("getXOffset")
+        .SetIncludeFile(
+            "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+    GetAllExpressionsForObject(
+        "TiledSpriteObject::TiledSprite")["XOffset"]
         .SetFunctionName("getXOffset")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
@@ -111,6 +123,16 @@ class TiledSpriteObjectJsExtension : public gd::PlatformExtension {
     GetAllConditionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::YOffset"]
         .SetFunctionName("getYOffset")
+        .SetIncludeFile(
+            "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+    GetAllExpressionsForObject(
+        "TiledSpriteObject::TiledSprite")["YOffset"]
+        .SetFunctionName("getYOffset")
+        .SetIncludeFile(
+            "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+    GetAllActionsForObject(
+        "TiledSpriteObject::TiledSprite")["TiledSpriteObject::SetImageFromResource"]
+        .SetFunctionName("setTexture")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
 

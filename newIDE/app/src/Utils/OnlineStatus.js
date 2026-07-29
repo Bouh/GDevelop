@@ -11,7 +11,7 @@ function getOnlineStatus() {
 /**
  * React Hook listening to the navigator online status.
  */
-export const useOnlineStatus = () => {
+export const useOnlineStatus = (): boolean => {
   const [onlineStatus, setOnlineStatus] = React.useState(getOnlineStatus());
 
   const goOnline = () => setOnlineStatus(true);
@@ -29,17 +29,4 @@ export const useOnlineStatus = () => {
   }, []);
 
   return onlineStatus;
-};
-
-type Props = {|
-  children: (onlineStatus: boolean) => React.Node,
-|};
-
-/**
- * Component listening to the navigator online status, passing
- * it down to children.
- */
-export const OnlineStatus = ({ children }: Props) => {
-  const onlineStatus = useOnlineStatus();
-  return children(onlineStatus);
 };

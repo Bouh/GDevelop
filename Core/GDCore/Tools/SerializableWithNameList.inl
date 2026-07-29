@@ -3,6 +3,7 @@
  * Copyright 2008-present Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
+#include <algorithm>
 #include "GDCore/Serialization/SerializerElement.h"
 #include "GDCore/String.h"
 #include "GDCore/Tools/MakeUnique.h"
@@ -124,6 +125,26 @@ void SerializableWithNameList<T>::SerializeElementsTo(
   serializerElement.ConsiderAsArrayOf(elementName);
   for (const auto& element : elements) {
     element->SerializeTo(serializerElement.AddChild(elementName));
+  }
+}
+
+template <typename T>
+void SerializableWithNameList<T>::ProgressivelyUnserializeElementsFrom(
+    const gd::String& elementName,
+    gd::Project& project,
+    const SerializerElement& serializerElement) {
+  serializerElement.ConsiderAsArrayOf(elementName);
+  for (std::size_t i = 0; i < serializerElement.GetChildrenCount(); ++i) {
+    T* newElement = nullptr;
+    if (elements.size() <= i) {
+      newElement = &InsertNew("", GetCount());
+    } else {
+      newElement = elements[i].get();
+    }
+    newElement->UnserializeFrom(project, serializerElement.GetChild(i));
+  }
+  while (elements.size() > serializerElement.GetChildrenCount()) {
+    elements.pop_back();
   }
 }
 

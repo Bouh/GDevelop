@@ -1,18 +1,17 @@
 // @flow
-import {
-  type ResourceSource,
-  type ChooseResourceFunction,
-} from '../../ResourcesList/ResourceSource.flow';
-import { type ResourceExternalEditor } from '../../ResourcesList/ResourceExternalEditor.flow';
+import { type ResourceManagementProps } from '../../ResourcesList/ResourceSource';
+import { ProjectScopedContainersAccessor } from '../../InstructionOrExpression/EventsScope';
 
 /**
  * The props given to any behavior editor
  */
 export type BehaviorEditorProps = {|
-  behavior: gdBehavior,
-  behaviorContent: gdBehaviorContent,
+  behaviors: Array<gdBehavior>,
   project: gdProject,
-  resourceSources: Array<ResourceSource>,
-  onChooseResource: ChooseResourceFunction,
-  resourceExternalEditors: Array<ResourceExternalEditor>,
+  projectScopedContainersAccessor: ProjectScopedContainersAccessor,
+  object: gdObject | null,
+  layersContainer: gdLayersContainer,
+  resourceManagementProps: ResourceManagementProps,
+  onBehaviorUpdated: () => void,
+  isAdvancedSectionInitiallyUncollapsed?: boolean,
 |};

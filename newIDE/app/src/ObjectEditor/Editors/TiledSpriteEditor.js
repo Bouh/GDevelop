@@ -3,52 +3,53 @@ import { Trans } from '@lingui/macro';
 
 import * as React from 'react';
 import SemiControlledTextField from '../../UI/SemiControlledTextField';
-import { Line, Column } from '../../UI/Grid';
 import ResourceSelectorWithThumbnail from '../../ResourcesList/ResourceSelectorWithThumbnail';
 import { type EditorProps } from './EditorProps.flow';
-import { ResponsiveLineStackLayout } from '../../UI/Layout';
+import { ResponsiveLineStackLayout, ColumnStackLayout } from '../../UI/Layout';
 const gd = global.gd;
 
 export default class TiledSpriteEditor extends React.Component<
   EditorProps,
   void
 > {
-  render() {
+  render(): any {
     const {
-      object,
+      objectConfiguration,
       project,
-      resourceSources,
-      onChooseResource,
-      resourceExternalEditors,
+      resourceManagementProps,
+      projectScopedContainersAccessor,
+      objectName,
+      renderObjectNameField,
     } = this.props;
-    const tiledSpriteObject = gd.asTiledSpriteObject(object);
+    const tiledSpriteConfiguration = gd.asTiledSpriteConfiguration(
+      objectConfiguration
+    );
 
     return (
-      <Column>
-        <Line>
-          <ResourceSelectorWithThumbnail
-            project={project}
-            resourceSources={resourceSources}
-            onChooseResource={onChooseResource}
-            resourceKind="image"
-            resourceName={tiledSpriteObject.getTexture()}
-            resourceExternalEditors={resourceExternalEditors}
-            onChange={resourceName => {
-              tiledSpriteObject.setTexture(resourceName);
-              this.forceUpdate();
-            }}
-            floatingLabelText={<Trans>Select an image</Trans>}
-          />
-        </Line>
-        <ResponsiveLineStackLayout>
+      <ColumnStackLayout noMargin>
+        {renderObjectNameField && renderObjectNameField()}
+        <ResourceSelectorWithThumbnail
+          project={project}
+          resourceManagementProps={resourceManagementProps}
+          projectScopedContainersAccessor={projectScopedContainersAccessor}
+          resourceKind="image"
+          resourceName={tiledSpriteConfiguration.getTexture()}
+          defaultNewResourceName={objectName}
+          onChange={resourceName => {
+            tiledSpriteConfiguration.setTexture(resourceName);
+            this.forceUpdate();
+          }}
+          floatingLabelText={<Trans>Select an image</Trans>}
+        />
+        <ResponsiveLineStackLayout noMargin noResponsiveLandscape>
           <SemiControlledTextField
             commitOnBlur
             floatingLabelText={<Trans>Default width (in pixels)</Trans>}
             fullWidth
             type="number"
-            value={tiledSpriteObject.getWidth()}
+            value={tiledSpriteConfiguration.getWidth()}
             onChange={value => {
-              tiledSpriteObject.setWidth(parseInt(value, 10) || 0);
+              tiledSpriteConfiguration.setWidth(parseInt(value, 10) || 0);
               this.forceUpdate();
             }}
           />
@@ -57,14 +58,14 @@ export default class TiledSpriteEditor extends React.Component<
             floatingLabelText={<Trans>Default height (in pixels)</Trans>}
             fullWidth
             type="number"
-            value={tiledSpriteObject.getHeight()}
+            value={tiledSpriteConfiguration.getHeight()}
             onChange={value => {
-              tiledSpriteObject.setHeight(parseInt(value, 10) || 0);
+              tiledSpriteConfiguration.setHeight(parseInt(value, 10) || 0);
               this.forceUpdate();
             }}
           />
         </ResponsiveLineStackLayout>
-      </Column>
+      </ColumnStackLayout>
     );
   }
 }

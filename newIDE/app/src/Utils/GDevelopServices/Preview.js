@@ -1,7 +1,7 @@
 // @flow
 import axios from 'axios';
-import { GDevelopGamesPreview } from './ApiConfigs';
-import { getSignedUrl } from './Usage';
+import { GDevelopGamePreviews } from './ApiConfigs';
+import { getSignedUrls } from './Usage';
 
 export type UploadedObject = {|
   Key: string,
@@ -9,20 +9,35 @@ export type UploadedObject = {|
   ContentType: 'text/javascript' | 'text/html',
 |};
 
-export const uploadObject = (params: UploadedObject): Promise<any> => {
-  return getSignedUrl({
+export const uploadObjects = async (
+  uploadedObjects: Array<UploadedObject>
+): Promise<void> => {
+  const { signedUrls } = await getSignedUrls({
     uploadType: 'preview',
-    key: params.Key,
-    contentType: params.ContentType,
-  }).then(({ signedUrl }) =>
-    axios.put(signedUrl, params.Body, {
-      headers: {
-        'Content-Type': params.ContentType,
-      },
-    })
+    files: uploadedObjects.map(params => ({
+      key: params.Key,
+      contentType: params.ContentType,
+    })),
+  });
+
+  if (signedUrls.length !== uploadedObjects.length) {
+    throw new Error(
+      'Unexpected response from the API (signed urls count is not the same as uploaded objects count).'
+    );
+  }
+
+  await Promise.all(
+    uploadedObjects.map((params, index) =>
+      // $FlowFixMe[underconstrained-implicit-instantiation]
+      axios.put(signedUrls[index], params.Body, {
+        headers: {
+          'Content-Type': params.ContentType,
+        },
+      })
+    )
   );
 };
 
-export const getBaseUrl = () => {
-  return GDevelopGamesPreview.options.destinationBucketBaseUrl;
+export const getBaseUrl = (): string => {
+  return GDevelopGamePreviews.baseUrl;
 };

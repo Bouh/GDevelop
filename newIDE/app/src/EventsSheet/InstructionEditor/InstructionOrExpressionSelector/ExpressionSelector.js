@@ -1,20 +1,25 @@
 // @flow
 import React, { Component } from 'react';
-import { enumerateExpressions } from './EnumerateExpressions';
+import { type I18n as I18nType } from '@lingui/core';
+import { enumerateAllExpressions } from '../../../InstructionOrExpression/EnumerateExpressions';
 import InstructionOrExpressionSelector from './index';
-import { createTree, type InstructionOrExpressionTreeNode } from './CreateTree';
 import {
-  type EnumeratedInstructionOrExpressionMetadata,
+  createTree,
+  type ExpressionTreeNode,
+} from '../../../InstructionOrExpression/CreateTree';
+import {
+  type EnumeratedExpressionMetadata,
   filterEnumeratedInstructionOrExpressionMetadataByScope,
-} from './EnumeratedInstructionOrExpressionMetadata.js';
-import { type EventsScope } from '../../EventsScope.flow';
+} from '../../../InstructionOrExpression/EnumeratedInstructionOrExpressionMetadata';
+import { type EventsScope } from '../../../InstructionOrExpression/EventsScope';
 
 type Props = {|
   expressionType: string,
   focusOnMount?: boolean,
   selectedType: string,
-  onChoose: (type: string, EnumeratedInstructionOrExpressionMetadata) => void,
+  onChoose: (type: string, EnumeratedExpressionMetadata) => void,
   scope: EventsScope,
+  i18n: I18nType,
 |};
 
 const style = {
@@ -24,22 +29,30 @@ const style = {
 };
 
 export default class ExpressionSelector extends Component<Props, {||}> {
-  instructionsInfo: Array<EnumeratedInstructionOrExpressionMetadata> = filterEnumeratedInstructionOrExpressionMetadataByScope(
-    enumerateExpressions(this.props.expressionType).allExpressions,
+  instructionsInfo: Array<EnumeratedExpressionMetadata> = filterEnumeratedInstructionOrExpressionMetadataByScope(
+    enumerateAllExpressions(
+      this.props.expressionType,
+      this.props.scope.project,
+      this.props.i18n
+    ),
     this.props.scope
   );
-  instructionsInfoTree: InstructionOrExpressionTreeNode = createTree(
-    this.instructionsInfo
+  instructionsInfoTree: ExpressionTreeNode = createTree(
+    this.instructionsInfo,
+    this.props.i18n
   );
 
-  render() {
-    const { expressionType, scope, ...otherProps } = this.props;
+  render(): any {
+    const { expressionType, scope, i18n, ...otherProps } = this.props;
     return (
       <InstructionOrExpressionSelector
+        id="expression-selector"
         style={style}
         instructionsInfo={this.instructionsInfo}
         instructionsInfoTree={this.instructionsInfoTree}
         iconSize={16}
+        useSubheaders
+        helpPagePath="/all-features/expressions-reference"
         {...otherProps}
       />
     );

@@ -8,8 +8,7 @@ This project is released under the MIT License.
 #ifndef SCENEPHYSICSDATAS_H
 #define SCENEPHYSICSDATAS_H
 
-#include "GDCpp/Runtime/Project/BehaviorsSharedData.h"
-#include "RuntimeScenePhysicsDatas.h"
+#include "GDCore/Project/BehaviorsSharedData.h"
 
 /**
  * \brief Handle the data shared by Physics Behavior
@@ -24,12 +23,10 @@ class ScenePhysicsDatas : public gd::BehaviorsSharedData {
 
 #if defined(GD_IDE_ONLY)
   virtual std::map<gd::String, gd::PropertyDescriptor> GetProperties(
-      const gd::SerializerElement& behaviorSharedDataContent,
-      gd::Project& project) const override;
+      const gd::SerializerElement& behaviorSharedDataContent) const override;
   virtual bool UpdateProperty(gd::SerializerElement& behaviorSharedDataContent,
                               const gd::String& name,
-                              const gd::String& value,
-                              gd::Project& project) override;
+                              const gd::String& value) override;
 #endif
   virtual void InitializeContent(
       gd::SerializerElement& behaviorSharedDataContent) override;

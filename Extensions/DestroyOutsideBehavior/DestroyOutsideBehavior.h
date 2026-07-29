@@ -5,36 +5,33 @@ Copyright (c) 2013-2016 Florian Rival (Florian.Rival@gmail.com)
 This project is released under the MIT License.
 */
 
-#ifndef DESTROYOUTSIDEBEHAVIOR_H
-#define DESTROYOUTSIDEBEHAVIOR_H
+#pragma once
+
 #include "GDCore/Project/Behavior.h"
 #include "GDCore/Project/Object.h"
+
 class RuntimeScene;
 namespace gd {
 class SerializerElement;
 }
 
 /**
- * \brief Behavior that allows objects to be dragged with the mouse (or touch).
+ * \brief Behavior that destroys object outside the screen.
  */
 class GD_EXTENSION_API DestroyOutsideBehavior : public gd::Behavior {
  public:
   DestroyOutsideBehavior(){};
   virtual ~DestroyOutsideBehavior(){};
-  virtual Behavior* Clone() const { return new DestroyOutsideBehavior(*this); }
+  virtual std::unique_ptr<gd::Behavior> Clone() const override {
+    return gd::make_unique<DestroyOutsideBehavior>(*this);
+  }
 
-#if defined(GD_IDE_ONLY)
   virtual std::map<gd::String, gd::PropertyDescriptor> GetProperties(
-      const gd::SerializerElement& behaviorContent,
-      gd::Project& project) const override;
+      const gd::SerializerElement& behaviorContent) const override;
   virtual bool UpdateProperty(gd::SerializerElement& behaviorContent,
                               const gd::String& name,
-                              const gd::String& value,
-                              gd::Project& project) override;
-#endif
+                              const gd::String& value) override;
 
   virtual void InitializeContent(
       gd::SerializerElement& behaviorContent) override;
 };
-
-#endif  // DESTROYOUTSIDEBEHAVIOR_H

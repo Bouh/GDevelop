@@ -1,94 +1,84 @@
 // @flow
 import * as React from 'react';
 import ResourcesLoader from '../../ResourcesLoader';
-import { type ResourceKind } from '../ResourceSource.flow';
-import ImagePreview from './ImagePreview';
+import ImagePreview, { isProjectImageResourceSmooth } from './ImagePreview';
 import GenericIconPreview from './GenericIconPreview';
-import Audiotrack from '@material-ui/icons/Audiotrack';
-import InsertDriveFile from '@material-ui/icons/InsertDriveFile';
-import VideoLibrary from '@material-ui/icons/VideoLibrary';
 import FontDownload from '@material-ui/icons/FontDownload';
+import File from '../../UI/CustomSvgIcons/File';
+import Video from '../../UI/CustomSvgIcons/Video';
+import Model3DPreview from './Model3DPreview';
+import AudioPreview from './AudioPreview';
 
 type Props = {|
   project: gdProject,
   resourceName: string,
-  resourcePath?: string,
   resourcesLoader: typeof ResourcesLoader,
-  style?: Object,
-  onSize?: (number, number) => void,
-|};
-
-type State = {|
-  resourceKind: ?ResourceKind,
 |};
 
 /**
  * Display the right preview for any given resource of a project
  */
-export default class ResourcePreview extends React.PureComponent<Props, State> {
-  state = this._loadFrom(this.props);
+const ResourcePreview = (props: Props): null | React.Node => {
+  const { project, resourceName } = props;
+  const resourcesManager = project.getResourcesManager();
+  const resourceKind = resourcesManager.hasResource(resourceName)
+    ? resourcesManager.getResource(resourceName).getKind()
+    : null;
 
-  componentWillReceiveProps(newProps: Props) {
-    if (
-      newProps.resourceName !== this.props.resourceName ||
-      newProps.project !== this.props.project ||
-      newProps.resourcePath !== this.props.resourcePath
-    ) {
-      this.setState(this._loadFrom(newProps));
-    }
+  switch (resourceKind) {
+    case 'image':
+      return (
+        <ImagePreview
+          resourceName={resourceName}
+          imageResourceSource={props.resourcesLoader.getResourceFullUrl(
+            project,
+            resourceName,
+            {}
+          )}
+          isImageResourceSmooth={isProjectImageResourceSmooth(
+            project,
+            resourceName
+          )}
+        />
+      );
+    case 'audio':
+      return (
+        <AudioPreview
+          resourceName={resourceName}
+          audioResourceSource={props.resourcesLoader.getResourceFullUrl(
+            project,
+            resourceName,
+            {}
+          )}
+        />
+      );
+    case 'model3D':
+      return (
+        <Model3DPreview
+          modelUrl={props.resourcesLoader.getResourceFullUrl(
+            project,
+            resourceName,
+            {}
+          )}
+          expand
+        />
+      );
+    case 'json':
+    case 'tilemap':
+    case 'tileset':
+    case 'atlas':
+    case 'spine':
+      return <GenericIconPreview renderIcon={props => <File {...props} />} />;
+    case 'video':
+      return <GenericIconPreview renderIcon={props => <Video {...props} />} />;
+    case 'font':
+    case 'bitmapFont':
+      return (
+        <GenericIconPreview renderIcon={props => <FontDownload {...props} />} />
+      );
+    default:
+      return null;
   }
+};
 
-  _loadFrom(props: Props): State {
-    const { project, resourceName } = props;
-    const resourcesManager = project.getResourcesManager();
-    const resourceKind = resourcesManager.hasResource(resourceName)
-      ? resourcesManager.getResource(resourceName).getKind()
-      : null;
-
-    return {
-      resourceKind,
-    };
-  }
-
-  render() {
-    const { resourceKind } = this.state;
-
-    switch (resourceKind) {
-      case 'image':
-        return (
-          <ImagePreview
-            project={this.props.project}
-            resourceName={this.props.resourceName}
-            resourcesLoader={this.props.resourcesLoader}
-            style={this.props.style}
-            onSize={this.props.onSize}
-            resourcePath={this.props.resourcePath}
-          />
-        );
-      case 'audio':
-        return (
-          <GenericIconPreview renderIcon={props => <Audiotrack {...props} />} />
-        );
-      case 'json':
-        return (
-          <GenericIconPreview
-            renderIcon={props => <InsertDriveFile {...props} />}
-          />
-        );
-      case 'video':
-        return (
-          <GenericIconPreview
-            renderIcon={props => <VideoLibrary {...props} />}
-          />
-        );
-      case 'font':
-        return (
-          <GenericIconPreview
-            renderIcon={props => <FontDownload {...props} />}
-          />
-        );
-      default:
-        return null;
-    }
-  }
-}
+export default ResourcePreview;

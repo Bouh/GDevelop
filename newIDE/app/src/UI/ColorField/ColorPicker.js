@@ -3,15 +3,12 @@
 
 import * as React from 'react';
 import { SketchPicker } from 'react-color';
+import Popover from '@material-ui/core/Popover';
+import muiZIndex from '@material-ui/core/styles/zIndex';
+import { type RGBColor } from '../../Utils/ColorTransformer';
+import PortalContainerContext from '../PortalContainerContext';
 
-export type RGBColor = {|
-  r: number,
-  g: number,
-  b: number,
-  a?: number,
-|};
-
-type ColorResult = {
+export type ColorResult = {
   rgb: RGBColor,
 };
 
@@ -23,96 +20,113 @@ type Props = {|
   onChange?: ColorChangeHandler,
   onChangeComplete?: ColorChangeHandler,
   disableAlpha?: boolean,
-|};
-
-type State = {|
-  displayColorPicker: boolean,
+  disabled?: boolean,
+  size?: 'compact',
 |};
 
 const styles = {
   color: {
-    width: '36px',
-    height: '14px',
+    width: '100%',
+    height: '100%',
     borderRadius: '2px',
     textAlign: 'center',
     fontSize: '10px',
   },
   swatch: {
-    padding: '5px',
+    padding: '2px',
     background: '#fff',
-    borderRadius: '1px',
+    borderRadius: '4px',
     boxShadow: '0 0 0 1px rgba(0,0,0,.1)',
     display: 'inline-block',
     cursor: 'pointer',
   },
-  popover: {
-    position: 'fixed',
-    zIndex: '2',
-    transform: 'translateX(-174px)',
+  disabled: {
+    opacity: 0.2,
+    cursor: 'default',
   },
-  cover: {
-    position: 'fixed',
-    top: '0px',
-    right: '0px',
-    bottom: '0px',
-    left: '0px',
+  popover: {
+    // Ensure the popover is above everything (modal, dialog, snackbar, tooltips, etc).
+    // There will be only one ColorPicker opened at a time, so it's fair to put the
+    // highest z index. If this is breaking, check the z-index of material-ui.
+    zIndex: muiZIndex.tooltip + 100,
   },
 };
 
-class ColorPicker extends React.Component<Props, State> {
-  state = {
-    displayColorPicker: false,
+const ColorPicker = ({
+  color,
+  style,
+  onChange,
+  onChangeComplete,
+  disableAlpha,
+  disabled,
+  size,
+}: Props): React.Node => {
+  const swatchRef = React.useRef<?HTMLDivElement>(null);
+  const [displayColorPicker, setDisplayColorPicker] = React.useState(false);
+  const portalContainer = React.useContext(PortalContainerContext);
+
+  const handleClick = () => {
+    if (disabled) return;
+    setDisplayColorPicker(!displayColorPicker);
   };
 
-  open = () => {
-    this.setState({ displayColorPicker: true });
+  const handleClose = () => {
+    setDisplayColorPicker(false);
   };
 
-  handleClick = () => {
-    this.setState({ displayColorPicker: !this.state.displayColorPicker });
-  };
+  const displayedColor = color
+    ? color
+    : {
+        r: 200,
+        g: 200,
+        b: 200,
+        a: 1,
+      };
 
-  handleClose = () => {
-    this.setState({ displayColorPicker: false });
-  };
-
-  render() {
-    const { style, color, ...otherProps } = this.props;
-
-    const displayedColor = color
-      ? color
-      : {
-          r: 200,
-          g: 200,
-          b: 200,
-          a: 1,
-        };
-
-    return (
-      <div style={style}>
-        <div style={styles.swatch} onClick={this.handleClick}>
-          <div
-            style={{
-              ...styles.color,
-              background: `rgba(${displayedColor.r}, ${displayedColor.g}, ${
-                displayedColor.b
-              }, ${displayedColor.a || 1})`,
-            }}
-          >
-            {color ? null : '?'}
-          </div>
+  return (
+    <>
+      <div
+        style={{
+          ...styles.swatch,
+          ...(disabled ? styles.disabled : {}),
+          width: size === 'compact' ? 16 : 38,
+          height: size === 'compact' ? 16 : 18,
+          ...style,
+        }}
+        onClick={handleClick}
+        ref={swatchRef}
+      >
+        <div
+          style={{
+            ...styles.color,
+            background: `rgba(${displayedColor.r}, ${displayedColor.g}, ${
+              displayedColor.b
+            }, ${displayedColor.a || 1})`,
+          }}
+        >
+          {color ? null : '?'}
         </div>
-        {this.state.displayColorPicker ? (
-          <React.Fragment>
-            <div style={styles.cover} onClick={this.handleClose} />
-            <div style={styles.popover}>
-              <SketchPicker color={displayedColor} {...otherProps} />
-            </div>
-          </React.Fragment>
-        ) : null}
       </div>
-    );
-  }
-}
+      {displayColorPicker && swatchRef.current ? (
+        <Popover
+          open
+          onClose={handleClose}
+          anchorEl={swatchRef.current}
+          container={portalContainer}
+          style={styles.popover}
+        >
+          <SketchPicker
+            // $FlowFixMe[incompatible-type]
+            color={displayedColor}
+            // $FlowFixMe[incompatible-type]
+            onChange={onChange}
+            onChangeComplete={onChangeComplete}
+            disableAlpha={disableAlpha}
+          />
+        </Popover>
+      ) : null}
+    </>
+  );
+};
 
 export default ColorPicker;

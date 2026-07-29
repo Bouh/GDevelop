@@ -1,72 +1,111 @@
 // @flow
-import { Trans } from '@lingui/macro';
 import * as React from 'react';
 import { type ParameterInlineRendererProps } from './ParameterInlineRenderer.flow';
-import VariableField, { renderVariableWithIcon } from './VariableField';
-import VariablesEditorDialog from '../../VariablesList/VariablesEditorDialog';
-import { type ParameterFieldProps } from './ParameterFieldCommons';
+import VariableField, {
+  renderVariableWithIcon,
+  type VariableFieldInterface,
+} from './VariableField';
+import { type VariableDialogOpeningProps } from '../../VariablesList/VariablesEditorDialog';
+import GlobalVariablesDialog from '../../VariablesList/GlobalVariablesDialog';
+import {
+  type ParameterFieldProps,
+  type ParameterFieldInterface,
+  type FieldFocusFunction,
+} from './ParameterFieldCommons';
+import { enumerateVariables } from './EnumerateVariables';
 
-type State = {|
-  editorOpen: boolean,
-|};
+const gd: libGDevelop = global.gd;
 
-export default class GlobalVariableField extends React.Component<
-  ParameterFieldProps,
-  State
-> {
-  _field: ?VariableField;
-  state = {
-    editorOpen: false,
-  };
+export default (React.forwardRef<ParameterFieldProps, ParameterFieldInterface>(
+  function GlobalVariableField(props: ParameterFieldProps, ref) {
+    const field = React.useRef<?VariableFieldInterface>(null);
+    const [
+      variableEditorOpen,
+      setVariableEditorOpen,
+    ] = React.useState<VariableDialogOpeningProps | null>(null);
+    const focus: FieldFocusFunction = options => {
+      if (field.current) field.current.focus(options);
+    };
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
 
-  focus() {
-    if (this._field) this._field.focus();
-  }
+    const { project, scope, projectScopedContainersAccessor } = props;
 
-  render() {
-    const { project, scope } = this.props;
+    const variablesContainers = React.useMemo(
+      () => {
+        return project ? [project.getVariables()] : [];
+      },
+      [project]
+    );
+
+    const enumerateGlobaleVariables = React.useCallback(
+      () => {
+        return project ? enumerateVariables(project.getVariables()) : [];
+      },
+      [project]
+    );
 
     return (
       <React.Fragment>
         <VariableField
-          variablesContainer={project ? project.getVariables() : null}
-          parameterMetadata={this.props.parameterMetadata}
-          value={this.props.value}
-          onChange={this.props.onChange}
-          isInline={this.props.isInline}
-          ref={field => (this._field = field)}
-          onOpenDialog={() => this.setState({ editorOpen: true })}
-          globalObjectsContainer={this.props.globalObjectsContainer}
-          objectsContainer={this.props.objectsContainer}
+          isObjectVariable={false}
+          variablesContainers={variablesContainers}
+          enumerateVariables={enumerateGlobaleVariables}
+          parameterMetadata={props.parameterMetadata}
+          value={props.value}
+          onChange={props.onChange}
+          isInline={props.isInline}
+          onRequestClose={props.onRequestClose}
+          onApply={props.onApply}
+          ref={field}
+          openVariableEditorDialog={setVariableEditorOpen}
+          globalObjectsContainer={props.globalObjectsContainer}
+          objectsContainer={props.objectsContainer}
+          projectScopedContainersAccessor={projectScopedContainersAccessor}
           scope={scope}
+          getVariableSourceFromIdentifier={getVariableSourceFromIdentifier}
+          editEventsFunctionParameter={null}
+          openEventsBasedEntityPropertyEditorDialog={null}
         />
-        {this.state.editorOpen && project && (
-          <VariablesEditorDialog
-            open={this.state.editorOpen}
-            variablesContainer={project.getVariables()}
-            onCancel={() => this.setState({ editorOpen: false })}
-            onApply={() => {
-              this.setState({ editorOpen: false });
+        {variableEditorOpen && project && (
+          <GlobalVariablesDialog
+            project={project}
+            open
+            onCancel={() => setVariableEditorOpen(null)}
+            onApply={(selectedVariableName: string | null) => {
+              if (
+                selectedVariableName &&
+                selectedVariableName.startsWith(props.value)
+              ) {
+                props.onChange(selectedVariableName);
+              }
+              setVariableEditorOpen(null);
+              if (field.current) field.current.updateAutocompletions();
             }}
-            emptyExplanationMessage={
-              <Trans>
-                Global variables are variables that are persisted across the
-                scenes during the game.
-              </Trans>
-            }
+            initiallySelectedVariable={variableEditorOpen}
+            hotReloadPreviewButtonProps={null}
+            isListLocked={false}
           />
         )}
       </React.Fragment>
     );
   }
-}
+): React.ComponentType<{
+  ...ParameterFieldProps,
+  +ref?: React.RefSetter<ParameterFieldInterface>,
+}>);
 
-export const renderInlineGlobalVariable = ({
-  value,
-}: ParameterInlineRendererProps) => {
-  return renderVariableWithIcon(
-    value,
-    'res/types/globalvar.png',
-    'global variable'
+const getVariableSourceFromIdentifier = (
+  variableName: string,
+  projectScopedContainers: gdProjectScopedContainers
+): VariablesContainer_SourceType => gd.VariablesContainer.Global;
+
+export const renderInlineGlobalVariable = (
+  props: ParameterInlineRendererProps
+): any =>
+  renderVariableWithIcon(
+    props,
+    'global variable',
+    getVariableSourceFromIdentifier
   );
-};

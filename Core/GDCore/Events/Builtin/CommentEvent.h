@@ -7,10 +7,11 @@
 #define COMMENTEVENT_H
 
 #include "GDCore/Events/Event.h"
+#include "GDCore/Events/EventsList.h"
 namespace gd {
 class Layout;
 class Project;
-}
+}  // namespace gd
 
 namespace gd {
 
@@ -44,6 +45,10 @@ class GD_CORE_API CommentEvent : public gd::BaseEvent {
 
   const gd::String& GetComment() const { return com1; }
   void SetComment(const gd::String& comment) { com1 = comment; }
+
+  virtual std::vector<gd::String> GetAllSearchableStrings() const;
+  virtual bool ReplaceAllSearchableStrings(
+      std::vector<gd::String> newSearchableString);
 
   virtual void SerializeTo(SerializerElement& element) const;
   virtual void UnserializeFrom(gd::Project& project,

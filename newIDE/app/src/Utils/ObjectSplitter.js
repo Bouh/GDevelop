@@ -45,12 +45,13 @@ export const split = (
   }: SplitConfiguration
 ): Array<PartialObjectDescription> => {
   const partialObjects = [];
-  const createReference = (reference, object): Reference => {
+  const createReference = (reference: string, object: Object): Reference => {
     partialObjects.push({
       reference,
       object,
     });
 
+    // $FlowFixMe[incompatible-indexer]
     return {
       [isReferenceMagicPropertyName]: true,
       referenceTo: reference,
@@ -181,14 +182,16 @@ export const unsplit = (
 /**
  * A helper that can be used to split according to a list of hardcoded paths
  */
-export const splitPaths = (paths: Set<string>) => {
+export const splitPaths = (paths: Set<string>): ((path: string) => boolean) => {
   return (path: string) => paths.has(path);
 };
 
 /**
  * A helper that can be used to get the name of items in array using an hardcoded property name.
  */
-export const getNameFromProperty = (propertyName: string) => {
+export const getNameFromProperty = (
+  propertyName: string
+): ((object: any) => string) => {
   return (object: Object): string => {
     const property = object[propertyName];
     if (typeof property !== 'string') {
@@ -202,7 +205,9 @@ export const getNameFromProperty = (propertyName: string) => {
 /**
  * A helper that can be used to get the name of items in array using an hardcoded property name.
  */
-export const getSlugifiedUniqueNameFromProperty = (propertyName: string) => {
+export const getSlugifiedUniqueNameFromProperty = (
+  propertyName: string
+): ((object: any, currentReference: string) => string) => {
   const existingNamesForReference = {};
 
   return (object: Object, currentReference: string): string => {
@@ -211,12 +216,16 @@ export const getSlugifiedUniqueNameFromProperty = (propertyName: string) => {
       throw new Error(`Property ${propertyName} is not a string`);
     }
 
+    // $FlowFixMe[prop-missing]
     existingNamesForReference[currentReference] =
+      // $FlowFixMe[invalid-computed-prop]
       existingNamesForReference[currentReference] || {};
     const newName = newNameGenerator(
       slugs(property),
+      // $FlowFixMe[invalid-computed-prop]
       name => !!existingNamesForReference[currentReference][name]
     );
+    // $FlowFixMe[invalid-computed-prop]
     existingNamesForReference[currentReference][newName] = true;
     return newName;
   };

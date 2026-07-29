@@ -3,17 +3,20 @@
  * Copyright 2008-2016 Florian Rival (Florian.Rival@gmail.com). All rights
  * reserved. This project is released under the MIT License.
  */
-#ifndef GDCORE_OBJECTSCONTAINER_H
-#define GDCORE_OBJECTSCONTAINER_H
+#pragma once
+
 #include <memory>
 #include <vector>
+#include <set>
+#include "GDCore/Project/MemoryTrackedRegistry.h"
 #include "GDCore/String.h"
 #include "GDCore/Project/ObjectGroupsContainer.h"
+#include "GDCore/Project/ObjectFolderOrObject.h"
 namespace gd {
 class Object;
 class Project;
 class SerializerElement;
-}
+}  // namespace gd
 #undef GetObject  // Disable an annoying macro
 
 namespace gd {
@@ -34,11 +37,24 @@ namespace gd {
  */
 class GD_CORE_API ObjectsContainer {
  public:
+  enum SourceType {
+      Unknown,
+      Global,
+      Scene,
+      Object,
+      Function,
+  };
+
   /**
-   * \brief Default constructor creating a container without any objects.
+   * \brief Constructor creating a container without any objects.
    */
-  ObjectsContainer();
+  ObjectsContainer(const SourceType sourceType);
   virtual ~ObjectsContainer();
+
+  ObjectsContainer(const ObjectsContainer&);
+  ObjectsContainer& operator=(const ObjectsContainer& rhs);
+
+  SourceType GetSourceType() const { return sourceType; }
 
   /** \name Objects management
    * Members functions related to objects management.
@@ -53,7 +69,7 @@ class GD_CORE_API ObjectsContainer {
   /**
    * \brief Return a reference to the object called \a name.
    */
-  Object& GetObject(const gd::String& name);
+  gd::Object& GetObject(const gd::String& name);
 
   /**
    * \brief Return a reference to the object called \a name.
@@ -64,7 +80,7 @@ class GD_CORE_API ObjectsContainer {
    * \brief Return a reference to the object at position \a index in the objects
    * list
    */
-  Object& GetObject(std::size_t index);
+  gd::Object& GetObject(std::size_t index);
 
   /**
    * \brief Return a reference to the object at position \a index in the objects
@@ -87,7 +103,6 @@ class GD_CORE_API ObjectsContainer {
    */
   std::size_t GetObjectsCount() const;
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Add a new empty object of type \a objectType called \a name at the
    * specified position in the list.<br>
@@ -95,11 +110,23 @@ class GD_CORE_API ObjectsContainer {
    * \note The object is created using the project's current platform.
    * \return A reference to the object in the list.
    */
-  gd::Object& InsertNewObject(gd::Project& project,
+  gd::Object& InsertNewObject(const gd::Project& project,
                               const gd::String& objectType,
                               const gd::String& name,
                               std::size_t position);
-#endif
+  /**
+   * \brief Add a new empty object of type \a objectType called \a name in the
+   * given folder at the specified position.<br>
+   *
+   * \note The object is created using the project's current platform.
+   * \return A reference to the object in the list.
+   */
+  gd::Object& InsertNewObjectInFolder(
+      const gd::Project& project,
+      const gd::String& objectType,
+      const gd::String& name,
+      gd::ObjectFolderOrObject& objectFolderOrObject,
+      std::size_t position);
 
   /**
    * \brief Add a new object to the list
@@ -127,18 +154,23 @@ class GD_CORE_API ObjectsContainer {
   void MoveObject(std::size_t oldIndex, std::size_t newIndex);
 
   /**
-   * \brief Swap the position of the specified objects.
+   * Move the specified object to another container, removing it from the
+   * current one and adding it to the new one at the specified position in the
+   * given folder.
+   *
+   * \note This does not invalidate the references to the object (object is not
+   * moved in memory, as referenced by smart pointers internally).
    */
-  void SwapObjects(std::size_t firstObjectIndex, std::size_t secondObjectIndex);
+  void MoveObjectFolderOrObjectToAnotherContainerInFolder(
+      gd::ObjectFolderOrObject& objectFolderOrObject,
+      gd::ObjectsContainer& newContainer,
+      gd::ObjectFolderOrObject& newParentFolder,
+      std::size_t newPosition);
 
   /**
-   * Move the specified object to another container, removing it from the current one
-   * and adding it to the new one at the specified position.
-   *
-   * \note This does not invalidate the references to the object (object is not moved in memory,
-   * as referenced by smart pointers internally).
+   * \brief Clear all groups of the container.
    */
-  void MoveObjectToAnotherContainer(const gd::String& name, gd::ObjectsContainer & newContainer, std::size_t newPosition);
+  void Clear();
 
   /**
    * Provide a raw access to the vector containing the objects
@@ -153,21 +185,46 @@ class GD_CORE_API ObjectsContainer {
   const std::vector<std::unique_ptr<gd::Object> >& GetObjects() const {
     return initialObjects;
   }
+
+  std::set<gd::String> GetAllObjectNames() const;
   ///@}
+
+  /**
+   * Returns a vector containing all object and folders in this container.
+   * Only use this for checking if you hold a valid `ObjectFolderOrObject` -
+   * don't use this for rendering or anything else.
+   */
+  std::vector<const ObjectFolderOrObject*> GetAllObjectFolderOrObjects() const;
+
+  gd::ObjectFolderOrObject& GetRootFolder() {
+      return *rootFolder;
+  }
+
+  void AddMissingObjectsInRootFolder();
 
   /** \name Saving and loading
    * Members functions related to saving and loading the objects of the class.
    */
   ///@{
   /**
-   * \brief Serialize instances container.
+   * \brief Serialize the objects container.
    */
   void SerializeObjectsTo(SerializerElement& element) const;
 
   /**
-   * \brief Unserialize the instances container.
+   * \brief Unserialize the objects container.
    */
   void UnserializeObjectsFrom(gd::Project& project,
+                              const SerializerElement& element);
+  /**
+   * \brief Serialize folder structure.
+   */
+  void SerializeFoldersTo(SerializerElement& element) const;
+
+  /**
+   * \brief Unserialize folder structure.
+   */
+  void UnserializeFoldersFrom(gd::Project& project,
                               const SerializerElement& element);
   ///@}
 
@@ -176,7 +233,6 @@ class GD_CORE_API ObjectsContainer {
    */
   ///@{
 
-#if defined(GD_IDE_ONLY)
   /**
    * \brief Return a reference to the project's objects groups.
    */
@@ -186,7 +242,6 @@ class GD_CORE_API ObjectsContainer {
    * \brief Return a const reference to the project's objects groups.
    */
   const ObjectGroupsContainer& GetObjectGroups() const { return objectGroups; }
-#endif
 
   ///@}
 
@@ -194,8 +249,17 @@ class GD_CORE_API ObjectsContainer {
   std::vector<std::unique_ptr<gd::Object> >
       initialObjects;  ///< Objects contained.
   gd::ObjectGroupsContainer objectGroups;
+
+ private:
+  SourceType sourceType = Unknown;
+  std::unique_ptr<gd::ObjectFolderOrObject> rootFolder;
+  gd::MemoryTracked _memoryTracked{this, "ObjectsContainer"};
+
+  /**
+   * Initialize from another variables container, copying elements. Used by
+   * copy-ctor and assign-op. Don't forget to update me if members were changed!
+   */
+  void Init(const ObjectsContainer& other);
 };
 
 }  // namespace gd
-
-#endif  // GDCORE_OBJECTSCONTAINER_H
