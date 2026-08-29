@@ -681,6 +681,7 @@ export class Project extends EmscriptenObject {
   getWholeProjectDiagnosticReport(): WholeProjectDiagnosticReport;
   static isNameSafe(name: string): boolean;
   static getSafeName(name: string): string;
+  insertNewLayoutInFolder(name: string, folder: LayoutFolderOrLayout, position: number): Layout;
   getLayoutsRootFolder(): LayoutFolderOrLayout;
 }
 

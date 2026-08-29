@@ -102,6 +102,37 @@ TEST_CASE("LayoutFolderOrLayout", "[common]") {
     REQUIRE(rootFolder.GetChildrenCount() == 1);
   }
 
+  SECTION("A layout can be inserted directly in a folder") {
+    gd::Project project;
+    project.InsertNewLayout("Scene1", 0);
+
+    auto& rootFolder = project.GetLayoutsRootFolder();
+    auto& folder = rootFolder.InsertNewFolder("MyFolder", 0);
+
+    auto& newLayout = project.InsertNewLayoutInFolder("Scene2", folder, 0);
+
+    REQUIRE(project.HasLayoutNamed("Scene2"));
+    REQUIRE(&project.GetLayout("Scene2") == &newLayout);
+    // It's only in the folder, not added a second time at the root.
+    REQUIRE(folder.GetChildrenCount() == 1);
+    REQUIRE(folder.GetChildAt(0).GetLayout().GetName() == "Scene2");
+    REQUIRE(rootFolder.GetChildrenCount() == 2);
+  }
+
+  SECTION("A layout inserted in a folder is put at the given position") {
+    gd::Project project;
+    project.InsertNewLayout("Scene1", 0);
+    project.InsertNewLayout("Scene2", 1);
+
+    auto& rootFolder = project.GetLayoutsRootFolder();
+    project.InsertNewLayoutInFolder("Scene3", rootFolder, 1);
+
+    REQUIRE(rootFolder.GetChildrenCount() == 3);
+    REQUIRE(rootFolder.GetChildAt(0).GetLayout().GetName() == "Scene1");
+    REQUIRE(rootFolder.GetChildAt(1).GetLayout().GetName() == "Scene3");
+    REQUIRE(rootFolder.GetChildAt(2).GetLayout().GetName() == "Scene2");
+  }
+
   SECTION("The folder structure is saved and loaded") {
     gd::Project project;
     project.InsertNewLayout("Scene1", 0);

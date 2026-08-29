@@ -2,12 +2,6 @@
 import { type I18n as I18nType } from '@lingui/core';
 import { t } from '@lingui/macro';
 import * as React from 'react';
-import Clipboard from '../Utils/Clipboard';
-import { SafeExtractor } from '../Utils/SafeExtractor';
-import {
-  serializeToJSObject,
-  unserializeFromJSObject,
-} from '../Utils/Serializer';
 import { type TreeViewItemContent, scenesRootFolderId } from '.';
 import { type MenuButton } from '../UI/TreeView';
 import { type ShowConfirmDeleteDialogOptions } from '../UI/Alert/AlertContext';
@@ -16,12 +10,13 @@ import newNameGenerator from '../Utils/NewNameGenerator';
 import { mapFor } from '../Utils/MapFor';
 import { getSceneTreeViewItemId } from './SceneTreeViewItemContent';
 import { addDefaultLightToAllLayers } from '../ProjectCreation/CreateProject';
+import { buildMoveToFolderSubmenu } from './SceneTreeViewHelpers';
 import {
-  buildMoveToFolderSubmenu,
-  moveNewSceneToFolder,
-} from './SceneTreeViewHelpers';
-
-const SCENE_FOLDER_CLIPBOARD_KIND = 'SceneFolder';
+  copySceneFolderOrLayoutToClipboard,
+  pasteSceneFolderOrLayoutsFromClipboard,
+  hasSceneFolderOrLayoutsInClipboard,
+  getPasteMenuLabel,
+} from './SceneFolderOrLayoutsClipboard';
 
 export type SceneFolderTreeViewItemProps = {|
   project: gdProject,
@@ -137,6 +132,25 @@ export class SceneFolderTreeViewItemContent implements TreeViewItemContent {
         type: 'separator',
       },
       {
+        label: i18n._(t`Copy`),
+        click: () => this.copy(),
+        accelerator: 'CmdOrCtrl+C',
+      },
+      {
+        label: i18n._(t`Cut`),
+        click: () => this.cut(),
+        accelerator: 'CmdOrCtrl+X',
+      },
+      {
+        label: getPasteMenuLabel(i18n),
+        enabled: hasSceneFolderOrLayoutsInClipboard(),
+        click: () => this.paste(),
+        accelerator: 'CmdOrCtrl+V',
+      },
+      {
+        type: 'separator',
+      },
+      {
         label: i18n._(t`Add a scene`),
         click: () => this._addScene(i18n),
       },
@@ -171,7 +185,7 @@ export class SceneFolderTreeViewItemContent implements TreeViewItemContent {
 
     showDeleteConfirmation({
       title: t`Remove folder`,
-      message: t`The content of this folder will be moved out of it, in "${this._getParentName()}". Do you want to continue?`,
+      message: t`The scenes and folders it contains will be moved out of it, not removed. Do you want to continue?`,
       confirmButtonLabel: t`Remove folder`,
     }).then(answer => {
       if (!answer) return;
@@ -194,11 +208,6 @@ export class SceneFolderTreeViewItemContent implements TreeViewItemContent {
 
       this._onFolderStructureModified();
     });
-  }
-
-  _getParentName(): string {
-    const parent = this.folder.getParent();
-    return parent.isRootFolder() ? 'Scenes' : parent.getFolderName();
   }
 
   getIndex(): number {
@@ -232,10 +241,7 @@ export class SceneFolderTreeViewItemContent implements TreeViewItemContent {
   }
 
   copy(): void {
-    Clipboard.set(SCENE_FOLDER_CLIPBOARD_KIND, {
-      folder: serializeToJSObject(this.folder),
-      name: this.folder.getFolderName(),
-    });
+    copySceneFolderOrLayoutToClipboard(this.folder);
   }
 
   cut(): void {
@@ -244,23 +250,23 @@ export class SceneFolderTreeViewItemContent implements TreeViewItemContent {
   }
 
   paste(): void {
-    if (!Clipboard.has(SCENE_FOLDER_CLIPBOARD_KIND)) return;
-
-    const clipboardContent = Clipboard.get(SCENE_FOLDER_CLIPBOARD_KIND);
-    const copiedFolder = SafeExtractor.extractObjectProperty(
-      clipboardContent,
-      'folder'
-    );
-    const name = SafeExtractor.extractStringProperty(clipboardContent, 'name');
-    if (!name || !copiedFolder) return;
-
-    const newFolder = this.folder.insertNewFolder(name, 0);
-    unserializeFromJSObject(newFolder, copiedFolder);
-    // Unserialization has overwritten the name.
-    newFolder.setFolderName(name);
+    const pastedContent = pasteSceneFolderOrLayoutsFromClipboard({
+      project: this.props.project,
+      destinationFolder: this.folder,
+      positionInFolder: this.folder.getChildrenCount(),
+    });
+    if (!pastedContent) return;
 
     this._onFolderStructureModified();
-    this.props.editName(getSceneFolderTreeViewItemId(newFolder));
+    this.props.expandFolders([this.getId()]);
+    const firstPastedItem = pastedContent.topLevelLayoutFolderOrLayouts[0];
+    if (firstPastedItem) {
+      this.props.editName(
+        firstPastedItem.isFolder()
+          ? getSceneFolderTreeViewItemId(firstPastedItem)
+          : getSceneTreeViewItemId(firstPastedItem.getLayout())
+      );
+    }
   }
 
   _addScene(i18n: I18nType): void {
@@ -270,14 +276,12 @@ export class SceneFolderTreeViewItemContent implements TreeViewItemContent {
       project.hasLayoutNamed(name)
     );
 
-    const newScene = project.insertNewLayout(
+    const newScene = project.insertNewLayoutInFolder(
       newName,
-      project.getLayoutsCount()
+      this.folder,
+      this.folder.getChildrenCount()
     );
-    newScene.updateBehaviorsSharedData(project);
     addDefaultLightToAllLayers(newScene);
-
-    moveNewSceneToFolder(project, newName, this.folder, 0);
 
     this._onFolderStructureModified();
     expandFolders([this.getId()]);

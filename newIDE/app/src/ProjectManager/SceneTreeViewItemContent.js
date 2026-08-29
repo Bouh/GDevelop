@@ -4,8 +4,6 @@ import { t } from '@lingui/macro';
 
 import * as React from 'react';
 import newNameGenerator from '../Utils/NewNameGenerator';
-import Clipboard from '../Utils/Clipboard';
-import { SafeExtractor } from '../Utils/SafeExtractor';
 import {
   serializeToJSObject,
   unserializeFromJSObject,
@@ -19,12 +17,13 @@ import Tooltip from '@material-ui/core/Tooltip';
 import Flag from '@material-ui/icons/Flag';
 import { type HTMLDataset } from '../Utils/HTMLDataset';
 import { getSceneFolderTreeViewItemId } from './SceneFolderTreeViewItemContent';
+import { buildMoveToFolderSubmenu } from './SceneTreeViewHelpers';
 import {
-  buildMoveToFolderSubmenu,
-  moveNewSceneToFolder,
-} from './SceneTreeViewHelpers';
-
-const SCENE_CLIPBOARD_KIND = 'Layout';
+  copySceneFolderOrLayoutToClipboard,
+  pasteSceneFolderOrLayoutsFromClipboard,
+  hasSceneFolderOrLayoutsInClipboard,
+  getPasteMenuLabel,
+} from './SceneFolderOrLayoutsClipboard';
 
 const styles = {
   tooltip: { marginRight: 5, verticalAlign: 'bottom' },
@@ -233,8 +232,8 @@ export class SceneTreeViewItemContent implements TreeViewItemContent {
         accelerator: 'CmdOrCtrl+X',
       },
       {
-        label: i18n._(t`Paste`),
-        enabled: Clipboard.has(SCENE_CLIPBOARD_KIND),
+        label: getPasteMenuLabel(i18n),
+        enabled: hasSceneFolderOrLayoutsInClipboard(),
         click: () => this.paste(),
         accelerator: 'CmdOrCtrl+V',
       },
@@ -309,25 +308,8 @@ export class SceneTreeViewItemContent implements TreeViewItemContent {
     this._onFolderStructureModified();
   }
 
-  /**
-   * A scene added to the project is put at the root of the folder structure:
-   * move it right after this scene, so that a copy or a duplicate stays next
-   * to the scene it was made from.
-   */
-  _placeNewSceneNextToThisOne(newSceneName: string): void {
-    moveNewSceneToFolder(
-      this.props.project,
-      newSceneName,
-      this.layoutFolderOrLayout.getParent(),
-      this.getIndex() + 1
-    );
-  }
-
   copy(): void {
-    Clipboard.set(SCENE_CLIPBOARD_KIND, {
-      layout: serializeToJSObject(this.scene),
-      name: this.scene.getName(),
-    });
+    copySceneFolderOrLayoutToClipboard(this.layoutFolderOrLayout);
   }
 
   cut(): void {
@@ -336,36 +318,23 @@ export class SceneTreeViewItemContent implements TreeViewItemContent {
   }
 
   paste(): void {
-    if (!Clipboard.has(SCENE_CLIPBOARD_KIND)) return;
-
-    const clipboardContent = Clipboard.get(SCENE_CLIPBOARD_KIND);
-    const copiedScene = SafeExtractor.extractObjectProperty(
-      clipboardContent,
-      'layout'
-    );
-    const name = SafeExtractor.extractStringProperty(clipboardContent, 'name');
-    if (!name || !copiedScene) return;
-
-    const project = this.props.project;
-    const newName = newNameGenerator(name, name =>
-      project.hasLayoutNamed(name)
-    );
-
-    const newScene = project.insertNewLayout(
-      newName,
-      project.getLayoutsCount()
-    );
-
-    unserializeFromJSObject(newScene, copiedScene, 'unserializeFrom', project);
-    // Unserialization has overwritten the name.
-    newScene.setName(newName);
-    newScene.updateBehaviorsSharedData(project);
-
-    this._placeNewSceneNextToThisOne(newName);
+    const pastedContent = pasteSceneFolderOrLayoutsFromClipboard({
+      project: this.props.project,
+      destinationFolder: this.layoutFolderOrLayout.getParent(),
+      positionInFolder: this.getIndex() + 1,
+    });
+    if (!pastedContent) return;
 
     this._onFolderStructureModified();
-    this.props.editName(getSceneTreeViewItemId(newScene));
-    this.props.onSceneAdded();
+    const firstPastedItem = pastedContent.topLevelLayoutFolderOrLayouts[0];
+    if (firstPastedItem) {
+      this.props.editName(
+        firstPastedItem.isFolder()
+          ? getSceneFolderTreeViewItemId(firstPastedItem)
+          : getSceneTreeViewItemId(firstPastedItem.getLayout())
+      );
+    }
+    if (pastedContent.createdLayouts.length > 0) this.props.onSceneAdded();
   }
 
   _duplicate(): void {
@@ -374,9 +343,10 @@ export class SceneTreeViewItemContent implements TreeViewItemContent {
       project.hasLayoutNamed(name)
     );
 
-    const newScene = project.insertNewLayout(
+    const newScene = project.insertNewLayoutInFolder(
       newName,
-      project.getLayoutsCount()
+      this.layoutFolderOrLayout.getParent(),
+      this.getIndex() + 1
     );
 
     unserializeFromJSObject(
@@ -388,8 +358,6 @@ export class SceneTreeViewItemContent implements TreeViewItemContent {
     // Unserialization has overwritten the name.
     newScene.setName(newName);
     newScene.updateBehaviorsSharedData(project);
-
-    this._placeNewSceneNextToThisOne(newName);
 
     this._onFolderStructureModified();
     this.props.editName(getSceneTreeViewItemId(newScene));

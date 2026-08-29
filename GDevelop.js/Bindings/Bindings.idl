@@ -708,6 +708,7 @@ interface Project {
     boolean STATIC_IsNameSafe([Const] DOMString name);
     [Const, Value] DOMString STATIC_GetSafeName([Const] DOMString name);
 
+    [Ref] Layout InsertNewLayoutInFolder([Const] DOMString name, [Ref] LayoutFolderOrLayout folder, unsigned long position);
     [Ref] LayoutFolderOrLayout GetLayoutsRootFolder();
 };
 

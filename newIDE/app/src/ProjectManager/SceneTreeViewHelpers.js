@@ -52,24 +52,3 @@ export const buildMoveToFolderSubmenu = (
     },
   ];
 };
-
-/**
- * Move the scene with the given name, that was just added at the root of the
- * folder structure by `gd.Project::insertNewLayout`, into the given folder.
- */
-export const moveNewSceneToFolder = (
-  project: gdProject,
-  sceneName: string,
-  parentFolder: gdLayoutFolderOrLayout,
-  position: number
-): void => {
-  const layoutsRootFolder = project.getLayoutsRootFolder();
-  if (parentFolder === layoutsRootFolder) return;
-
-  const sceneInRootFolder = layoutsRootFolder.getLayoutChild(sceneName);
-  layoutsRootFolder.moveLayoutFolderOrLayoutToAnotherFolder(
-    sceneInRootFolder,
-    parentFolder,
-    position
-  );
-};
