@@ -1,0 +1,200 @@
+.container {
+  position: fixed;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  width: max-content;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--theme-dialog-separator-color);
+  background-color: var(--theme-dialog-background-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  /* Dragging the frame should never select the text of its title bar. */
+  user-select: none;
+}
+
+.container.minimized {
+  min-width: 220px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 6px;
+  min-width: 0;
+  background-color: var(--theme-surface-alternate-canvas-background-color);
+  border-bottom: 1px solid var(--theme-dialog-separator-color);
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.container.dragging .dragHandle {
+  cursor: grabbing;
+}
+
+.container.dragging,
+.container.resizing {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* Invisible handles on the borders and corners of the frame to resize it. */
+.resizeHandle {
+  position: absolute;
+  z-index: 10;
+  touch-action: none;
+}
+
+.resizeLeft,
+.resizeRight {
+  top: 10px;
+  bottom: 10px;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+.resizeLeft {
+  left: 0;
+}
+
+.resizeRight {
+  right: 0;
+}
+
+.resizeTop,
+.resizeBottom {
+  left: 10px;
+  right: 10px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.resizeTop {
+  top: 0;
+}
+
+.resizeBottom {
+  bottom: 0;
+}
+
+.resizeTopLeft,
+.resizeTopRight,
+.resizeBottomLeft,
+.resizeBottomRight {
+  width: 10px;
+  height: 10px;
+}
+
+.resizeTopLeft {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.resizeTopRight {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.resizeBottomLeft {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.resizeBottomRight {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
+}
+
+/* Two columns of three dots, hinting that the frame can be moved. */
+.grip {
+  flex-shrink: 0;
+  width: 6px;
+  height: 12px;
+  background-image: radial-gradient(
+    circle at center,
+    var(--theme-text-secondary-color) 1px,
+    transparent 1.2px
+  );
+  background-size: 3px 4px;
+  opacity: 0.6;
+}
+
+.dragHandle:hover .grip {
+  opacity: 1;
+}
+
+.headerButtons {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.headerIcon {
+  font-size: 16px;
+}
+
+.gameArea {
+  position: relative;
+  width: 320px;
+  height: 180px;
+  overflow: hidden;
+  background-color: #000;
+}
+
+/*
+ * Holds the game window: always sized at exactly the game resolution, and
+ * only scaled to be displayed at the frame zoom.
+ */
+.gameScaler {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+}
+
+/*
+ * When minimized, the game window is only clipped to a 1x1 pixel area:
+ * `display: none` (or a zero size) would stop `requestAnimationFrame` in
+ * the game - and so the test being run.
+ */
+.hiddenGameArea {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.gameIframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  /* The test simulates all the inputs itself: never let the user interact
+  with the game. */
+  pointer-events: none;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px 4px 6px;
+  background-color: var(--theme-surface-canvas-background-color);
+  border-top: 1px solid var(--theme-dialog-separator-color);
+}

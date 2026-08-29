@@ -56,6 +56,15 @@ type SimplifiedResource = {|
   metadata?: string,
 |};
 
+type SimplifiedTest = {|
+  testName: string,
+  type: string,
+  description?: string,
+  source?: string,
+  lastRunStatus?: string,
+  lastRunAt?: number,
+|};
+
 type SimplifiedProject = {|
   properties: {|
     name: string,
@@ -70,6 +79,7 @@ type SimplifiedProject = {|
   scenes: Array<SimplifiedScene>,
   globalVariables: Array<SimplifiedVariable>,
   resources: Array<SimplifiedResource>,
+  tests?: Array<SimplifiedTest>,
 |};
 
 type ProjectSpecificExtensionsSummary = {|
@@ -390,6 +400,9 @@ export const makeSimplifiedProjectBuilder = (
     };
   };
 
+  // The full structure is intentionally uncapped here — the backend trims
+  // it if needed, and `read_game_project_json` reads it with its own token
+  // budget (see SimplifiedProjectReader.js).
   const getSimplifiedProject = (
     project: gdProject,
     options: SimplifiedProjectOptions
@@ -430,6 +443,25 @@ export const makeSimplifiedProjectBuilder = (
         project.getVariables()
       ),
     };
+
+    const projectTests = project.getTests();
+    if (projectTests.getTestsCount() > 0) {
+      simplifiedProject.tests = mapFor(0, projectTests.getTestsCount(), i => {
+        const test = projectTests.getTestAt(i);
+        const simplifiedTest: SimplifiedTest = {
+          testName: test.getName(),
+          type: test.getType(),
+        };
+        if (test.getDescription())
+          simplifiedTest.description = test.getDescription();
+        if (test.getSource()) simplifiedTest.source = test.getSource();
+        if (test.getLastRunStatus()) {
+          simplifiedTest.lastRunStatus = test.getLastRunStatus();
+          simplifiedTest.lastRunAt = test.getLastRunAt();
+        }
+        return simplifiedTest;
+      });
+    }
 
     return simplifiedProject;
   };
