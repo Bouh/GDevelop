@@ -928,6 +928,14 @@ export default class PixiResourcesLoader {
 
     const loadingPromise = load3DModel(project, resourceName);
     loadedOrLoading3DModelPromises[resourceName] = loadingPromise;
+    // Never keep a rejected promise in the cache: a transient failure (network
+    // error, expired credentials on a long editing session...) would otherwise
+    // make the model fail for the whole session, even once the problem is gone.
+    loadingPromise.catch(() => {
+      if (loadedOrLoading3DModelPromises[resourceName] === loadingPromise) {
+        delete loadedOrLoading3DModelPromises[resourceName];
+      }
+    });
     return loadingPromise;
   }
 

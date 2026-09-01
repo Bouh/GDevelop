@@ -32,6 +32,42 @@ const removeMetalnessFromMesh = node => {
   }
 };
 
+// The renderer is kept alive between previews, so every model rendered here
+// must have its GPU resources released explicitly: nothing else ever will.
+// $FlowFixMe[missing-local-annot]
+const disposeMaterial = material => {
+  for (const key in material) {
+    const value = material[key];
+    if (value && value.isTexture) {
+      value.dispose();
+    }
+  }
+  material.dispose();
+};
+
+// $FlowFixMe[missing-local-annot]
+const disposeModel = model => {
+  model.traverse(node => {
+    if (node.geometry) {
+      node.geometry.dispose();
+    }
+    if (node.skeleton) {
+      // Each skeleton owns a bone texture allocated on the GPU.
+      node.skeleton.dispose();
+    }
+    if (!node.material) {
+      return;
+    }
+    if (Array.isArray(node.material)) {
+      for (let index = 0; index < node.material.length; index++) {
+        disposeMaterial(node.material[index]);
+      }
+    } else {
+      disposeMaterial(node.material);
+    }
+  });
+};
+
 // Worker message types
 const MESSAGE_TYPES = {
   RENDER_MODEL: 'RENDER_MODEL',
@@ -216,7 +252,17 @@ const renderModel = async (resourceUrl, resourceData, basePath) => {
             })
           : Promise.resolve(renderer.domElement.toDataURL());
 
-        resolve(screenshot);
+        resolve(
+          // Free the geometries, materials and textures of the model as soon as
+          // the screenshot is taken. Without this, previewing 3D models keeps
+          // filling the GPU memory of this worker for the whole session.
+          screenshot.then(dataUrl => {
+            scene.remove(model);
+            disposeModel(model);
+            if (renderer) renderer.renderLists.dispose();
+            return dataUrl;
+          })
+        );
       },
       undefined,
       error => {

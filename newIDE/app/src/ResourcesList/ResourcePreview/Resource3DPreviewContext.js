@@ -232,6 +232,15 @@ export const Resource3DPreviewProvider = ({
     // Cleanup on unmount
     return () => {
       queueRef.current = [];
+      // The previews are blob URLs created by the worker: dropping the cache is
+      // not enough, they must be revoked or the blobs are kept in memory until
+      // the page is reloaded.
+      for (const url in previewCache.current) {
+        const previewUrl = previewCache.current[url];
+        if (previewUrl && previewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(previewUrl);
+        }
+      }
       previewCache.current = {};
 
       // Terminate the worker

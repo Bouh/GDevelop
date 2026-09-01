@@ -708,6 +708,18 @@ export default class InstancesEditor extends Component<Props, State> {
     if (this.pixiRenderer) {
       this.pixiRenderer.destroy();
     }
+    if (this.threeRenderer) {
+      // In 3D, the PixiJS renderer is built on top of the WebGL context owned by
+      // the Three.js renderer: destroying the PixiJS renderer is not enough, the
+      // Three.js renderer must be disposed too. Otherwise the context - and every
+      // program, texture and buffer it holds - is kept alive forever.
+      // Browsers only allow a handful of live WebGL contexts (16 on Chromium):
+      // leaking one per closed scene editor makes the browser silently drop the
+      // oldest contexts after a while, breaking the rendering of the tabs still open.
+      this.threeRenderer.dispose();
+      this.threeRenderer.forceContextLoss();
+      this.threeRenderer = null;
+    }
   }
 
   // To be updated, see https://reactjs.org/docs/react-component.html#unsafe_componentwillreceiveprops.

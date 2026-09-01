@@ -4032,15 +4032,54 @@ module.exports = {
             .get3DModel(this._project, modelResourceName)
             .then((model3d) => {
               if (this._wasDestroyed) return;
+              this._disposeClonedModel3D();
               this._clonedModel3D = THREE_ADDONS.SkeletonUtils.clone(
                 model3d.scene
               );
 
               this._updateDefaultTransformation();
+            })
+            .catch((error) => {
+              // Without this, a model failing to load leaves an unhandled
+              // promise rejection behind (and the instance stays invisible).
+              console.error(
+                'Unable to load the 3D model "' +
+                  modelResourceName +
+                  '" for the scene editor:',
+                error
+              );
             });
         }
 
         this._updateThreeObjectPosition();
+      }
+
+      /**
+       * Release what is owned by the cloned model. Geometries, materials and
+       * textures are shared with the model cached by PixiResourcesLoader and
+       * must NOT be disposed here - but each clone has its own skeletons, and
+       * every skeleton owns a bone texture allocated on the GPU.
+       */
+      _disposeClonedModel3D() {
+        if (!this._clonedModel3D) return;
+        this._clonedModel3D.traverse((node) => {
+          if (node.skeleton) node.skeleton.dispose();
+        });
+        this._clonedModel3D = null;
+      }
+
+      onRemovedFromScene() {
+        super.onRemovedFromScene();
+        this._disposeClonedModel3D();
+        if (this._threeModelGroup) {
+          this._threeModelGroup.clear();
+          this._threeModelGroup = null;
+        }
+        if (this._threeObject) this._threeObject.clear();
+        if (this._pixiObject) {
+          // Keep the textures, they are shared with the other instances.
+          this._pixiObject.destroy(false);
+        }
       }
 
       _updateThreeObjectPosition() {
