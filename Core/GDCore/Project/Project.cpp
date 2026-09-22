@@ -354,6 +354,21 @@ gd::Layout& Project::InsertLayout(const gd::Layout& layout,
   return newlyInsertedLayout;
 }
 
+gd::Layout& Project::InsertNewLayoutInFolder(
+    const gd::String& name,
+    gd::LayoutFolderOrLayout& folder,
+    std::size_t position) {
+  gd::Layout& newlyInsertedLayout =
+      *(*(scenes.emplace(scenes.end(), new Layout())));
+
+  newlyInsertedLayout.SetName(name);
+  newlyInsertedLayout.UpdateBehaviorsSharedData(*this);
+
+  folder.InsertLayout(&newlyInsertedLayout, position);
+
+  return newlyInsertedLayout;
+}
+
 void Project::RemoveLayout(const gd::String& name) {
   std::vector<std::unique_ptr<gd::Layout> >::iterator scene =
       find_if(scenes.begin(), scenes.end(), [&name](const std::unique_ptr<gd::Layout>& layout) {

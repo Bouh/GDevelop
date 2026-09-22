@@ -610,14 +610,20 @@ class GD_CORE_API Project {
   std::size_t GetLayoutPosition(const gd::String& name) const;
 
   /**
-   * Change the position of the specified layout.
+   * Change the position of the specified layout in the layouts list.
+   *
+   * \note This has no effect on the order shown to the user, which is given by
+   * the layouts folder structure (see GetLayoutsRootFolder).
    */
   void MoveLayout(std::size_t oldIndex, std::size_t newIndex);
 
   /**
-   * \brief Swap the specified layouts.
+   * \brief Swap the specified layouts in the layouts list.
    *
    * Do nothing if indexes are not correct.
+   *
+   * \note This has no effect on the order shown to the user, which is given by
+   * the layouts folder structure (see GetLayoutsRootFolder).
    */
   void SwapLayouts(std::size_t first, std::size_t second);
 
@@ -645,6 +651,17 @@ class GD_CORE_API Project {
    *
    */
   gd::Layout& InsertLayout(const Layout& layout, std::size_t position);
+
+  /**
+   * \brief Add a new empty layout called "name" at the given position in the
+   * given folder of the layouts folder structure.
+   *
+   * \note The new layout is added at the end of the layouts list: the position
+   * in the folder structure is what defines the order shown to the user.
+   */
+  gd::Layout& InsertNewLayoutInFolder(const gd::String& name,
+                                      gd::LayoutFolderOrLayout& folder,
+                                      std::size_t position);
 
   /**
    * \brief Delete layout named "name".

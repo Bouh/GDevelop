@@ -772,10 +772,7 @@ const ProjectManager = React.forwardRef<Props, ProjectManagerInterface>(
         if (!project) return;
 
         const layoutsRootFolder = project.getLayoutsRootFolder();
-        const newFolder = layoutsRootFolder.insertNewFolder(
-          'NewFolder',
-          layoutsRootFolder.getChildrenCount()
-        );
+        const newFolder = layoutsRootFolder.insertNewFolder('NewFolder', 0);
 
         onProjectItemModified();
 
